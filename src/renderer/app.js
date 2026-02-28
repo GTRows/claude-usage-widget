@@ -74,6 +74,9 @@ async function init() {
     // Apply saved theme and load thresholds immediately
     const settings = await window.electronAPI.getSettings();
     applyTheme(settings.theme);
+    if (window.electronAPI.platform === 'darwin') {
+        document.getElementById('trayLabel').textContent = 'Hide from Dock';
+    }
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
 
@@ -680,6 +683,9 @@ async function loadSettings() {
     });
 
     applyTheme(settings.theme);
+    if (window.electronAPI.platform === 'darwin') {
+        document.getElementById('trayLabel').textContent = 'Hide from Dock';
+    }
 }
 
 async function saveSettings() {
@@ -700,6 +706,9 @@ async function saveSettings() {
     };
     await window.electronAPI.saveSettings(settings);
     applyTheme(settings.theme);
+    if (window.electronAPI.platform === 'darwin') {
+        document.getElementById('trayLabel').textContent = 'Hide from Dock';
+    }
 }
 
 function applyTheme(theme) {

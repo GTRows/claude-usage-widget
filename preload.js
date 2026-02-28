@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchUsageData: () => ipcRenderer.invoke('fetch-usage-data'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
 
+  // Platform
+  platform: process.platform,
+
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings)
