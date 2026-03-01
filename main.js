@@ -51,7 +51,7 @@ function createMainWindow() {
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: false,
-    icon: path.join(__dirname, 'assets/icon.ico'),
+    icon: path.join(__dirname, process.platform === 'darwin' ? 'assets/icon.icns' : 'assets/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -83,7 +83,7 @@ function createMainWindow() {
 
 function createTray() {
   try {
-    tray = new Tray(path.join(__dirname, 'assets/logo.png'));
+    tray = new Tray(path.join(__dirname, process.platform === 'darwin' ? 'assets/tray-icon-mac.png' : 'assets/tray-icon.png'));
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -266,11 +266,15 @@ ipcMain.handle('save-settings', (event, settings) => {
 
   app.setLoginItemSettings({
     openAtLogin: settings.autoStart,
-    path: app.getPath('exe')
+    ...(process.platform !== 'darwin' && { path: app.getPath('exe') })
   });
 
   if (mainWindow) {
-    mainWindow.setSkipTaskbar(settings.minimizeToTray);
+    if (process.platform === 'darwin') {
+      if (settings.minimizeToTray) { app.dock.hide(); } else { app.dock.show(); }
+    } else {
+      mainWindow.setSkipTaskbar(settings.minimizeToTray);
+    }
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
   }
 
@@ -422,7 +426,11 @@ app.whenReady().then(async () => {
   const minimizeToTray = store.get('settings.minimizeToTray', false);
   const alwaysOnTop = store.get('settings.alwaysOnTop', true);
   if (mainWindow) {
-    if (minimizeToTray) mainWindow.setSkipTaskbar(true);
+    if (process.platform === 'darwin') {
+      if (minimizeToTray) app.dock.hide();
+    } else {
+      if (minimizeToTray) mainWindow.setSkipTaskbar(true);
+    }
     mainWindow.setAlwaysOnTop(alwaysOnTop, 'floating');
   }
 });
