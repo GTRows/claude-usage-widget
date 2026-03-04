@@ -67,9 +67,15 @@ A full settings overlay with persistent preferences via electron-store.
 3. Launch "Claude Usage Widget" from the Start Menu
 
 **macOS:**
-1. Download the latest `Claude-Usage-Widget.dmg` from [Releases](../../releases)
+1. Download the latest `Claude-Usage-Widget-arm64.dmg` (Apple Silicon) or `Claude-Usage-Widget-x64.dmg` (Intel) from [Releases](../../releases)
 2. Open the DMG and drag the app to your Applications folder
 3. Launch "Claude Usage Widget" from Applications
+
+> **⚠️ macOS Security Notice:** Because this app is not yet notarized with Apple, macOS Gatekeeper may show a "damaged or can't be opened" warning. To fix this, run the following command in Terminal after installing:
+> ```
+> xattr -cr /Applications/Claude\ Usage\ Widget.app
+> ```
+> Then try launching the app again.
 
 ---
 
