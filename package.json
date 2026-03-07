@@ -32,7 +32,8 @@
   },
   "build": {
     "appId": "com.claudeusage.widget",
-    "productName": "Claude Usage Widget",
+    "productName": "Claude-Usage-Widget",
+    "publish": null,
     "win": {
       "target": [
         "nsis",
