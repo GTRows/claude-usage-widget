@@ -1,5 +1,6 @@
-chore: bump version to 1.6.0
+docs: update README and add release notes for v1.6.0
 
-Batch release combining:
-- feat: usage alerts (warn/danger threshold OS notifications)
-- feat: compact mode (290x105 mini view with two progress bars)
+- Add Usage Alerts and Compact Mode to features list
+- Add v1.6.0 What's New section
+- Mark compact mode and usage alerts as complete in roadmap
+- Add RELEASE_NOTES_v1.6.0.md

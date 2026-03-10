@@ -17,12 +17,35 @@ A beautiful, standalone desktop widget for **Windows, macOS, and Linux** that di
 📍 **Always on Top** — User-controlled, stays visible across all workspaces
 💾 **System Tray** — Minimizes to tray for easy access
 ⚙️ **Settings Panel** — Persistent preferences for startup, theme, tray, thresholds, and date/time formats
+🔔 **Usage Alerts** — Native OS notifications when usage crosses warn/danger thresholds
+📦 **Compact Mode** — Minimal 290×105px view showing just the two progress bars
 🔔 **Update Notifications** — Automatic check for new releases on startup
 🕐 **Configurable Date & Time Formats** — 12h/24h time, and flexible weekly reset date display
 
 ---
 
 ## What's New
+
+### v1.6.0
+
+#### 🔔 Usage Alerts
+The widget now sends native OS desktop notifications when your usage crosses configurable thresholds.
+
+- Alerts fire at your **warning** and **danger** thresholds (same levels used for bar color changes)
+- Covers both **Current Session** and **Weekly Limit**
+- Smart startup seeding: thresholds already exceeded when the app launches are treated as acknowledged — no surprise alerts on startup
+- Alerts reset automatically when a usage window resets and climbs back through the threshold
+- Enabled by default; toggle off in Settings if not needed
+
+#### 📦 Compact Mode
+A minimal 290×105px view showing just the two progress bars — useful when screen space is tight.
+
+- Collapse to compact using the **‹** chevron on the left edge of the normal view
+- Expand back to normal using the **›** chevron on the right edge of compact view
+- Also toggleable from the Settings panel (takes effect on Done)
+- Mode is persisted across restarts
+
+---
 
 ### v1.5.3
 
@@ -327,9 +350,9 @@ DEBUG_LOG=1 npm start
 - [x] Configurable date & time formats
 - [x] Update notifications
 - [x] Linux support
+- [x] Compact mode
+- [x] Notification alerts at usage thresholds
 - [ ] Usage history graphs
-- [ ] Compact mode
-- [ ] Notification alerts at usage thresholds
 - [ ] Multiple account support
 - [ ] Keyboard shortcuts
 
