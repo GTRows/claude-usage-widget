@@ -7,6 +7,8 @@ let isExpanded = false;
 let isCompactMode = false;
 let usageChart = null;
 let graphVisible = false;
+let graphWasVisible = false;  // preserves graph state across compact mode toggle
+let expandWasOpen = false;    // preserves extra rows state across compact mode toggle
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const WIDGET_HEIGHT_COLLAPSED = 155;
 const WIDGET_ROW_HEIGHT = 30;
@@ -231,6 +233,7 @@ function setupEventListeners() {
 
     // Listen for refresh requests from tray
     window.electronAPI.onRefreshUsage(async () => {
+        if (elements.settingsOverlay.style.display === 'flex') return;
         if (elements.refreshBtn) elements.refreshBtn.classList.add('spinning');
         await fetchUsageData();
         if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
@@ -283,6 +286,7 @@ function setupEventListeners() {
             await loadSettings();
             elements.settingsOverlay.style.display = 'flex';
             window.electronAPI.resizeWindow(288);
+            stopAutoUpdate(); // pause refresh while settings is open
         }
     });
 
@@ -540,6 +544,18 @@ function resizeWidget(bannerVisible) {
 function updateUI(data) {
     latestUsageData = data;
 
+    if (isCompactMode) {
+        // In compact mode — just update the bars and alerts, don't touch layout
+        updateCompactBars(data);
+        startCountdown();
+        checkUsageAlerts(data);
+        if (isFirstDataLoad) {
+            isFirstDataLoad = false;
+            seedAlertFlags(data);
+        }
+        return;
+    }
+
     showMainContent();
     buildExtraRows(data);
     refreshTimers();
@@ -549,9 +565,6 @@ function updateUI(data) {
     if (graphVisible) {
         loadChart();
     }
-
-    // Update compact bars in parallel if compact mode is active
-    if (isCompactMode) updateCompactBars(data);
 
     // On first load, seed alert flags so we don't fire for thresholds
     // the user can already see when the app starts
@@ -625,17 +638,30 @@ function applyCompactMode(compact) {
     elements.mainContent.style.display = compact ? 'none' : 'block';
     elements.compactContent.style.display = compact ? 'flex' : 'none';
 
-    // Collapse extra rows when entering compact — prevents stale isExpanded state
+    // Collapse extra rows when entering compact — save state for restore on exit
     if (compact && isExpanded) {
+        expandWasOpen = true;
         isExpanded = false;
         elements.expandArrow.classList.remove('expanded');
         elements.expandSection.style.display = 'none';
+    } else if (!compact && expandWasOpen) {
+        expandWasOpen = false;
+        isExpanded = true;
+        elements.expandArrow.classList.add('expanded');
+        elements.expandSection.style.display = 'block';
     }
 
     if (compact && graphVisible) {
+        graphWasVisible = true;
         graphVisible = false;
         elements.graphBtn.classList.remove('active');
         elements.graphSection.style.display = 'none';
+    } else if (!compact && graphWasVisible) {
+        graphWasVisible = false;
+        graphVisible = true;
+        elements.graphBtn.classList.add('active');
+        elements.graphSection.style.display = 'block';
+        loadChart();
     }
 
     // Show/hide the collapse chevron (only visible in normal mode with data)
@@ -645,7 +671,7 @@ function applyCompactMode(compact) {
 
     // Hide refresh button in compact mode (no room, and refresh causes resize issues)
     if (elements.refreshBtn) {
-        elements.refreshBtn.style.display = compact ? 'none' : '';
+        elements.refreshBtn.style.display = '';
     }
     if (elements.graphBtn) {
         elements.graphBtn.style.display = compact ? 'none' : '';

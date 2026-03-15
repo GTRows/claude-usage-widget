@@ -325,7 +325,8 @@ ipcMain.handle('get-settings', () => {
     timeFormat: store.get('settings.timeFormat', '12h'),
     weeklyDateFormat: store.get('settings.weeklyDateFormat', 'date'),
     usageAlerts: store.get('settings.usageAlerts', true),
-    compactMode: store.get('settings.compactMode', false)
+    compactMode: store.get('settings.compactMode', false),
+    refreshInterval: store.get('settings.refreshInterval', '300')
   };
 });
 
@@ -340,6 +341,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.weeklyDateFormat', settings.weeklyDateFormat);
   store.set('settings.usageAlerts', settings.usageAlerts);
   store.set('settings.compactMode', settings.compactMode);
+  store.set('settings.refreshInterval', settings.refreshInterval);
 
   // openAtLogin is not supported on Linux — Electron silently ignores it.
   // Skip the call entirely to avoid misleading behaviour.
