@@ -25,6 +25,24 @@ let tray = null;
 
 const WIDGET_WIDTH = 560;
 const WIDGET_HEIGHT = 155;
+const HISTORY_RETENTION_DAYS = 30;
+const CHART_DAYS = 7;
+
+function storeUsageHistory(data) {
+  const timestamp = Date.now();
+  const history = store.get('usageHistory', []);
+
+  history.push({
+    timestamp,
+    session: data.five_hour?.utilization || 0,
+    weekly: data.seven_day?.utilization || 0,
+    sonnet: data.seven_day_sonnet?.utilization || 0,
+    extraUsage: data.extra_usage?.utilization || 0
+  });
+
+  const cutoff = timestamp - (HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  store.set('usageHistory', history.filter((entry) => entry.timestamp > cutoff));
+}
 
 // Set session-level User-Agent to avoid Electron detection
 app.on('ready', () => {
@@ -266,6 +284,14 @@ ipcMain.on('open-external', (event, url) => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+ipcMain.handle('get-usage-history', () => {
+  const history = store.get('usageHistory', []);
+  const cutoff = Date.now() - (CHART_DAYS * 24 * 60 * 60 * 1000);
+  return history
+    .filter((entry) => entry.timestamp > cutoff)
+    .sort((a, b) => a.timestamp - b.timestamp);
 });
 
 // Show a native OS desktop notification (Windows toast, macOS NC, Linux libnotify)
@@ -525,6 +551,7 @@ ipcMain.handle('fetch-usage-data', async () => {
     debugLog('Prepaid fetch skipped or failed:', prepaidResult.reason?.message || 'no data');
   }
 
+  storeUsageHistory(data);
   return data;
 });
 
