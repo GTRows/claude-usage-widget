@@ -154,7 +154,7 @@ A full settings overlay with persistent preferences via electron-store.
 
 > **⚠️ macOS Security Notice:** Because this app is not yet notarized with Apple, macOS Gatekeeper may show a "damaged or can't be opened" warning. To fix this, run the following command in Terminal after installing:
 > ```
-> xattr -cr /Applications/Claude\ Usage\ Widget.app
+> xattr -cr /Applications/Claude-Usage-Widget.app
 > ```
 > Then try launching the app again.
 
