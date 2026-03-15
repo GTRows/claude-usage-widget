@@ -798,11 +798,15 @@ body.theme-light .graph-btn.active {
 }
 
 .settings-disclaimer {
-    color: #505060;
+    color: #c0c0d0;
     font-size: 9px;
     text-align: center;
     padding: 5px 14px 4px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+body.theme-light .settings-disclaimer {
+    color: #808090;
 }
 
 .settings-rows {
@@ -842,7 +846,7 @@ body.theme-light .graph-btn.active {
 }
 
 .settings-col .settings-row-label {
-    width: 110px;
+    width: 90px;
     flex-shrink: 0;
 }
 
@@ -987,6 +991,16 @@ body.theme-light .graph-btn.active {
     gap: 8px;
     padding: 7px 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settings-footer .settings-version-label {
+    flex: 1;
+    font-size: 11px;
+    color: #9090b0;
+}
+
+.settings-footer .coffee-btn {
+    flex-shrink: 0;
 }
 
 .logout-btn {
@@ -1203,17 +1217,9 @@ body.theme-light .expand-arrow {
 }
 
 /* ── Settings version row ──────────────────────────────────── */
-.settings-version-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    margin-bottom: 8px;
-}
-
 .settings-version-label {
     font-size: 11px;
-    color: #555570;
+    color: #9090b0;
     font-family: inherit;
 }
 
@@ -1258,6 +1264,11 @@ body.theme-light .settings-update-link {
     font-family: inherit;
 }
 
+.settings-select option {
+    background: #2a2a3e;
+    color: #e0e0f0;
+}
+
 .settings-select:hover {
     border-color: rgba(255,255,255,0.3);
 }
@@ -1265,6 +1276,11 @@ body.theme-light .settings-update-link {
 body.theme-light .settings-select {
     background: rgba(0,0,0,0.05);
     border-color: rgba(0,0,0,0.15);
+    color: #303050;
+}
+
+body.theme-light .settings-select option {
+    background: #ffffff;
     color: #303050;
 }
 

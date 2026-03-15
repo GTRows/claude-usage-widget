@@ -73,6 +73,7 @@ const elements = {
     themeBtns: document.querySelectorAll('.theme-btn'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
+    refreshInterval: document.getElementById('refreshInterval'),
 
     updateBanner: document.getElementById('updateBanner'),
     updateBannerText: document.getElementById('updateBannerText'),
@@ -127,7 +128,7 @@ async function init() {
     // Populate version label then check for updates after a short delay
     const version = await window.electronAPI.getAppVersion();
     if (elements.settingsVersionLabel) {
-        elements.settingsVersionLabel.textContent = `v${version}`;
+        elements.settingsVersionLabel.textContent = `Application Version: v${version}`;
     }
     setTimeout(checkForUpdate, 2000);
     // Also check once every 24 hours for users who never close the app
@@ -281,7 +282,7 @@ function setupEventListeners() {
         } else {
             await loadSettings();
             elements.settingsOverlay.style.display = 'flex';
-            window.electronAPI.resizeWindow(320);
+            window.electronAPI.resizeWindow(288);
         }
     });
 
@@ -953,11 +954,13 @@ function showMainContent() {
 // Auto-update management
 function startAutoUpdate() {
     stopAutoUpdate();
+    const settings = window._cachedSettings || {};
+    const intervalSecs = parseInt(settings.refreshInterval) || 300;
     updateInterval = setInterval(async () => {
         if (elements.refreshBtn) elements.refreshBtn.classList.add('spinning');
         await fetchUsageData();
         if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
-    }, UPDATE_INTERVAL);
+    }, intervalSecs * 1000);
 }
 
 function stopAutoUpdate() {
@@ -1209,6 +1212,7 @@ async function loadSettings() {
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
     elements.weeklyDateFormat.value = settings.weeklyDateFormat || 'date';
+    elements.refreshInterval.value = settings.refreshInterval || '300';
     elements.usageAlertsToggle.checked = settings.usageAlerts !== false;
     if (elements.compactModeToggle) elements.compactModeToggle.checked = !!settings.compactMode;
 
@@ -1248,6 +1252,7 @@ async function saveSettings() {
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
         weeklyDateFormat: elements.weeklyDateFormat.value || 'date',
+        refreshInterval: elements.refreshInterval.value || '300',
         usageAlerts: elements.usageAlertsToggle.checked,
         compactMode: isCompactMode  // use updated value after applyCompactMode
     };
@@ -1260,6 +1265,8 @@ async function saveSettings() {
 
     // Re-render resets-at values immediately with new format
     if (latestUsageData) refreshTimers();
+    // Restart auto-update with new interval if it changed
+    startAutoUpdate();
 }
 
 function applyTheme(theme) {
