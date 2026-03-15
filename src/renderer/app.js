@@ -7,6 +7,7 @@ let isExpanded = false;
 let isCompactMode = false;
 let usageChart = null;
 let graphVisible = false;
+let graphWasVisible = false; // preserves graph state across compact mode toggle
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const WIDGET_HEIGHT_COLLAPSED = 155;
 const WIDGET_ROW_HEIGHT = 30;
@@ -632,9 +633,16 @@ function applyCompactMode(compact) {
     }
 
     if (compact && graphVisible) {
+        graphWasVisible = true;
         graphVisible = false;
         elements.graphBtn.classList.remove('active');
         elements.graphSection.style.display = 'none';
+    } else if (!compact && graphWasVisible) {
+        graphWasVisible = false;
+        graphVisible = true;
+        elements.graphBtn.classList.add('active');
+        elements.graphSection.style.display = 'block';
+        loadChart();
     }
 
     // Show/hide the collapse chevron (only visible in normal mode with data)
