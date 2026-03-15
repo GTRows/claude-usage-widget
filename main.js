@@ -23,16 +23,25 @@ const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit
 let mainWindow = null;
 let tray = null;
 
-const WIDGET_WIDTH = 530;
+const WIDGET_WIDTH = 560;
 const WIDGET_HEIGHT = 155;
+const HISTORY_RETENTION_DAYS = 30;
+const CHART_DAYS = 7;
 
-// Force portable builds to use %APPDATA% so config persists in the same
-// location as the installer version. Without this, portable stores userData
-// next to the exe and loses settings between runs.
-if (process.env.PORTABLE_EXECUTABLE_DIR) {
-  app.setPath('userData', require('path').join(
-    require('os').homedir(), 'AppData', 'Roaming', 'claude-usage-widget'
-  ));
+function storeUsageHistory(data) {
+  const timestamp = Date.now();
+  const history = store.get('usageHistory', []);
+
+  history.push({
+    timestamp,
+    session: data.five_hour?.utilization || 0,
+    weekly: data.seven_day?.utilization || 0,
+    sonnet: data.seven_day_sonnet?.utilization || 0,
+    extraUsage: data.extra_usage?.utilization || 0
+  });
+
+  const cutoff = timestamp - (HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  store.set('usageHistory', history.filter((entry) => entry.timestamp > cutoff));
 }
 
 // Set session-level User-Agent to avoid Electron detection
@@ -103,7 +112,9 @@ function createTray() {
         label: 'Show Widget',
         click: () => {
           if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
+            mainWindow.focus();
           } else {
             createMainWindow();
           }
@@ -151,7 +162,13 @@ function createTray() {
 
     tray.on('click', () => {
       if (mainWindow) {
-        mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
+        if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
+          mainWindow.hide();
+        } else {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
       }
     });
   } catch (error) {
@@ -225,7 +242,15 @@ ipcMain.handle('validate-session-key', async (event, sessionKey) => {
 });
 
 ipcMain.on('minimize-window', () => {
-  if (mainWindow) mainWindow.hide();
+  if (mainWindow) {
+    // macOS: minimize to Dock so the user can restore via Dock click
+    // Windows/Linux: hide to tray (taskbar may be hidden, tray is the restore path)
+    if (process.platform === 'darwin') {
+      mainWindow.minimize();
+    } else {
+      mainWindow.hide();
+    }
+  }
 });
 
 ipcMain.on('close-window', () => {
@@ -259,6 +284,14 @@ ipcMain.on('open-external', (event, url) => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+ipcMain.handle('get-usage-history', () => {
+  const history = store.get('usageHistory', []);
+  const cutoff = Date.now() - (CHART_DAYS * 24 * 60 * 60 * 1000);
+  return history
+    .filter((entry) => entry.timestamp > cutoff)
+    .sort((a, b) => a.timestamp - b.timestamp);
 });
 
 // Show a native OS desktop notification (Windows toast, macOS NC, Linux libnotify)
@@ -491,11 +524,13 @@ ipcMain.handle('fetch-usage-data', async () => {
         used_cents: used,
         limit_cents: limit,
         is_enabled: true,
+        currency: overage.currency || 'USD',
       };
     } else if (!enabled) {
       // Extra usage is off — still pass the flag so the renderer can show status
       if (!data.extra_usage) data.extra_usage = {};
       data.extra_usage.is_enabled = false;
+      data.extra_usage.currency = overage.currency || 'USD';
     }
   } else {
     debugLog('Overage fetch skipped or failed:', overageResult.reason?.message || 'no data');
@@ -507,11 +542,16 @@ ipcMain.handle('fetch-usage-data', async () => {
     if (typeof prepaid.amount === 'number') {
       if (!data.extra_usage) data.extra_usage = {};
       data.extra_usage.balance_cents = prepaid.amount;
+      // Use prepaid currency if overage didn't already set one
+      if (!data.extra_usage.currency && prepaid.currency) {
+        data.extra_usage.currency = prepaid.currency;
+      }
     }
   } else {
     debugLog('Prepaid fetch skipped or failed:', prepaidResult.reason?.message || 'no data');
   }
 
+  storeUsageHistory(data);
   return data;
 });
 
@@ -548,6 +588,10 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createMainWindow();
+  } else {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
   }
 });
 

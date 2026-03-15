@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-widget",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Desktop widget for Claude.ai usage monitoring",
   "main": "main.js",
   "scripts": {
@@ -29,6 +29,7 @@
     "electron-builder": "^24.9.1"
   },
   "dependencies": {
+    "chart.js": "^4.5.1",
     "electron-store": "^8.1.0"
   },
   "build": {

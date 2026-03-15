@@ -5,9 +5,12 @@ let countdownInterval = null;
 let latestUsageData = null;
 let isExpanded = false;
 let isCompactMode = false;
+let usageChart = null;
+let graphVisible = false;
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const WIDGET_HEIGHT_COLLAPSED = 155;
 const WIDGET_ROW_HEIGHT = 30;
+const GRAPH_HEIGHT = 232;
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -33,6 +36,7 @@ const elements = {
     connectBtn: document.getElementById('connectBtn'),
     sessionKeyError: document.getElementById('sessionKeyError'),
     refreshBtn: document.getElementById('refreshBtn'),
+    graphBtn: document.getElementById('graphBtn'),
     minimizeBtn: document.getElementById('minimizeBtn'),
     closeBtn: document.getElementById('closeBtn'),
 
@@ -53,6 +57,8 @@ const elements = {
     expandArrow: document.getElementById('expandArrow'),
     expandSection: document.getElementById('expandSection'),
     extraRows: document.getElementById('extraRows'),
+    graphSection: document.getElementById('graphSection'),
+    usageChart: document.getElementById('usageChart'),
 
     settingsBtn: document.getElementById('settingsBtn'),
     settingsOverlay: document.getElementById('settingsOverlay'),
@@ -166,6 +172,16 @@ function setupEventListeners() {
         elements.refreshBtn.classList.remove('spinning');
     });
 
+    elements.graphBtn.addEventListener('click', async () => {
+        graphVisible = !graphVisible;
+        elements.graphBtn.classList.toggle('active', graphVisible);
+        elements.graphSection.style.display = graphVisible ? 'block' : 'none';
+        if (graphVisible) {
+            await loadChart();
+        }
+        if (!isCompactMode) resizeWidget();
+    });
+
     elements.minimizeBtn.addEventListener('click', () => {
         window.electronAPI.minimizeWindow();
     });
@@ -179,6 +195,9 @@ function setupEventListeners() {
         isExpanded = !isExpanded;
         elements.expandArrow.classList.toggle('expanded', isExpanded);
         elements.expandSection.style.display = isExpanded ? 'block' : 'none';
+        if (graphVisible) {
+            loadChart();
+        }
         resizeWidget();
     });
 
@@ -211,7 +230,9 @@ function setupEventListeners() {
 
     // Listen for refresh requests from tray
     window.electronAPI.onRefreshUsage(async () => {
+        if (elements.refreshBtn) elements.refreshBtn.classList.add('spinning');
         await fetchUsageData();
+        if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
     });
 
     // Listen for session expiration events (403 errors)
@@ -371,18 +392,18 @@ async function fetchUsageData() {
     }
 }
 
-// Check if there's no usage data
-function hasNoUsage(data) {
-    const sessionUtilization = data.five_hour?.utilization || 0;
-    const sessionResetsAt = data.five_hour?.resets_at;
-    const weeklyUtilization = data.seven_day?.utilization || 0;
-    const weeklyResetsAt = data.seven_day?.resets_at;
-
-    return sessionUtilization === 0 && !sessionResetsAt &&
-        weeklyUtilization === 0 && !weeklyResetsAt;
-}
 
 // Update UI with usage data
+// Format a cent-based amount with the correct currency symbol.
+// Known unambiguous symbols are used; everything else falls back to the
+// ISO 4217 code as a suffix so the display is always correct.
+function formatCurrency(amountCents, currencyCode) {
+  const amount = (amountCents / 100).toFixed(0);
+  const symbols = { USD: '$', EUR: '€', GBP: '£' };
+  const sym = symbols[currencyCode];
+  return sym ? `${sym}${amount}` : `${amount} ${currencyCode || 'USD'}`;
+}
+
 // Extra row label mapping for API fields
 const EXTRA_ROW_CONFIG = {
     seven_day_sonnet: { label: 'Sonnet (7d)', color: 'weekly' },
@@ -417,7 +438,7 @@ function buildExtraRows(data) {
                     <div class="progress-bar">
                         <div class="progress-fill ${colorClass}" style="width: ${Math.min(utilization, 100)}%"></div>
                     </div>
-                    <span class="usage-percentage extra-spending">$${(value.used_cents/100).toFixed(0)}/$${(value.limit_cents/100).toFixed(0)}</span>
+                    <span class="usage-percentage extra-spending">${formatCurrency(value.used_cents, value.currency)}/${formatCurrency(value.limit_cents, value.currency)}</span>
                    </div>`
                 : `<div class="usage-bar-group">
                     <div class="progress-bar">
@@ -431,7 +452,7 @@ function buildExtraRows(data) {
                     ? `<span class="extra-status off">OFF</span>`
                     : '';
             const balanceHTML = value.balance_cents != null
-                ? `<span class="timer-text extra-balance">${statusTag} Bal $${(value.balance_cents/100).toFixed(0)}</span>`
+                ? `<span class="timer-text extra-balance">${statusTag} Bal ${formatCurrency(value.balance_cents, value.currency)}</span>`
                 : statusTag
                     ? `<span class="timer-text extra-balance">${statusTag}</span>`
                     : `<span class="timer-text"></span>`;
@@ -507,28 +528,26 @@ function resizeWidget(bannerVisible) {
         : elements.updateBanner.style.display !== 'none';
     const bannerOffset = hasBanner ? BANNER_HEIGHT : 0;
     const extraCount = elements.extraRows.children.length;
-    if (isExpanded && extraCount > 0) {
-        const expandedHeight = WIDGET_HEIGHT_COLLAPSED + EXPAND_OVERHEAD + (extraCount * WIDGET_ROW_HEIGHT) + bannerOffset;
-        window.electronAPI.resizeWindow(expandedHeight);
-    } else {
-        window.electronAPI.resizeWindow(WIDGET_HEIGHT_COLLAPSED + bannerOffset);
-    }
+    const expandedOffset = isExpanded && extraCount > 0
+        ? EXPAND_OVERHEAD + (extraCount * WIDGET_ROW_HEIGHT)
+        : 0;
+    const graphOffset = graphVisible ? GRAPH_HEIGHT : 0;
+    const totalHeight = WIDGET_HEIGHT_COLLAPSED + expandedOffset + graphOffset + bannerOffset;
+    window.electronAPI.resizeWindow(totalHeight);
 }
 
 function updateUI(data) {
     latestUsageData = data;
 
-    if (hasNoUsage(data)) {
-        showNoUsage();
-        return;
-    }
-
-    if (!isCompactMode) showMainContent();
+    showMainContent();
     buildExtraRows(data);
     refreshTimers();
     if (isExpanded) refreshExtraTimers();
-    if (!isCompactMode) resizeWidget();
+    resizeWidget();
     startCountdown();
+    if (graphVisible) {
+        loadChart();
+    }
 
     // Update compact bars in parallel if compact mode is active
     if (isCompactMode) updateCompactBars(data);
@@ -547,7 +566,7 @@ function updateUI(data) {
 // Only fires once per threshold crossing per session window — not on every refresh.
 function checkUsageAlerts(data) {
     const settings = window._cachedSettings || {};
-    if (settings.usageAlerts === false) return;
+    if (!settings.usageAlerts) return;
 
     const sessionPct = data.five_hour?.utilization || 0;
     const weeklyPct = data.seven_day?.utilization || 0;
@@ -612,6 +631,12 @@ function applyCompactMode(compact) {
         elements.expandSection.style.display = 'none';
     }
 
+    if (compact && graphVisible) {
+        graphVisible = false;
+        elements.graphBtn.classList.remove('active');
+        elements.graphSection.style.display = 'none';
+    }
+
     // Show/hide the collapse chevron (only visible in normal mode with data)
     if (elements.compactCollapseBtn) {
         elements.compactCollapseBtn.style.display = compact ? 'none' : 'flex';
@@ -620,6 +645,9 @@ function applyCompactMode(compact) {
     // Hide refresh button in compact mode (no room, and refresh causes resize issues)
     if (elements.refreshBtn) {
         elements.refreshBtn.style.display = compact ? 'none' : '';
+    }
+    if (elements.graphBtn) {
+        elements.graphBtn.style.display = compact ? 'none' : '';
     }
 
     // Tell main process to resize the window width
@@ -631,6 +659,7 @@ function applyCompactMode(compact) {
 
     // Update compact bars if we have data
     if (compact && latestUsageData) updateCompactBars(latestUsageData);
+    if (!compact) resizeWidget();
 }
 
 // Update the compact mode progress bars
@@ -705,9 +734,8 @@ function refreshTimers() {
     const weeklyDateFormat = settings.weeklyDateFormat || 'date';
 
     // Session data
+    const sessionUtilization = latestUsageData.five_hour?.utilization || 0;
     const sessionResetsAt = latestUsageData.five_hour?.resets_at;
-    const sessionExpired = sessionResetsAt && (new Date(sessionResetsAt) - new Date()) <= 0;
-    const sessionUtilization = sessionExpired ? 100 : (latestUsageData.five_hour?.utilization || 0);
 
     // Check if session timer has expired and we need to refresh
     if (sessionResetsAt) {
@@ -741,9 +769,8 @@ function refreshTimers() {
     elements.sessionResetsAt.style.opacity = sessionResetsAt ? '1' : '0.4';
 
     // Weekly data
+    const weeklyUtilization = latestUsageData.seven_day?.utilization || 0;
     const weeklyResetsAt = latestUsageData.seven_day?.resets_at;
-    const weeklyExpired = weeklyResetsAt && (new Date(weeklyResetsAt) - new Date()) <= 0;
-    const weeklyUtilization = weeklyExpired ? 100 : (latestUsageData.seven_day?.utilization || 0);
 
     // Check if weekly timer has expired and we need to refresh
     if (weeklyResetsAt) {
@@ -791,10 +818,8 @@ function updateProgressBar(progressElement, percentageElement, value, isWeekly =
     progressElement.style.width = `${percentage}%`;
     percentageElement.textContent = `${Math.round(percentage)}%`;
 
-    progressElement.classList.remove('warning', 'danger', 'pulse');
-    if (percentage >= 100) {
-        progressElement.classList.add('danger', 'pulse');
-    } else if (percentage >= dangerThreshold) {
+    progressElement.classList.remove('warning', 'danger');
+    if (percentage >= dangerThreshold) {
         progressElement.classList.add('danger');
     } else if (percentage >= warnThreshold) {
         progressElement.classList.add('warning');
@@ -910,13 +935,6 @@ function showLoginRequired() {
     stopAutoUpdate();
 }
 
-function showNoUsage() {
-    elements.loadingContainer.style.display = 'none';
-    elements.loginContainer.style.display = 'none';
-    elements.noUsageContainer.style.display = 'flex';
-    elements.mainContent.style.display = 'none';
-}
-
 function showMainContent() {
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'none';
@@ -935,8 +953,10 @@ function showMainContent() {
 // Auto-update management
 function startAutoUpdate() {
     stopAutoUpdate();
-    updateInterval = setInterval(() => {
-        fetchUsageData();
+    updateInterval = setInterval(async () => {
+        if (elements.refreshBtn) elements.refreshBtn.classList.add('spinning');
+        await fetchUsageData();
+        if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
     }, UPDATE_INTERVAL);
 }
 
@@ -945,6 +965,220 @@ function stopAutoUpdate() {
         clearInterval(updateInterval);
         updateInterval = null;
     }
+}
+
+async function loadChart() {
+    const history = await window.electronAPI.getUsageHistory();
+    if (!history.length) return;
+    renderChart(history);
+}
+
+function renderChart(history) {
+    if (usageChart) usageChart.destroy();
+
+    const showSonnet = isExpanded && !!latestUsageData?.seven_day_sonnet;
+    const showExtraUsage = isExpanded && !!latestUsageData?.extra_usage;
+    const allValues = history.flatMap((entry) => {
+        const values = [entry.session, entry.weekly];
+        if (showSonnet) values.push(entry.sonnet || 0);
+        if (showExtraUsage) values.push(entry.extraUsage || 0);
+        return values;
+    });
+    const yMax = Math.max(10, Math.ceil(Math.max(...allValues) / 10) * 10);
+
+    const datasets = [
+        {
+            label: 'Session',
+            data: history.map((entry) => entry.session),
+            borderColor: '#8b5cf6',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            stepped: true,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            pointHitRadius: 10
+        },
+        {
+            label: 'Weekly',
+            data: history.map((entry) => entry.weekly),
+            borderColor: '#3b82f6',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            stepped: true,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            pointHitRadius: 10
+        }
+    ];
+
+    if (showSonnet) {
+        const sonnetData = history.map((entry) => entry.sonnet || 0);
+        if (sonnetData.some((value) => value > 0)) {
+            datasets.push({
+            label: 'Sonnet',
+            data: sonnetData,
+            borderColor: '#10b981',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            stepped: true,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            pointHitRadius: 10
+            });
+        }
+    }
+
+    if (showExtraUsage) {
+        const extraUsageData = history.map((entry) => entry.extraUsage || 0);
+        if (extraUsageData.some((value) => value > 0)) {
+            datasets.push({
+            label: 'Extra Usage',
+            data: extraUsageData,
+            borderColor: '#f59e0b',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            stepped: true,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            pointHitRadius: 10
+            });
+        }
+    }
+
+    usageChart = new Chart(elements.usageChart.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: history.map((entry) => entry.timestamp),
+            datasets
+        },
+        options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'nearest'
+            },
+            scales: {
+                x: {
+                    offset: true,
+                    ticks: {
+                        autoSkip: false,
+                        maxRotation: 0,
+                        minRotation: 0,
+                        font: {
+                            size: 10
+                        },
+                        callback(value, index) {
+                            const tf = (window._cachedSettings || {}).timeFormat || '12h';
+                            return formatXAxisTick(history, index, tf);
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    min: 0,
+                    max: yMax,
+                    ticks: {
+                        font: {
+                            size: 10
+                        },
+                        callback: (value) => `${value}%`
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        title(items) {
+                            const point = history[items[0].dataIndex];
+                            return new Date(point.timestamp).toLocaleString([], {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                            });
+                        },
+                        label(item) {
+                            return `${item.dataset.label}: ${Math.round(item.parsed.y)}%`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function formatXAxisTick(history, index, timeFormat) {
+    const tickIndexes = getXAxisTickIndexes(history.length);
+    if (!tickIndexes.has(index)) {
+        return '';
+    }
+
+    const timestamp = history[index]?.timestamp;
+    if (!timestamp) {
+        return '';
+    }
+
+    const spanMs = Math.max(0, history[history.length - 1].timestamp - history[0].timestamp);
+    const date = new Date(timestamp);
+    const hour12 = (timeFormat || '12h') !== '24h';
+
+    if (spanMs < 12 * 60 * 60 * 1000) {
+        return date.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12
+        });
+    }
+
+    if (spanMs < 48 * 60 * 60 * 1000) {
+        return date.toLocaleString([], {
+            weekday: 'short',
+            hour: 'numeric',
+            hour12
+        });
+    }
+
+    return date.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function getXAxisTickIndexes(length) {
+    const indexes = new Set();
+    if (length <= 0) {
+        return indexes;
+    }
+
+    indexes.add(0);
+    if (length === 1) {
+        return indexes;
+    }
+
+    const targetTickCount = Math.min(5, length);
+    const lastIndex = length - 1;
+    indexes.add(lastIndex);
+
+    if (targetTickCount <= 2) {
+        return indexes;
+    }
+
+    const interval = lastIndex / (targetTickCount - 1);
+    for (let i = 1; i < targetTickCount - 1; i += 1) {
+        indexes.add(Math.round(interval * i));
+    }
+
+    return indexes;
 }
 
 // Add spinning animation for refresh button
