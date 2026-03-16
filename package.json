@@ -19,7 +19,7 @@
   ],
   "author": "Slavomir Durej",
   "license": "MIT",
-  "copyright": "Copyright © 2025 Slavomir Durej",
+  "copyright": "Copyright \u00a9 2025 Slavomir Durej",
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
@@ -36,7 +36,7 @@
   "build": {
     "appId": "com.claudeusage.widget",
     "productName": "Claude-Usage-Widget",
-    "copyright": "Copyright © 2025 Slavomir Durej",
+    "copyright": "Copyright \u00a9 2025 Slavomir Durej",
     "publish": null,
     "win": {
       "target": [
@@ -71,7 +71,10 @@
           ]
         }
       ],
-      "icon": "assets/icon.icns"
+      "icon": "assets/icon.icns",
+      "extendInfo": {
+        "NSHumanReadableCopyright": "Copyright \u00a9 2025 Slavomir Durej"
+      }
     },
     "dmg": {
       "artifactName": "${productName}-${version}-macOS-${arch}.dmg"
@@ -80,7 +83,10 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/logo.png",
