@@ -8,6 +8,7 @@ let isCompactMode = false;
 let usageChart = null;
 let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
+let appInitializing = true;  // suppresses _saveViewState during startup restore
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const WIDGET_HEIGHT_COLLAPSED = 155;
 const WIDGET_ROW_HEIGHT = 30;
@@ -74,6 +75,7 @@ const elements = {
     themeBtns: document.querySelectorAll('.theme-btn'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
+    refreshInterval: document.getElementById('refreshInterval'),
 
     updateBanner: document.getElementById('updateBanner'),
     updateBannerText: document.getElementById('updateBannerText'),
@@ -117,6 +119,26 @@ async function init() {
         if (elements.compactSettingsOverlay) elements.compactSettingsOverlay.style.display = 'none';
     }
 
+    // Restore graph visibility
+    if (settings.graphVisible) {
+        if (!settings.compactMode) {
+            // Normal mode — show graph immediately
+            graphVisible = true;
+            elements.graphBtn.classList.add('active');
+            elements.graphSection.style.display = 'block';
+        } else {
+            // Compact mode — store so it restores when exiting compact
+            graphWasVisible = true;
+        }
+    }
+
+    // Restore expanded state
+    if (settings.expandedOpen) {
+        isExpanded = true;
+        elements.expandArrow.classList.add('expanded');
+        elements.expandSection.style.display = 'block';
+    }
+
     if (credentials.sessionKey && credentials.organizationId) {
         showMainContent();
         await fetchUsageData();
@@ -128,11 +150,14 @@ async function init() {
     // Populate version label then check for updates after a short delay
     const version = await window.electronAPI.getAppVersion();
     if (elements.settingsVersionLabel) {
-        elements.settingsVersionLabel.textContent = `v${version}`;
+        elements.settingsVersionLabel.textContent = `Application Version: v${version}`;
     }
     setTimeout(checkForUpdate, 2000);
     // Also check once every 24 hours for users who never close the app
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+
+    // Startup restore complete — allow _saveViewState to persist changes
+    appInitializing = false;
 }
 
 // Event Listeners
@@ -181,6 +206,7 @@ function setupEventListeners() {
             await loadChart();
         }
         if (!isCompactMode) resizeWidget();
+        _saveViewState();
     });
 
     elements.minimizeBtn.addEventListener('click', () => {
@@ -200,6 +226,7 @@ function setupEventListeners() {
             loadChart();
         }
         resizeWidget();
+        _saveViewState();
     });
 
     // Settings close
@@ -207,6 +234,7 @@ function setupEventListeners() {
         await saveSettings();
         elements.settingsOverlay.style.display = 'none';
         if (!isCompactMode) resizeWidget();
+        startAutoUpdate();
     });
 
     elements.logoutBtn.addEventListener('click', async () => {
@@ -276,13 +304,14 @@ function setupEventListeners() {
 
     // Settings button — open compact settings if in compact mode, full settings otherwise
     elements.settingsBtn.addEventListener('click', async () => {
+        stopAutoUpdate();
         if (isCompactMode) {
             elements.compactModeToggleCompact.checked = isCompactMode;
             elements.compactSettingsOverlay.style.display = 'flex';
         } else {
             await loadSettings();
             elements.settingsOverlay.style.display = 'flex';
-            window.electronAPI.resizeWindow(320);
+            window.electronAPI.resizeWindow(288);
         }
     });
 
@@ -294,6 +323,7 @@ function setupEventListeners() {
             await _saveCompactSetting(compact);
         }
         elements.compactSettingsOverlay.style.display = 'none';
+        startAutoUpdate();
     });
 }
 
@@ -544,7 +574,7 @@ function updateUI(data) {
     buildExtraRows(data);
     refreshTimers();
     if (isExpanded) refreshExtraTimers();
-    resizeWidget();
+    if (!isCompactMode) resizeWidget();
     startCountdown();
     if (graphVisible) {
         loadChart();
@@ -650,10 +680,8 @@ function applyCompactMode(compact) {
         elements.compactCollapseBtn.style.display = compact ? 'none' : 'flex';
     }
 
-    // Hide refresh button in compact mode (no room, and refresh causes resize issues)
-    if (elements.refreshBtn) {
-        elements.refreshBtn.style.display = compact ? 'none' : '';
-    }
+    // Keep refresh button visible in compact mode so users can see when data updates
+    // Hide graph button in compact mode (not applicable)
     if (elements.graphBtn) {
         elements.graphBtn.style.display = compact ? 'none' : '';
     }
@@ -668,6 +696,9 @@ function applyCompactMode(compact) {
     // Update compact bars if we have data
     if (compact && latestUsageData) updateCompactBars(latestUsageData);
     if (!compact) resizeWidget();
+
+    // Persist graph/expanded state changes caused by compact mode toggle
+    _saveViewState();
 }
 
 // Update the compact mode progress bars
@@ -689,12 +720,30 @@ function updateCompactBars(data) {
     if (weeklyPct >= dangerThreshold) elements.compactWeeklyFill.classList.add('danger');
     else if (weeklyPct >= warnThreshold) elements.compactWeeklyFill.classList.add('warning');
 }
-// Persist compact mode setting without touching the rest of settings
+// Persist compact mode setting without touching the rest of settings — debounced
+let _saveCompactTimer = null;
 async function _saveCompactSetting(compact) {
-    const settings = window._cachedSettings || await window.electronAPI.getSettings();
-    settings.compactMode = compact;
-    window._cachedSettings = settings;
-    await window.electronAPI.saveSettings(settings);
+    if (_saveCompactTimer) clearTimeout(_saveCompactTimer);
+    _saveCompactTimer = setTimeout(async () => {
+        const settings = window._cachedSettings || await window.electronAPI.getSettings();
+        settings.compactMode = compact;
+        window._cachedSettings = settings;
+        await window.electronAPI.saveSettings(settings);
+    }, 300);
+}
+
+// Persist graph/expanded visibility state — debounced to avoid hammering disk on rapid toggles
+let _saveViewStateTimer = null;
+async function _saveViewState() {
+    if (appInitializing) return;
+    if (_saveViewStateTimer) clearTimeout(_saveViewStateTimer);
+    _saveViewStateTimer = setTimeout(async () => {
+        const settings = window._cachedSettings || await window.electronAPI.getSettings();
+        settings.graphVisible = graphVisible;
+        settings.expandedOpen = isExpanded;
+        window._cachedSettings = settings;
+        await window.electronAPI.saveSettings(settings);
+    }, 300);
 }
 
 let sessionResetTriggered = false;
@@ -961,11 +1010,13 @@ function showMainContent() {
 // Auto-update management
 function startAutoUpdate() {
     stopAutoUpdate();
+    const settings = window._cachedSettings || {};
+    const intervalSecs = parseInt(settings.refreshInterval) || 300;
     updateInterval = setInterval(async () => {
         if (elements.refreshBtn) elements.refreshBtn.classList.add('spinning');
         await fetchUsageData();
         if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
-    }, UPDATE_INTERVAL);
+    }, intervalSecs * 1000);
 }
 
 function stopAutoUpdate() {
@@ -1198,7 +1249,7 @@ style.textContent = `
     }
     
     .refresh-btn.spinning svg {
-        animation: spin-refresh 1s linear;
+        animation: spin-refresh 1s linear infinite;
     }
 `;
 document.head.appendChild(style);
@@ -1217,6 +1268,7 @@ async function loadSettings() {
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
     elements.weeklyDateFormat.value = settings.weeklyDateFormat || 'date';
+    if (elements.refreshInterval) elements.refreshInterval.value = settings.refreshInterval || '300';
     elements.usageAlertsToggle.checked = settings.usageAlerts !== false;
     if (elements.compactModeToggle) elements.compactModeToggle.checked = !!settings.compactMode;
 
@@ -1256,8 +1308,11 @@ async function saveSettings() {
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
         weeklyDateFormat: elements.weeklyDateFormat.value || 'date',
+        refreshInterval: elements.refreshInterval ? (elements.refreshInterval.value || '300') : '300',
         usageAlerts: elements.usageAlertsToggle.checked,
-        compactMode: isCompactMode  // use updated value after applyCompactMode
+        compactMode: isCompactMode,
+        graphVisible: graphVisible,
+        expandedOpen: isExpanded
     };
     await window.electronAPI.saveSettings(settings);
     window._cachedSettings = settings;
@@ -1268,6 +1323,8 @@ async function saveSettings() {
 
     // Re-render resets-at values immediately with new format
     if (latestUsageData) refreshTimers();
+    // Restart auto-update with new interval if it changed
+    startAutoUpdate();
 }
 
 function applyTheme(theme) {
