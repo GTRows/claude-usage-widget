@@ -89,9 +89,13 @@ function createMainWindow() {
   mainWindow = new BrowserWindow(windowOptions);
   mainWindow.loadFile('src/renderer/index.html');
 
+  let positionSaveTimer = null;
   mainWindow.on('move', () => {
-    const position = mainWindow.getBounds();
-    store.set('windowPosition', { x: position.x, y: position.y });
+    if (positionSaveTimer) clearTimeout(positionSaveTimer);
+    positionSaveTimer = setTimeout(() => {
+      const position = mainWindow.getBounds();
+      store.set('windowPosition', { x: position.x, y: position.y });
+    }, 300);
   });
 
   mainWindow.on('closed', () => {

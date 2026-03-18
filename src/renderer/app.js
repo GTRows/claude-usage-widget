@@ -990,6 +990,16 @@ function showLoginRequired() {
     elements.sessionKeyError.textContent = '';
     elements.sessionKeyInput.value = '';
     stopAutoUpdate();
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    // Reset alert state so a new session doesn't inherit suppressed alerts
+    isFirstDataLoad = true;
+    alertFired.session_warn = false;
+    alertFired.session_danger = false;
+    alertFired.weekly_warn = false;
+    alertFired.weekly_danger = false;
 }
 
 function showMainContent() {
