@@ -23,6 +23,7 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 - Settings overlay resize corrected to 288px
 - Stop countdown timer on logout — prevents stale timers running after logout (code review Finding 2)
 - Reset alert state on logout/relogin — new session no longer inherits suppressed alerts (code review Finding 4)
+- In-flight fetch guard — overlapping refresh calls from manual, tray, timer, and reset triggers are now dropped rather than piling up (code review Finding 3)
 
 ### macOS
 - Widget width 590px on macOS vs 560px on Windows/Linux — prevents date/time column clipping
