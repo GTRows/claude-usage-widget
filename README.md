@@ -28,6 +28,15 @@ A beautiful, standalone desktop widget for **Windows, macOS, and Linux** that di
 
 ## What's New in v1.7.0
 
+### 🎨 Dynamic Threshold Colors
+
+All usage bars (Session, Weekly, and Extra Usage) now respect your configured warning and danger thresholds:
+- **Green** below warning threshold
+- **Amber** at or above warning threshold
+- **Red** at or above danger threshold
+
+Changes apply immediately when thresholds are adjusted in Settings.
+
 ### 📈 Usage History Graph
 
 A toggleable usage history graph now sits below the main widget. Click the graph button in the toolbar to show or hide it.

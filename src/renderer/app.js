@@ -474,11 +474,28 @@ function buildExtraRows(data) {
         // Build row using DOM methods (no innerHTML)
         const label = document.createElement('span');
         label.className = 'usage-label';
-        label.textContent = config.label;
+        
+        if (key === 'extra_usage') {
+            // Extra usage: ON/OFF indicator goes next to label
+            if (value.is_enabled === true) {
+                const statusTag = document.createElement('span');
+                statusTag.className = 'extra-status on';
+                statusTag.textContent = 'ON';
+                label.appendChild(statusTag);
+            } else if (value.is_enabled === false) {
+                const statusTag = document.createElement('span');
+                statusTag.className = 'extra-status off';
+                statusTag.textContent = 'OFF';
+                label.appendChild(statusTag);
+            }
+            label.appendChild(document.createTextNode(' Extra Usage'));
+        } else {
+            label.textContent = config.label;
+        }
         row.appendChild(label);
 
         if (key === 'extra_usage') {
-            // Extra usage: bar col shows $used/$limit, elapsed col empty, timer col shows balance
+            // Extra usage: bar col shows $used/$limit, elapsed col empty, timer col shows account credits
             const barGroup = document.createElement('div');
             barGroup.className = 'usage-bar-group';
             const progressBar = document.createElement('div');
@@ -486,6 +503,14 @@ function buildExtraRows(data) {
             const progressFill = document.createElement('div');
             progressFill.className = `progress-fill ${colorClass}`;
             progressFill.style.width = `${Math.min(utilization, 100)}%`;
+            
+            // Apply warning/danger thresholds to extra usage bar
+            if (utilization >= dangerThreshold) {
+                progressFill.classList.add('danger');
+            } else if (utilization >= warnThreshold) {
+                progressFill.classList.add('warning');
+            }
+            
             progressBar.appendChild(progressFill);
             barGroup.appendChild(progressBar);
 
@@ -505,25 +530,15 @@ function buildExtraRows(data) {
             row.appendChild(elapsedGroup);
 
             const timerText = document.createElement('span');
-            timerText.className = 'timer-text extra-balance';
-            if (value.is_enabled === true) {
-                const statusTag = document.createElement('span');
-                statusTag.className = 'extra-status on';
-                statusTag.textContent = 'ON';
-                timerText.appendChild(statusTag);
-            } else if (value.is_enabled === false) {
-                const statusTag = document.createElement('span');
-                statusTag.className = 'extra-status off';
-                statusTag.textContent = 'OFF';
-                timerText.appendChild(statusTag);
-            }
-            if (value.balance_cents != null) {
-                timerText.appendChild(document.createTextNode(` Bal ${formatCurrency(value.balance_cents, value.currency)}`));
-            }
+            timerText.className = 'timer-text extra-balance-label';
+            timerText.textContent = 'Account Credits:';
             row.appendChild(timerText);
 
             const resetsText = document.createElement('span');
-            resetsText.className = 'resets-at-text';
+            resetsText.className = 'resets-at-text extra-balance-amount';
+            if (value.balance_cents != null) {
+                resetsText.textContent = formatCurrency(value.balance_cents, value.currency);
+            }
             row.appendChild(resetsText);
         } else {
             const totalMinutes = key.includes('seven_day') ? 7 * 24 * 60 : 5 * 60;
@@ -579,11 +594,6 @@ function buildExtraRows(data) {
             resetsText.className = 'resets-at-text';
             row.appendChild(resetsText);
         }
-
-        // Apply warning/danger classes
-        const progressEl = row.querySelector('.progress-fill');
-        if (utilization >= 90) progressEl.classList.add('danger');
-        else if (utilization >= 75) progressEl.classList.add('warning');
 
         elements.extraRows.appendChild(row);
         count++;
@@ -1409,7 +1419,14 @@ async function saveSettings() {
     }
 
     // Re-render resets-at values immediately with new format
-    if (latestUsageData) refreshTimers();
+    if (latestUsageData) {
+        refreshTimers();
+        // Rebuild extra rows to apply new threshold colors
+        if (isExpanded) {
+            buildExtraRows(latestUsageData);
+            refreshExtraTimers();
+        }
+    }
     // Restart auto-update with new interval if it changed
     startAutoUpdate();
 }

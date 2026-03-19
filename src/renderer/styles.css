@@ -654,6 +654,17 @@ body.theme-light .graph-btn.active {
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
 }
 
+/* Threshold color overrides for warning and danger states */
+.progress-fill.warning {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.progress-fill.danger {
+    background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
 
 /* Circle only — centered in its column */
 .usage-elapsed-group {
@@ -712,20 +723,29 @@ body.theme-light .graph-btn.active {
     opacity: 0.8;
 }
 
-.timer-text.extra-balance {
-    font-size: 10px;
-    color: #34d399;
-    font-weight: 600;
+.timer-text.extra-balance-label {
+    font-size: 12px;
+    color: #a0a0a0;
+    font-weight: 400;
+    text-align: left;
+}
+
+.resets-at-text.extra-balance-amount {
+    font-size: 12px;
+    color: #a0a0a0;
+    font-weight: 400;
+    text-align: center;
 }
 
 .extra-status {
+    display: inline-block;
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.04em;
-    padding: 1px 4px;
+    padding: 2px 5px;
     border-radius: 3px;
     vertical-align: middle;
-    margin-right: 3px;
+    margin-right: 6px;
 }
 
 .extra-status.on {
