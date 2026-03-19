@@ -471,58 +471,113 @@ function buildExtraRows(data) {
         const row = document.createElement('div');
         row.className = 'usage-section';
 
+        // Build row using DOM methods (no innerHTML)
+        const label = document.createElement('span');
+        label.className = 'usage-label';
+        label.textContent = config.label;
+        row.appendChild(label);
+
         if (key === 'extra_usage') {
             // Extra usage: bar col shows $used/$limit, elapsed col empty, timer col shows balance
-            const barHTML = value.used_cents != null && value.limit_cents != null
-                ? `<div class="usage-bar-group">
-                    <div class="progress-bar">
-                        <div class="progress-fill ${colorClass}" style="width: ${Math.min(utilization, 100)}%"></div>
-                    </div>
-                    <span class="usage-percentage extra-spending">${formatCurrency(value.used_cents, value.currency)}/${formatCurrency(value.limit_cents, value.currency)}</span>
-                   </div>`
-                : `<div class="usage-bar-group">
-                    <div class="progress-bar">
-                        <div class="progress-fill ${colorClass}" style="width: ${Math.min(utilization, 100)}%"></div>
-                    </div>
-                    <span class="usage-percentage">${Math.round(utilization)}%</span>
-                   </div>`;
-            const statusTag = value.is_enabled === true
-                ? `<span class="extra-status on">ON</span>`
-                : value.is_enabled === false
-                    ? `<span class="extra-status off">OFF</span>`
-                    : '';
-            const balanceHTML = value.balance_cents != null
-                ? `<span class="timer-text extra-balance">${statusTag} Bal ${formatCurrency(value.balance_cents, value.currency)}</span>`
-                : statusTag
-                    ? `<span class="timer-text extra-balance">${statusTag}</span>`
-                    : `<span class="timer-text"></span>`;
-            row.innerHTML = `
-                <span class="usage-label">${config.label}</span>
-                ${barHTML}
-                <div class="usage-elapsed-group"></div>
-                ${balanceHTML}
-                <span class="resets-at-text"></span>
-            `;
+            const barGroup = document.createElement('div');
+            barGroup.className = 'usage-bar-group';
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar';
+            const progressFill = document.createElement('div');
+            progressFill.className = `progress-fill ${colorClass}`;
+            progressFill.style.width = `${Math.min(utilization, 100)}%`;
+            progressBar.appendChild(progressFill);
+            barGroup.appendChild(progressBar);
+
+            const percentage = document.createElement('span');
+            if (value.used_cents != null && value.limit_cents != null) {
+                percentage.className = 'usage-percentage extra-spending';
+                percentage.textContent = `${formatCurrency(value.used_cents, value.currency)}/${formatCurrency(value.limit_cents, value.currency)}`;
+            } else {
+                percentage.className = 'usage-percentage';
+                percentage.textContent = `${Math.round(utilization)}%`;
+            }
+            barGroup.appendChild(percentage);
+            row.appendChild(barGroup);
+
+            const elapsedGroup = document.createElement('div');
+            elapsedGroup.className = 'usage-elapsed-group';
+            row.appendChild(elapsedGroup);
+
+            const timerText = document.createElement('span');
+            timerText.className = 'timer-text extra-balance';
+            if (value.is_enabled === true) {
+                const statusTag = document.createElement('span');
+                statusTag.className = 'extra-status on';
+                statusTag.textContent = 'ON';
+                timerText.appendChild(statusTag);
+            } else if (value.is_enabled === false) {
+                const statusTag = document.createElement('span');
+                statusTag.className = 'extra-status off';
+                statusTag.textContent = 'OFF';
+                timerText.appendChild(statusTag);
+            }
+            if (value.balance_cents != null) {
+                timerText.appendChild(document.createTextNode(` Bal ${formatCurrency(value.balance_cents, value.currency)}`));
+            }
+            row.appendChild(timerText);
+
+            const resetsText = document.createElement('span');
+            resetsText.className = 'resets-at-text';
+            row.appendChild(resetsText);
         } else {
             const totalMinutes = key.includes('seven_day') ? 7 * 24 * 60 : 5 * 60;
-            row.innerHTML = `
-                <span class="usage-label">${config.label}</span>
-                <div class="usage-bar-group">
-                    <div class="progress-bar">
-                        <div class="progress-fill ${colorClass}" style="width: ${Math.min(utilization, 100)}%"></div>
-                    </div>
-                    <span class="usage-percentage">${Math.round(utilization)}%</span>
-                </div>
-                <div class="usage-elapsed-group">
-                    <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
-                        <circle class="timer-bg" cx="12" cy="12" r="10" />
-                        <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
-                            style="stroke-dasharray: 63; stroke-dashoffset: 63" />
-                    </svg>
-                </div>
-                <div class="timer-text" data-resets="${resetsAt || ''}" data-total="${totalMinutes}">--:--</div>
-                <span class="resets-at-text"></span>
-            `;
+
+            const barGroup = document.createElement('div');
+            barGroup.className = 'usage-bar-group';
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar';
+            const progressFill = document.createElement('div');
+            progressFill.className = `progress-fill ${colorClass}`;
+            progressFill.style.width = `${Math.min(utilization, 100)}%`;
+            progressBar.appendChild(progressFill);
+            barGroup.appendChild(progressBar);
+
+            const percentage = document.createElement('span');
+            percentage.className = 'usage-percentage';
+            percentage.textContent = `${Math.round(utilization)}%`;
+            barGroup.appendChild(percentage);
+            row.appendChild(barGroup);
+
+            const elapsedGroup = document.createElement('div');
+            elapsedGroup.className = 'usage-elapsed-group';
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'mini-timer');
+            svg.setAttribute('width', '24');
+            svg.setAttribute('height', '24');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            const circleBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circleBg.setAttribute('class', 'timer-bg');
+            circleBg.setAttribute('cx', '12');
+            circleBg.setAttribute('cy', '12');
+            circleBg.setAttribute('r', '10');
+            svg.appendChild(circleBg);
+            const circleProgress = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circleProgress.setAttribute('class', `timer-progress ${colorClass}`);
+            circleProgress.setAttribute('cx', '12');
+            circleProgress.setAttribute('cy', '12');
+            circleProgress.setAttribute('r', '10');
+            circleProgress.style.strokeDasharray = '63';
+            circleProgress.style.strokeDashoffset = '63';
+            svg.appendChild(circleProgress);
+            elapsedGroup.appendChild(svg);
+            row.appendChild(elapsedGroup);
+
+            const timerText = document.createElement('div');
+            timerText.className = 'timer-text';
+            timerText.dataset.resets = resetsAt || '';
+            timerText.dataset.total = totalMinutes;
+            timerText.textContent = '--:--';
+            row.appendChild(timerText);
+
+            const resetsText = document.createElement('span');
+            resetsText.className = 'resets-at-text';
+            row.appendChild(resetsText);
         }
 
         // Apply warning/danger classes

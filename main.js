@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, Notification, safeStorage } = require('electron');
 const path = require('path');
 const https = require('https');
 const Store = require('electron-store');
@@ -7,9 +7,8 @@ const { fetchViaWindow } = require('./src/fetch-via-window');
 const GITHUB_OWNER = 'SlavomirDurej';
 const GITHUB_REPO = 'claude-usage-widget';
 
-const store = new Store({
-  encryptionKey: 'claude-widget-secure-key-2024'
-});
+// Non-sensitive settings storage (no encryption needed)
+const store = new Store();
 
 // Debug mode: set DEBUG_LOG=1 env var or pass --debug flag to see verbose logs.
 // Regular users will only see critical errors in the console.
@@ -27,10 +26,11 @@ const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_HEIGHT = 155;
 const HISTORY_RETENTION_DAYS = 30;
 const CHART_DAYS = 7;
+const MAX_HISTORY_SAMPLES = 10000; // Cap total samples to prevent unbounded growth
 
 function storeUsageHistory(data) {
   const timestamp = Date.now();
-  const history = store.get('usageHistory', []);
+  let history = store.get('usageHistory', []);
 
   history.push({
     timestamp,
@@ -40,8 +40,16 @@ function storeUsageHistory(data) {
     extraUsage: data.extra_usage?.utilization || 0
   });
 
+  // Rotation: apply both time-based and count-based limits
   const cutoff = timestamp - (HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  store.set('usageHistory', history.filter((entry) => entry.timestamp > cutoff));
+  history = history.filter((entry) => entry.timestamp > cutoff);
+
+  // If still over limit, drop oldest samples
+  if (history.length > MAX_HISTORY_SAMPLES) {
+    history = history.slice(history.length - MAX_HISTORY_SAMPLES);
+  }
+
+  store.set('usageHistory', history);
 }
 
 // Set session-level User-Agent to avoid Electron detection
@@ -182,14 +190,37 @@ function createTray() {
 
 // IPC Handlers
 ipcMain.handle('get-credentials', () => {
+  let sessionKey = null;
+  // Try safeStorage first (OS keychain)
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = store.get('sessionKey_encrypted');
+    if (encrypted) {
+      try {
+        sessionKey = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+      } catch (err) {
+        console.error('[Keychain] Failed to decrypt session key:', err.message);
+      }
+    }
+  } else {
+    // Fallback: plain storage (legacy or safeStorage unavailable)
+    sessionKey = store.get('sessionKey');
+  }
   return {
-    sessionKey: store.get('sessionKey'),
+    sessionKey,
     organizationId: store.get('organizationId')
   };
 });
 
 ipcMain.handle('save-credentials', async (event, { sessionKey, organizationId }) => {
-  store.set('sessionKey', sessionKey);
+  // Store session key in OS keychain if available
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(sessionKey);
+    store.set('sessionKey_encrypted', encrypted.toString('base64'));
+    store.delete('sessionKey'); // Remove legacy plain storage
+  } else {
+    // Fallback: plain storage
+    store.set('sessionKey', sessionKey);
+  }
   if (organizationId) {
     store.set('organizationId', organizationId);
   }
@@ -200,6 +231,7 @@ ipcMain.handle('save-credentials', async (event, { sessionKey, organizationId })
 
 ipcMain.handle('delete-credentials', async () => {
   store.delete('sessionKey');
+  store.delete('sessionKey_encrypted');
   store.delete('organizationId');
   // Remove all Claude.ai cookies
   const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
@@ -283,7 +315,21 @@ ipcMain.handle('set-window-position', (event, { x, y }) => {
 });
 
 ipcMain.on('open-external', (event, url) => {
-  shell.openExternal(url);
+  // Trust boundary enforcement: duplicate allowlist check in main process
+  const allowedDomains = ['claude.ai', 'github.com', 'paypal.me'];
+  try {
+    const parsedUrl = new URL(url);
+    const isAllowed = allowedDomains.some(domain => 
+      parsedUrl.hostname === domain || parsedUrl.hostname.endsWith('.' + domain)
+    );
+    if (isAllowed) {
+      shell.openExternal(url);
+    } else {
+      console.warn(`[Security] Blocked openExternal call to disallowed domain: ${parsedUrl.hostname}`);
+    }
+  } catch (err) {
+    console.warn(`[Security] Blocked openExternal call with invalid URL: ${url}`);
+  }
 });
 
 ipcMain.handle('get-app-version', () => {
