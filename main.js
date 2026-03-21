@@ -10,6 +10,26 @@ const GITHUB_REPO = 'claude-usage-widget';
 // Non-sensitive settings storage (no encryption needed)
 const store = new Store();
 
+// Migration: Delete old encrypted config file from v1.7.0 and earlier
+// The old version used electron-store with encryption, new version uses plain storage
+try {
+  const fs = require('fs');
+  const configPath = store.path;
+  
+  if (fs.existsSync(configPath)) {
+    const rawData = fs.readFileSync(configPath, 'utf-8');
+    // Check if file looks encrypted (contains non-JSON garbage)
+    if (rawData.includes('\u0000') || !rawData.trim().startsWith('{')) {
+      console.log('[Migration] Detected old encrypted config, deleting for fresh start');
+      fs.unlinkSync(configPath);
+      // Store will create a fresh config file automatically
+    }
+  }
+} catch (err) {
+  // If migration fails, just log and continue - store will handle it
+  console.error('[Migration] Error during config migration:', err.message);
+}
+
 // Debug mode: set DEBUG_LOG=1 env var or pass --debug flag to see verbose logs.
 // Regular users will only see critical errors in the console.
 const DEBUG = process.env.DEBUG_LOG === '1' || process.argv.includes('--debug');
