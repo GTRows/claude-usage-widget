@@ -5,12 +5,13 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ---
 
-## [Unreleased] — v1.8.0 (staged in `develop`)
+## [1.7.1] — 2026-03-21
 
 ### New Features
 - Configurable auto-refresh interval — set polling frequency via settings (15s, 30s, 1min, 2min, 5min)
 - Auto-refresh pauses when settings panel is open, resumes cleanly on Done
 - Refresh button visible in compact mode with clockwise spin animation during refresh
+- Dynamic threshold colors — all usage bars now display orange/red based on warning/danger thresholds set in settings
 
 ### Enhancements
 - Graph and expanded rows state persists across restarts — app reopens exactly as you left it
@@ -20,26 +21,31 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 - Settings save crash fixed — `refreshInterval` undefined was crashing electron-store on Done
 - Compact mode no longer blows to full size on every data refresh
 - Graph visibility correctly restored when exiting compact mode
+- Graph redraws immediately when time format changes in settings
+- Settings/refresh/graph buttons hidden on login screen
 - Settings overlay resize corrected to 288px
-- Stop countdown timer on logout — prevents stale timers running after logout (code review Finding 2)
-- Reset alert state on logout/relogin — new session no longer inherits suppressed alerts (code review Finding 4)
-- In-flight fetch guard — overlapping refresh calls from manual, tray, timer, and reset triggers are now dropped rather than piling up (code review Finding 3)
+- Stop countdown timer on logout — prevents stale timers running after logout
+- Reset alert state on logout/relogin — new session no longer inherits suppressed alerts
+- In-flight fetch guard — overlapping refresh calls from manual, tray, timer, and reset triggers are now dropped rather than piling up
+- Periodic always-on-top re-assertion (5-second interval) — prevents z-order loss from hidden BrowserWindows, alt-tab, window manager shortcuts, and other disruptions
 
 ### macOS
 - Widget width 590px on macOS vs 560px on Windows/Linux — prevents date/time column clipping
 - `NSHumanReadableCopyright` added to mac `extendInfo` for correct About dialog display
+- Code signing and notarization support — macOS builds are now properly signed with Developer ID and notarized by Apple (no more Gatekeeper warnings)
 
 ### Security
-- Content-Security-Policy header added — renderer locked to self-only resources (code review Finding 5)
+- Content-Security-Policy header added — renderer locked to self-only resources
 - URL validation with allowlist — only claude.ai, github.com, and paypal.me permitted via shell.openExternal
 - Google Fonts dependency removed — Libre Baskerville bundled locally, no external network call on startup
+- OS keychain storage for sessionKey — Windows DPAPI and macOS Keychain integration for secure credential storage
+- History rotation cap (10,000 samples max) — prevents unbounded growth
 
 ### Optimization
 - Debounced window position writes on drag — reduces disk I/O churn
 - Debounced compact mode and view state saves — eliminates lag during compact mode transition
 - Settings panel layout consolidated into 2-column rows
 - Dark mode disclaimer, dropdown option, and version label colors corrected
-- Periodic always-on-top re-assertion (5-second interval) — prevents z-order loss from hidden BrowserWindows, alt-tab, window manager shortcuts, and other disruptions
 
 ### Docs
 - Updated screenshots for main view and settings panel
