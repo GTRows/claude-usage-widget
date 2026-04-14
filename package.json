@@ -1,7 +1,7 @@
 {
   "name": "claude-usage-widget",
-  "version": "1.7.1",
-  "description": "Desktop widget for Claude.ai usage monitoring",
+  "version": "1.8.0-gtrows.1",
+  "description": "Desktop widget for Claude.ai usage monitoring (modified by GTRows)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,9 +17,9 @@
     "widget",
     "electron"
   ],
-  "author": "Slavomir Durej",
+  "author": "Slavomir Durej (modified by GTRows)",
   "license": "MIT",
-  "copyright": "Copyright © 2025 Slavomir Durej",
+  "copyright": "Copyright © 2025 Slavomir Durej. Modified by GTRows.",
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
@@ -35,9 +35,9 @@
     "electron-store": "^8.1.0"
   },
   "build": {
-    "appId": "com.claudeusage.widget",
-    "productName": "Claude-Usage-Widget",
-    "copyright": "Copyright © 2025 Slavomir Durej",
+    "appId": "com.claudeusage.widget.gtrows",
+    "productName": "Claude-Usage-Widget-GTRows",
+    "copyright": "Copyright © 2025 Slavomir Durej. Modified by GTRows.",
     "publish": null,
     "win": {
       "target": [
@@ -81,7 +81,7 @@
         "teamId": "X84UXCNLPX"
       },
       "extendInfo": {
-        "NSHumanReadableCopyright": "Copyright © 2025 Slavomir Durej"
+        "NSHumanReadableCopyright": "Copyright © 2025 Slavomir Durej. Modified by GTRows."
       }
     },
     "dmg": {

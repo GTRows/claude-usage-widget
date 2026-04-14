@@ -1039,9 +1039,25 @@ body.theme-light .settings-disclaimer {
 }
 
 .settings-footer .settings-version-label {
-    flex: 1;
     font-size: 11px;
     color: #9090b0;
+}
+
+.settings-footer .settings-fork-label {
+    flex: 1;
+    font-size: 10px;
+    color: #a8e063;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border: 1px solid rgba(168, 224, 99, 0.35);
+    border-radius: 3px;
+    margin-left: 6px;
+}
+
+body.theme-light .settings-footer .settings-fork-label {
+    color: #4a7a00;
+    border-color: rgba(74, 122, 0, 0.35);
 }
 
 .settings-footer .coffee-btn {
