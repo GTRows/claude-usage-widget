@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, Notification, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, Notification, safeStorage, nativeImage } = require('electron');
 const path = require('path');
 const https = require('https');
 const Store = require('electron-store');
@@ -54,6 +54,10 @@ const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit
 
 let mainWindow = null;
 let tray = null;
+let trayIconFrames = [];
+let trayIconIndex = 0;
+let trayIconTimer = null;
+let defaultTrayImage = null;
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_HEIGHT = 155;
@@ -150,7 +154,9 @@ function createMainWindow() {
 
 function createTray() {
   try {
-    tray = new Tray(path.join(__dirname, process.platform === 'darwin' ? 'assets/tray-icon-mac.png' : process.platform === 'linux' ? 'assets/tray-icon-linux.png' : 'assets/tray-icon.png'));
+    const trayIconPath = path.join(__dirname, process.platform === 'darwin' ? 'assets/tray-icon-mac.png' : process.platform === 'linux' ? 'assets/tray-icon-linux.png' : 'assets/tray-icon.png');
+    defaultTrayImage = nativeImage.createFromPath(trayIconPath);
+    tray = new Tray(defaultTrayImage);
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -667,6 +673,43 @@ ipcMain.handle('fetch-usage-data', async () => {
   }
 
   return data;
+});
+
+// Renderer pushes pre-rendered tray icon frames (one per metric).
+// Each frame: { dataURL: string, tooltip: string }. Main cycles them.
+function applyTrayFrame(index) {
+  if (!tray || tray.isDestroyed?.()) return;
+  if (!trayIconFrames.length) {
+    if (defaultTrayImage) tray.setImage(defaultTrayImage);
+    tray.setToolTip('Claude Usage Widget');
+    if (process.platform === 'darwin') tray.setTitle('');
+    return;
+  }
+  const frame = trayIconFrames[index % trayIconFrames.length];
+  try {
+    const img = nativeImage.createFromDataURL(frame.dataURL);
+    if (!img.isEmpty()) tray.setImage(img);
+  } catch (err) {
+    debugLog('Failed to apply tray frame:', err.message);
+  }
+  if (frame.tooltip) tray.setToolTip(frame.tooltip);
+  if (process.platform === 'darwin' && frame.title) tray.setTitle(frame.title);
+}
+
+function startTrayCycle() {
+  if (trayIconTimer) clearInterval(trayIconTimer);
+  if (trayIconFrames.length <= 1) return;
+  trayIconTimer = setInterval(() => {
+    trayIconIndex = (trayIconIndex + 1) % trayIconFrames.length;
+    applyTrayFrame(trayIconIndex);
+  }, 3000);
+}
+
+ipcMain.on('set-tray-frames', (event, frames) => {
+  trayIconFrames = Array.isArray(frames) ? frames.filter(f => f && f.dataURL) : [];
+  trayIconIndex = 0;
+  applyTrayFrame(0);
+  startTrayCycle();
 });
 
 // App lifecycle
