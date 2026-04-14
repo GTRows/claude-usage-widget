@@ -1108,7 +1108,8 @@ function showMainContent() {
 function startAutoUpdate() {
     stopAutoUpdate();
     const settings = window._cachedSettings || {};
-    const intervalSecs = parseInt(settings.refreshInterval) || 300;
+    const rawInterval = parseInt(settings.refreshInterval);
+    const intervalSecs = Number.isFinite(rawInterval) && rawInterval >= 15 ? rawInterval : 300;
     updateInterval = setInterval(async () => {
         if (elements.refreshBtn) elements.refreshBtn.classList.add('spinning');
         await fetchUsageData();
@@ -1365,7 +1366,10 @@ async function loadSettings() {
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
     elements.weeklyDateFormat.value = settings.weeklyDateFormat || 'date';
-    if (elements.refreshInterval) elements.refreshInterval.value = settings.refreshInterval || '300';
+    if (elements.refreshInterval) {
+        const raw = parseInt(settings.refreshInterval);
+        elements.refreshInterval.value = Number.isFinite(raw) && raw >= 15 ? String(raw) : '300';
+    }
     elements.usageAlertsToggle.checked = settings.usageAlerts !== false;
     if (elements.compactModeToggle) elements.compactModeToggle.checked = !!settings.compactMode;
 
@@ -1405,7 +1409,7 @@ async function saveSettings() {
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
         weeklyDateFormat: elements.weeklyDateFormat.value || 'date',
-        refreshInterval: elements.refreshInterval ? (elements.refreshInterval.value || '300') : '300',
+        refreshInterval: elements.refreshInterval ? String(Math.max(15, parseInt(elements.refreshInterval.value) || 300)) : '300',
         usageAlerts: elements.usageAlertsToggle.checked,
         compactMode: isCompactMode,
         graphVisible: graphVisible,

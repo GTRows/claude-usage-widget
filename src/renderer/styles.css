@@ -941,6 +941,16 @@ body.theme-light .settings-disclaimer {
     outline: none;
 }
 
+.refresh-interval-group {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.refresh-interval-input {
+    width: 64px;
+}
+
 .threshold-pct {
     color: #707080;
     font-size: 11px;
