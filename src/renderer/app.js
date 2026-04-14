@@ -645,6 +645,7 @@ function updateUI(data) {
     latestUsageData = data;
 
     showMainContent();
+    updateTrayIcon(data);
     buildExtraRows(data);
     refreshTimers();
     if (isExpanded) refreshExtraTimers();
@@ -940,6 +941,66 @@ function startCountdown() {
         refreshTimers();
         if (isExpanded) refreshExtraTimers();
     }, 1000);
+}
+
+// Build a pre-rendered tray icon frame for a single metric.
+// Draws a circular usage ring with the percentage in the centre.
+function buildTrayFrame(label, percent) {
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    const pct = Math.max(0, Math.min(100, percent));
+    let color = '#10b981';
+    if (pct >= dangerThreshold) color = '#ef4444';
+    else if (pct >= warnThreshold) color = '#f59e0b';
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    const start = -Math.PI / 2;
+    const end = start + (pct / 100) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 2, start, end);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pct >= 100 ? '100' : `${Math.round(pct)}`, size / 2, size / 2 + 1);
+
+    return {
+        dataURL: canvas.toDataURL('image/png'),
+        tooltip: `${label}: ${Math.round(pct)}%`,
+        title: ` ${Math.round(pct)}%`
+    };
+}
+
+function updateTrayIcon(data) {
+    try {
+        const frames = [];
+        const session = data.five_hour?.utilization;
+        const weekly = data.seven_day?.utilization;
+        const opus = data.seven_day_opus?.utilization;
+
+        if (typeof session === 'number') frames.push(buildTrayFrame('Session', session));
+        if (typeof weekly === 'number') frames.push(buildTrayFrame('Weekly', weekly));
+        if (typeof opus === 'number' && opus > 0) frames.push(buildTrayFrame('Opus (7d)', opus));
+
+        if (window.electronAPI.setTrayFrames) {
+            window.electronAPI.setTrayFrames(frames);
+        }
+    } catch (err) {
+        debugLog('Failed to update tray icon:', err);
+    }
 }
 
 // Update progress bar

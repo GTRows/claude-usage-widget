@@ -70,5 +70,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
 
   // Compact mode
-  setCompactMode: (compact) => ipcRenderer.send('set-compact-mode', compact)
+  setCompactMode: (compact) => ipcRenderer.send('set-compact-mode', compact),
+
+  // Tray icon frames (pre-rendered in renderer, cycled in main)
+  setTrayFrames: (frames) => ipcRenderer.send('set-tray-frames', frames)
 });
