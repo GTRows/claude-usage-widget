@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(node -c main.js)",
+      "Bash(node -c preload.js)",
+      "Bash(node -c src/renderer/app.js)"
     ]
   }
 }
