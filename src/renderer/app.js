@@ -8,12 +8,15 @@ let isCompactMode = false;
 let usageChart = null;
 let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
+let historyVisible = false;
+let historyRangeMs = 24 * 60 * 60 * 1000;
 let appInitializing = true;  // suppresses _saveViewState during startup restore
 let isFetching = false;       // in-flight guard — prevents overlapping fetchUsageData calls
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const WIDGET_HEIGHT_COLLAPSED = 155;
 const WIDGET_ROW_HEIGHT = 30;
 const GRAPH_HEIGHT = 232;
+const HISTORY_HEIGHT = 268;
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -62,6 +65,12 @@ const elements = {
     extraRows: document.getElementById('extraRows'),
     graphSection: document.getElementById('graphSection'),
     usageChart: document.getElementById('usageChart'),
+    historyBtn: document.getElementById('historyBtn'),
+    historySection: document.getElementById('historySection'),
+    historyRangeTabs: document.getElementById('historyRangeTabs'),
+    historyTableBody: document.getElementById('historyTableBody'),
+    historyCount: document.getElementById('historyCount'),
+    historyEmpty: document.getElementById('historyEmpty'),
 
     settingsBtn: document.getElementById('settingsBtn'),
     settingsOverlay: document.getElementById('settingsOverlay'),
@@ -140,6 +149,13 @@ async function init() {
         elements.expandSection.style.display = 'block';
     }
 
+    // Restore history visibility (normal mode only)
+    if (settings.historyVisible && !settings.compactMode && elements.historyBtn) {
+        historyVisible = true;
+        elements.historyBtn.classList.add('active');
+        elements.historySection.style.display = 'block';
+    }
+
     if (credentials.sessionKey && credentials.organizationId) {
         showMainContent();
         await fetchUsageData();
@@ -209,6 +225,31 @@ function setupEventListeners() {
         if (!isCompactMode) resizeWidget();
         _saveViewState();
     });
+
+    if (elements.historyBtn) {
+        elements.historyBtn.addEventListener('click', async () => {
+            historyVisible = !historyVisible;
+            elements.historyBtn.classList.toggle('active', historyVisible);
+            elements.historySection.style.display = historyVisible ? 'block' : 'none';
+            if (historyVisible) await loadHistoryTable();
+            if (!isCompactMode) resizeWidget();
+            _saveViewState();
+        });
+    }
+
+    if (elements.historyRangeTabs) {
+        elements.historyRangeTabs.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.history-range-btn');
+            if (!btn) return;
+            const range = parseInt(btn.dataset.range, 10);
+            if (!Number.isFinite(range)) return;
+            historyRangeMs = range;
+            elements.historyRangeTabs.querySelectorAll('.history-range-btn').forEach(b => {
+                b.classList.toggle('active', b === btn);
+            });
+            await loadHistoryTable();
+        });
+    }
 
     elements.minimizeBtn.addEventListener('click', () => {
         window.electronAPI.minimizeWindow();
@@ -637,7 +678,8 @@ function resizeWidget(bannerVisible) {
         ? EXPAND_OVERHEAD + (extraCount * WIDGET_ROW_HEIGHT)
         : 0;
     const graphOffset = graphVisible ? GRAPH_HEIGHT : 0;
-    const totalHeight = WIDGET_HEIGHT_COLLAPSED + expandedOffset + graphOffset + bannerOffset;
+    const historyOffset = historyVisible ? HISTORY_HEIGHT : 0;
+    const totalHeight = WIDGET_HEIGHT_COLLAPSED + expandedOffset + graphOffset + historyOffset + bannerOffset;
     window.electronAPI.resizeWindow(totalHeight);
 }
 
@@ -652,6 +694,9 @@ function updateUI(data) {
     startCountdown();
     if (graphVisible) {
         loadChart();
+    }
+    if (historyVisible) {
+        loadHistoryTable();
     }
 
     // Update compact bars in parallel if compact mode is active
@@ -749,6 +794,12 @@ function applyCompactMode(compact) {
         loadChart();
     }
 
+    if (compact && historyVisible) {
+        historyVisible = false;
+        if (elements.historyBtn) elements.historyBtn.classList.remove('active');
+        if (elements.historySection) elements.historySection.style.display = 'none';
+    }
+
     // Show/hide the collapse chevron (only visible in normal mode with data)
     if (elements.compactCollapseBtn) {
         elements.compactCollapseBtn.style.display = compact ? 'none' : 'flex';
@@ -758,6 +809,9 @@ function applyCompactMode(compact) {
     // Hide graph button in compact mode (not applicable)
     if (elements.graphBtn) {
         elements.graphBtn.style.display = compact ? 'none' : '';
+    }
+    if (elements.historyBtn) {
+        elements.historyBtn.style.display = compact ? 'none' : '';
     }
 
     // Tell main process to resize the window width
@@ -815,6 +869,7 @@ async function _saveViewState() {
         const settings = window._cachedSettings || await window.electronAPI.getSettings();
         settings.graphVisible = graphVisible;
         settings.expandedOpen = isExpanded;
+        settings.historyVisible = historyVisible;
         window._cachedSettings = settings;
         await window.electronAPI.saveSettings(settings);
     }, 300);
@@ -1129,6 +1184,104 @@ async function loadChart() {
     renderChart(history);
 }
 
+async function loadHistoryTable() {
+    if (!elements.historyTableBody) return;
+    const fetchRange = window.electronAPI.getUsageHistoryRange;
+    const history = fetchRange
+        ? await fetchRange(historyRangeMs)
+        : await window.electronAPI.getUsageHistory();
+
+    const ordered = [...history].sort((a, b) => b.timestamp - a.timestamp);
+
+    if (elements.historyCount) {
+        elements.historyCount.textContent = `${ordered.length} sample${ordered.length === 1 ? '' : 's'}`;
+    }
+
+    elements.historyTableBody.innerHTML = '';
+    if (!ordered.length) {
+        elements.historyEmpty.style.display = 'block';
+        return;
+    }
+    elements.historyEmpty.style.display = 'none';
+
+    const settings = window._cachedSettings || {};
+    const timeFormat = settings.timeFormat || '12h';
+    const hour12 = timeFormat !== '24h';
+    const now = Date.now();
+    const showDate = historyRangeMs === 0 || historyRangeMs > 24 * 60 * 60 * 1000;
+
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < ordered.length; i++) {
+        const entry = ordered[i];
+        const next = ordered[i + 1];
+        const tr = document.createElement('tr');
+
+        const timeCell = document.createElement('td');
+        timeCell.className = 'col-time';
+        const date = new Date(entry.timestamp);
+        if (showDate) {
+            timeCell.textContent = date.toLocaleString([], {
+                month: 'short', day: 'numeric',
+                hour: 'numeric', minute: '2-digit', hour12
+            });
+        } else {
+            timeCell.textContent = date.toLocaleTimeString([], {
+                hour: 'numeric', minute: '2-digit', hour12
+            });
+        }
+        timeCell.title = date.toLocaleString();
+        tr.appendChild(timeCell);
+
+        tr.appendChild(makePctCell(entry.session));
+        tr.appendChild(makePctCell(entry.weekly));
+        tr.appendChild(makePctCell(entry.sonnet));
+        tr.appendChild(makePctCell(entry.opus));
+        tr.appendChild(makePctCell(entry.extraUsage));
+        tr.appendChild(makeDeltaCell(entry.session, next?.session));
+        tr.appendChild(makeDeltaCell(entry.weekly, next?.weekly));
+
+        frag.appendChild(tr);
+    }
+    elements.historyTableBody.appendChild(frag);
+    void now;
+}
+
+function makePctCell(value) {
+    const td = document.createElement('td');
+    td.className = 'col-pct';
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        td.textContent = '—';
+        td.classList.add('col-muted');
+        return td;
+    }
+    const pct = Math.max(0, value);
+    td.textContent = `${Math.round(pct)}%`;
+    if (pct >= dangerThreshold) td.classList.add('col-danger');
+    else if (pct >= warnThreshold) td.classList.add('col-warning');
+    else if (pct === 0) td.classList.add('col-muted');
+    return td;
+}
+
+function makeDeltaCell(current, previous) {
+    const td = document.createElement('td');
+    td.className = 'col-pct';
+    if (typeof current !== 'number' || typeof previous !== 'number') {
+        td.textContent = '—';
+        td.classList.add('col-muted');
+        return td;
+    }
+    const diff = current - previous;
+    if (Math.abs(diff) < 0.05) {
+        td.textContent = '0%';
+        td.classList.add('col-muted');
+        return td;
+    }
+    const rounded = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
+    td.textContent = rounded;
+    td.classList.add(diff > 0 ? 'col-delta-up' : 'col-delta-down');
+    return td;
+}
+
 function renderChart(history) {
     if (usageChart) usageChart.destroy();
 
@@ -1409,7 +1562,8 @@ async function saveSettings() {
         usageAlerts: elements.usageAlertsToggle.checked,
         compactMode: isCompactMode,
         graphVisible: graphVisible,
-        expandedOpen: isExpanded
+        expandedOpen: isExpanded,
+        historyVisible: historyVisible
     };
     await window.electronAPI.saveSettings(settings);
     window._cachedSettings = settings;
