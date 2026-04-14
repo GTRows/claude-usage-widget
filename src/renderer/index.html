@@ -41,7 +41,7 @@
                         </svg>
                     </button>
                     <button class="control-btn minimize-btn" id="minimizeBtn" title="Minimise to System Tray">−</button>
-                    <button class="control-btn close-btn" id="closeBtn" title="Exit Application">×</button>
+                    <button class="control-btn close-btn" id="closeBtn" title="Hide to Tray">×</button>
                 </div>
             </div>
 
@@ -240,29 +240,25 @@
                                 </label>
                             </div>
                             <div class="settings-col">
-                                <span class="settings-row-label" id="trayLabel">Hide from taskbar</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="minimizeToTrayToggle">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Row 2: two toggles -->
-                        <div class="settings-row-2col">
-                            <div class="settings-col">
                                 <span class="settings-row-label">Always on top</span>
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="alwaysOnTopToggle">
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
+                        </div>
+
+                        <!-- Row 2: usage alerts -->
+                        <div class="settings-row-2col">
                             <div class="settings-col">
                                 <span class="settings-row-label">Usage Alerts</span>
                                 <label class="toggle-switch">
                                     <input type="checkbox" id="usageAlertsToggle">
                                     <span class="toggle-slider"></span>
                                 </label>
+                            </div>
+                            <div class="settings-col">
+                                <!-- placeholder -->
                             </div>
                         </div>
 

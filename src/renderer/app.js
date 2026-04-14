@@ -69,7 +69,6 @@ const elements = {
     logoutBtn: document.getElementById('logoutBtn'),
     coffeeBtn: document.getElementById('coffeeBtn'),
     autoStartToggle: document.getElementById('autoStartToggle'),
-    minimizeToTrayToggle: document.getElementById('minimizeToTrayToggle'),
     alwaysOnTopToggle: document.getElementById('alwaysOnTopToggle'),
     warnThreshold: document.getElementById('warnThreshold'),
     dangerThreshold: document.getElementById('dangerThreshold'),
@@ -106,9 +105,6 @@ async function init() {
     const settings = await window.electronAPI.getSettings();
     window._cachedSettings = settings;
     applyTheme(settings.theme);
-    if (window.electronAPI.platform === 'darwin') {
-        document.getElementById('trayLabel').textContent = 'Hide from Dock';
-    }
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
 
@@ -1359,7 +1355,6 @@ async function loadSettings() {
     const settings = await window.electronAPI.getSettings();
 
     elements.autoStartToggle.checked = settings.autoStart;
-    elements.minimizeToTrayToggle.checked = settings.minimizeToTray;
     elements.alwaysOnTopToggle.checked = settings.alwaysOnTop;
     elements.warnThreshold.value = settings.warnThreshold;
     elements.dangerThreshold.value = settings.dangerThreshold;
@@ -1377,9 +1372,6 @@ async function loadSettings() {
     });
 
     applyTheme(settings.theme);
-    if (window.electronAPI.platform === 'darwin') {
-        document.getElementById('trayLabel').textContent = 'Hide from Dock';
-    }
 }
 
 async function saveSettings() {
@@ -1398,7 +1390,6 @@ async function saveSettings() {
 
     const settings = {
         autoStart: elements.autoStartToggle.checked,
-        minimizeToTray: elements.minimizeToTrayToggle.checked,
         alwaysOnTop: elements.alwaysOnTopToggle.checked,
         theme: activeThemeBtn ? activeThemeBtn.dataset.theme : 'dark',
         warnThreshold: warn,
@@ -1414,9 +1405,6 @@ async function saveSettings() {
     await window.electronAPI.saveSettings(settings);
     window._cachedSettings = settings;
     applyTheme(settings.theme);
-    if (window.electronAPI.platform === 'darwin') {
-        document.getElementById('trayLabel').textContent = 'Hide from Dock';
-    }
 
     // Re-render resets-at values immediately with new format
     if (latestUsageData) {

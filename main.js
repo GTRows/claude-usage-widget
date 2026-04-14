@@ -323,7 +323,14 @@ ipcMain.on('minimize-window', () => {
 });
 
 ipcMain.on('close-window', () => {
-  app.quit();
+  if (mainWindow) {
+    if (process.platform === 'darwin') {
+      mainWindow.hide();
+      app.dock.hide();
+    } else {
+      mainWindow.hide();
+    }
+  }
 });
 
 ipcMain.on('resize-window', (event, height) => {
@@ -400,7 +407,6 @@ ipcMain.on('set-compact-mode', (event, compact) => {
 ipcMain.handle('get-settings', () => {
   return {
     autoStart: store.get('settings.autoStart', false),
-    minimizeToTray: store.get('settings.minimizeToTray', false),
     alwaysOnTop: store.get('settings.alwaysOnTop', true),
     theme: store.get('settings.theme', 'dark'),
     warnThreshold: store.get('settings.warnThreshold', 75),
@@ -417,7 +423,6 @@ ipcMain.handle('get-settings', () => {
 
 ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.autoStart', settings.autoStart);
-  store.set('settings.minimizeToTray', settings.minimizeToTray);
   store.set('settings.alwaysOnTop', settings.alwaysOnTop);
   store.set('settings.theme', settings.theme);
   store.set('settings.warnThreshold', settings.warnThreshold);
@@ -440,11 +445,6 @@ ipcMain.handle('save-settings', (event, settings) => {
   }
 
   if (mainWindow) {
-    if (process.platform === 'darwin') {
-      if (settings.minimizeToTray) { app.dock.hide(); } else { app.dock.show(); }
-    } else {
-      mainWindow.setSkipTaskbar(settings.minimizeToTray);
-    }
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
   }
 
@@ -694,14 +694,8 @@ app.whenReady().then(async () => {
   createTray();
 
   // Apply persisted settings
-  const minimizeToTray = store.get('settings.minimizeToTray', false);
   const alwaysOnTop = store.get('settings.alwaysOnTop', true);
   if (mainWindow) {
-    if (process.platform === 'darwin') {
-      if (minimizeToTray) app.dock.hide();
-    } else {
-      if (minimizeToTray) mainWindow.setSkipTaskbar(true);
-    }
     mainWindow.setAlwaysOnTop(alwaysOnTop, 'floating');
   }
 
