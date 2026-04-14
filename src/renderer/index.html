@@ -40,6 +40,13 @@
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                         </svg>
                     </button>
+                    <button class="control-btn history-btn" id="historyBtn" title="Toggle History Table">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="6" x2="21" y2="6" />
+                            <line x1="3" y1="12" x2="21" y2="12" />
+                            <line x1="3" y1="18" x2="21" y2="18" />
+                        </svg>
+                    </button>
                     <button class="control-btn minimize-btn" id="minimizeBtn" title="Minimise to System Tray">−</button>
                     <button class="control-btn close-btn" id="closeBtn" title="Hide to Tray">×</button>
                 </div>
@@ -186,6 +193,39 @@
                     <canvas id="usageChart"></canvas>
                 </div>
 
+                <div class="history-section" id="historySection" style="display: none;">
+                    <div class="history-controls">
+                        <div class="history-range-tabs" id="historyRangeTabs">
+                            <button class="history-range-btn" data-range="3600000">1h</button>
+                            <button class="history-range-btn" data-range="21600000">6h</button>
+                            <button class="history-range-btn active" data-range="86400000">24h</button>
+                            <button class="history-range-btn" data-range="604800000">7d</button>
+                            <button class="history-range-btn" data-range="2592000000">30d</button>
+                            <button class="history-range-btn" data-range="0">All</button>
+                        </div>
+                        <div class="history-meta">
+                            <span class="history-count" id="historyCount">0</span>
+                        </div>
+                    </div>
+                    <div class="history-table-wrap">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-time">Time</th>
+                                    <th class="col-pct">Session</th>
+                                    <th class="col-pct">Weekly</th>
+                                    <th class="col-pct">Sonnet</th>
+                                    <th class="col-pct">Opus</th>
+                                    <th class="col-pct">Extra</th>
+                                    <th class="col-pct">Δ Sess.</th>
+                                    <th class="col-pct">Δ Week.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="history-empty" id="historyEmpty" style="display:none;">No samples in this range.</div>
+                </div>
 
             </div>
 

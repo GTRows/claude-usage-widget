@@ -75,6 +75,7 @@ function storeUsageHistory(data) {
     session: data.five_hour?.utilization || 0,
     weekly: data.seven_day?.utilization || 0,
     sonnet: data.seven_day_sonnet?.utilization || 0,
+    opus: data.seven_day_opus?.utilization || 0,
     extraUsage: data.extra_usage?.utilization || 0
   });
 
@@ -440,6 +441,19 @@ ipcMain.handle('get-usage-history', () => {
     .sort((a, b) => a.timestamp - b.timestamp);
 });
 
+// Range-scoped history fetch for the detail table.
+// rangeMs: positive number = last N ms; 0 or null = full retained history.
+ipcMain.handle('get-usage-history-range', (event, rangeMs) => {
+  const history = store.get('usageHistory', []);
+  if (!rangeMs || rangeMs <= 0) {
+    return [...history].sort((a, b) => a.timestamp - b.timestamp);
+  }
+  const cutoff = Date.now() - rangeMs;
+  return history
+    .filter((entry) => entry.timestamp > cutoff)
+    .sort((a, b) => a.timestamp - b.timestamp);
+});
+
 // Show a native OS desktop notification (Windows toast, macOS NC, Linux libnotify)
 ipcMain.on('show-notification', (event, { title, body }) => {
   if (Notification.isSupported()) {
@@ -474,7 +488,8 @@ ipcMain.handle('get-settings', () => {
     refreshInterval: store.get('settings.refreshInterval', '300'),
     graphVisible: store.get('settings.graphVisible', false),
     expandedOpen: store.get('settings.expandedOpen', false),
-    trayPopupMode: store.get('settings.trayPopupMode', false)
+    trayPopupMode: store.get('settings.trayPopupMode', false),
+    historyVisible: store.get('settings.historyVisible', false)
   };
 });
 
@@ -492,6 +507,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.graphVisible', settings.graphVisible);
   store.set('settings.expandedOpen', settings.expandedOpen);
   store.set('settings.trayPopupMode', settings.trayPopupMode);
+  store.set('settings.historyVisible', settings.historyVisible);
 
   // openAtLogin is not supported on Linux — Electron silently ignores it.
   // Skip the call entirely to avoid misleading behaviour.
