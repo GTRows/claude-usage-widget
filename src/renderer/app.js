@@ -85,6 +85,7 @@ const elements = {
     settingsUpdateLink: document.getElementById('settingsUpdateLink'),
     usageAlertsToggle: document.getElementById('usageAlertsToggle'),
     compactModeToggle: document.getElementById('compactModeToggle'),
+    trayPopupModeToggle: document.getElementById('trayPopupModeToggle'),
     compactModeToggleCompact: document.getElementById('compactModeToggleCompact'),
     compactContent: document.getElementById('compactContent'),
     compactCollapseBtn: document.getElementById('compactCollapseBtn'),
@@ -1368,6 +1369,7 @@ async function loadSettings() {
     if (elements.refreshInterval) elements.refreshInterval.value = settings.refreshInterval || '300';
     elements.usageAlertsToggle.checked = settings.usageAlerts !== false;
     if (elements.compactModeToggle) elements.compactModeToggle.checked = !!settings.compactMode;
+    if (elements.trayPopupModeToggle) elements.trayPopupModeToggle.checked = !!settings.trayPopupMode;
 
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
@@ -1409,7 +1411,8 @@ async function saveSettings() {
         usageAlerts: elements.usageAlertsToggle.checked,
         compactMode: isCompactMode,
         graphVisible: graphVisible,
-        expandedOpen: isExpanded
+        expandedOpen: isExpanded,
+        trayPopupMode: elements.trayPopupModeToggle ? elements.trayPopupModeToggle.checked : false
     };
     await window.electronAPI.saveSettings(settings);
     window._cachedSettings = settings;

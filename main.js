@@ -57,6 +57,7 @@ let tray = null;
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_HEIGHT = 155;
+const TRAY_POPUP_GAP = 8;
 const HISTORY_RETENTION_DAYS = 30;
 const CHART_DAYS = 7;
 const MAX_HISTORY_SAMPLES = 10000; // Cap total samples to prevent unbounded growth
@@ -106,6 +107,7 @@ async function setSessionCookie(sessionKey) {
 
 function createMainWindow() {
   const savedPosition = store.get('windowPosition');
+  const trayPopupMode = store.get('settings.trayPopupMode', false);
   const windowOptions = {
     width: WIDGET_WIDTH,
     height: WIDGET_HEIGHT,
@@ -113,7 +115,8 @@ function createMainWindow() {
     transparent: true,
     alwaysOnTop: true,
     resizable: false,
-    skipTaskbar: false,
+    skipTaskbar: trayPopupMode,
+    show: !trayPopupMode,
     icon: path.join(__dirname, process.platform === 'darwin' ? 'assets/icon.icns' : process.platform === 'linux' ? 'assets/logo.png' : 'assets/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
@@ -122,16 +125,23 @@ function createMainWindow() {
     }
   };
 
-  if (savedPosition) {
+  if (savedPosition && !trayPopupMode) {
     windowOptions.x = savedPosition.x;
     windowOptions.y = savedPosition.y;
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+
+  mainWindow.on('blur', () => {
+    if (store.get('settings.trayPopupMode', false)) {
+      mainWindow.hide();
+    }
+  });
   mainWindow.loadFile('src/renderer/index.html');
 
   let positionSaveTimer = null;
   mainWindow.on('move', () => {
+    if (store.get('settings.trayPopupMode', false)) return;
     if (positionSaveTimer) clearTimeout(positionSaveTimer);
     positionSaveTimer = setTimeout(() => {
       const position = mainWindow.getBounds();
@@ -146,6 +156,43 @@ function createMainWindow() {
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+}
+
+// Position the main window anchored to the tray icon bounds (for tray-popup mode).
+// Falls back to the screen's work area when tray bounds are unavailable.
+function positionWindowNearTray(trayBounds) {
+  if (!mainWindow) return;
+  const { screen } = require('electron');
+  const winBounds = mainWindow.getBounds();
+  let anchorX;
+  let anchorY;
+
+  if (trayBounds && trayBounds.x !== undefined) {
+    anchorX = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2);
+    anchorY = Math.round(trayBounds.y + trayBounds.height + TRAY_POPUP_GAP);
+  } else {
+    const display = screen.getPrimaryDisplay();
+    const area = display.workArea;
+    anchorX = area.x + area.width - winBounds.width - TRAY_POPUP_GAP;
+    anchorY = area.y + area.height - winBounds.height - TRAY_POPUP_GAP;
+  }
+
+  const display = screen.getDisplayMatching({
+    x: anchorX, y: anchorY, width: winBounds.width, height: winBounds.height
+  });
+  const area = display.workArea;
+  anchorX = Math.max(area.x + TRAY_POPUP_GAP, Math.min(anchorX, area.x + area.width - winBounds.width - TRAY_POPUP_GAP));
+  // If anchoring below tray would go off-screen, flip above
+  if (anchorY + winBounds.height > area.y + area.height) {
+    if (trayBounds && trayBounds.y !== undefined) {
+      anchorY = trayBounds.y - winBounds.height - TRAY_POPUP_GAP;
+    } else {
+      anchorY = area.y + area.height - winBounds.height - TRAY_POPUP_GAP;
+    }
+  }
+  anchorY = Math.max(area.y + TRAY_POPUP_GAP, anchorY);
+
+  mainWindow.setPosition(anchorX, anchorY);
 }
 
 function createTray() {
@@ -205,16 +252,18 @@ function createTray() {
     tray.setToolTip('Claude Usage Widget');
     tray.setContextMenu(contextMenu);
 
-    tray.on('click', () => {
-      if (mainWindow) {
-        if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
-          mainWindow.hide();
-        } else {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.show();
-          mainWindow.focus();
-        }
+    tray.on('click', (event, bounds) => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
+        mainWindow.hide();
+        return;
       }
+      if (store.get('settings.trayPopupMode', false)) {
+        positionWindowNearTray(bounds);
+      }
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
     });
   } catch (error) {
     console.error('Failed to create tray:', error);
@@ -411,7 +460,8 @@ ipcMain.handle('get-settings', () => {
     compactMode: store.get('settings.compactMode', false),
     refreshInterval: store.get('settings.refreshInterval', '300'),
     graphVisible: store.get('settings.graphVisible', false),
-    expandedOpen: store.get('settings.expandedOpen', false)
+    expandedOpen: store.get('settings.expandedOpen', false),
+    trayPopupMode: store.get('settings.trayPopupMode', false)
   };
 });
 
@@ -429,6 +479,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.refreshInterval', settings.refreshInterval);
   store.set('settings.graphVisible', settings.graphVisible);
   store.set('settings.expandedOpen', settings.expandedOpen);
+  store.set('settings.trayPopupMode', settings.trayPopupMode);
 
   // openAtLogin is not supported on Linux — Electron silently ignores it.
   // Skip the call entirely to avoid misleading behaviour.
@@ -441,9 +492,9 @@ ipcMain.handle('save-settings', (event, settings) => {
 
   if (mainWindow) {
     if (process.platform === 'darwin') {
-      if (settings.minimizeToTray) { app.dock.hide(); } else { app.dock.show(); }
+      if (settings.minimizeToTray || settings.trayPopupMode) { app.dock.hide(); } else { app.dock.show(); }
     } else {
-      mainWindow.setSkipTaskbar(settings.minimizeToTray);
+      mainWindow.setSkipTaskbar(settings.minimizeToTray || settings.trayPopupMode);
     }
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
   }
