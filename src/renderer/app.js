@@ -10,13 +10,19 @@ let graphVisible = false;
 let graphWasVisible = false; // preserves graph state across compact mode toggle
 let historyVisible = false;
 let historyRangeMs = 24 * 60 * 60 * 1000;
+let historyCustomFrom = null;
+let historyCustomTo = null;
+let historyCustomActive = false;
+let historyPage = 1;
+let historyPageSize = 50;
+let historyLastEntries = [];
+let graphRangeMs = 24 * 60 * 60 * 1000;
+let graphCustomFrom = null;
+let graphCustomTo = null;
+let graphCustomActive = false;
 let appInitializing = true;  // suppresses _saveViewState during startup restore
 let isFetching = false;       // in-flight guard — prevents overlapping fetchUsageData calls
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const WIDGET_HEIGHT_COLLAPSED = 155;
-const WIDGET_ROW_HEIGHT = 30;
-const GRAPH_HEIGHT = 232;
-const HISTORY_HEIGHT = 268;
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -43,7 +49,15 @@ const elements = {
     sessionKeyError: document.getElementById('sessionKeyError'),
     refreshBtn: document.getElementById('refreshBtn'),
     graphBtn: document.getElementById('graphBtn'),
-    minimizeBtn: document.getElementById('minimizeBtn'),
+    pinBtn: document.getElementById('pinBtn'),
+    storagePath: document.getElementById('storagePath'),
+    storagePathOpen: document.getElementById('storagePathOpen'),
+    storageUsageHint: document.getElementById('storageUsageHint'),
+    clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+    autoPruneToggle: document.getElementById('autoPruneToggle'),
+    autoPruneDays: document.getElementById('autoPruneDays'),
+    autoPruneDaysRow: document.getElementById('autoPruneDaysRow'),
+    hideFromTaskbarToggle: document.getElementById('hideFromTaskbarToggle'),
     closeBtn: document.getElementById('closeBtn'),
 
     sessionPercentage: document.getElementById('sessionPercentage'),
@@ -71,17 +85,35 @@ const elements = {
     historyTableBody: document.getElementById('historyTableBody'),
     historyCount: document.getElementById('historyCount'),
     historyEmpty: document.getElementById('historyEmpty'),
+    historyRangeCustom: document.getElementById('historyRangeCustom'),
+    historyRangeFrom: document.getElementById('historyRangeFrom'),
+    historyRangeTo: document.getElementById('historyRangeTo'),
+    historyRangeApply: document.getElementById('historyRangeApply'),
+    historyPagination: document.getElementById('historyPagination'),
+    historyPagePrev: document.getElementById('historyPagePrev'),
+    historyPageNext: document.getElementById('historyPageNext'),
+    historyPageIndicator: document.getElementById('historyPageIndicator'),
+    historyPageSize: document.getElementById('historyPageSize'),
+    historyPageJump: document.getElementById('historyPageJump'),
+    historyPageJumpBtn: document.getElementById('historyPageJumpBtn'),
+    graphRangeTabs: document.getElementById('graphRangeTabs'),
+    graphRangeCustom: document.getElementById('graphRangeCustom'),
+    graphRangeFrom: document.getElementById('graphRangeFrom'),
+    graphRangeTo: document.getElementById('graphRangeTo'),
+    graphRangeApply: document.getElementById('graphRangeApply'),
 
     settingsBtn: document.getElementById('settingsBtn'),
     settingsOverlay: document.getElementById('settingsOverlay'),
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
-    coffeeBtn: document.getElementById('coffeeBtn'),
     autoStartToggle: document.getElementById('autoStartToggle'),
     alwaysOnTopToggle: document.getElementById('alwaysOnTopToggle'),
     warnThreshold: document.getElementById('warnThreshold'),
     dangerThreshold: document.getElementById('dangerThreshold'),
     themeBtns: document.querySelectorAll('.theme-btn'),
+    themeStyleBtns: document.querySelectorAll('.theme-style-btn'),
+    trayStyleSelect: document.getElementById('trayStyleSelect'),
+    trayShowLogoToggle: document.getElementById('trayShowLogoToggle'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
     refreshInterval: document.getElementById('refreshInterval'),
@@ -93,7 +125,6 @@ const elements = {
     settingsUpdateLink: document.getElementById('settingsUpdateLink'),
     usageAlertsToggle: document.getElementById('usageAlertsToggle'),
     compactModeToggle: document.getElementById('compactModeToggle'),
-    trayPopupModeToggle: document.getElementById('trayPopupModeToggle'),
     compactModeToggleCompact: document.getElementById('compactModeToggleCompact'),
     compactContent: document.getElementById('compactContent'),
     compactCollapseBtn: document.getElementById('compactCollapseBtn'),
@@ -109,12 +140,15 @@ const elements = {
 // Initialize
 async function init() {
     setupEventListeners();
+    startContentObserver();
     credentials = await window.electronAPI.getCredentials();
 
     // Apply saved theme and load thresholds immediately
     const settings = await window.electronAPI.getSettings();
     window._cachedSettings = settings;
     applyTheme(settings.theme);
+    applyThemeStyle(settings.themeStyle || 'classic');
+    if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
 
@@ -236,21 +270,176 @@ function setupEventListeners() {
 
     if (elements.historyRangeTabs) {
         elements.historyRangeTabs.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.history-range-btn');
+            const btn = e.target.closest('.range-btn');
             if (!btn) return;
+            elements.historyRangeTabs.querySelectorAll('.range-btn').forEach(b => {
+                b.classList.toggle('active', b === btn);
+            });
+            if (btn.dataset.range === 'custom') {
+                historyCustomActive = true;
+                elements.historyRangeCustom.style.display = 'flex';
+                elements.historySection.classList.add('custom-active');
+                seedCustomInputs(elements.historyRangeFrom, elements.historyRangeTo, historyCustomFrom, historyCustomTo, historyRangeMs);
+                if (!isCompactMode) resizeWidget();
+                const seeded = parseCustomInputs(elements.historyRangeFrom, elements.historyRangeTo);
+                if (seeded) {
+                    historyCustomFrom = seeded.from;
+                    historyCustomTo = seeded.to;
+                    historyPage = 1;
+                    await loadHistoryTable();
+                }
+                return;
+            }
+            historyCustomActive = false;
+            historyCustomFrom = null;
+            historyCustomTo = null;
+            elements.historyRangeCustom.style.display = 'none';
+            elements.historySection.classList.remove('custom-active');
             const range = parseInt(btn.dataset.range, 10);
             if (!Number.isFinite(range)) return;
             historyRangeMs = range;
-            elements.historyRangeTabs.querySelectorAll('.history-range-btn').forEach(b => {
-                b.classList.toggle('active', b === btn);
-            });
+            historyPage = 1;
+            if (!isCompactMode) resizeWidget();
             await loadHistoryTable();
         });
     }
 
-    elements.minimizeBtn.addEventListener('click', () => {
-        window.electronAPI.minimizeWindow();
-    });
+    if (elements.historyRangeApply) {
+        elements.historyRangeApply.addEventListener('click', async () => {
+            const parsed = parseCustomInputs(elements.historyRangeFrom, elements.historyRangeTo);
+            if (!parsed) return;
+            historyCustomFrom = parsed.from;
+            historyCustomTo = parsed.to;
+            historyPage = 1;
+            await loadHistoryTable();
+        });
+    }
+
+    if (elements.historyPageSize) {
+        elements.historyPageSize.addEventListener('change', () => {
+            const size = parseInt(elements.historyPageSize.value, 10);
+            if (!Number.isFinite(size) || size <= 0) return;
+            historyPageSize = size;
+            historyPage = 1;
+            renderHistoryPage();
+        });
+    }
+
+    if (elements.historyPagePrev) {
+        elements.historyPagePrev.addEventListener('click', () => {
+            if (historyPage <= 1) return;
+            historyPage -= 1;
+            renderHistoryPage();
+        });
+    }
+
+    if (elements.historyPageNext) {
+        elements.historyPageNext.addEventListener('click', () => {
+            const totalPages = Math.max(1, Math.ceil(historyLastEntries.length / historyPageSize));
+            if (historyPage >= totalPages) return;
+            historyPage += 1;
+            renderHistoryPage();
+        });
+    }
+
+    const jumpToPage = () => {
+        if (!elements.historyPageJump) return;
+        const totalPages = Math.max(1, Math.ceil(historyLastEntries.length / historyPageSize));
+        const target = parseInt(elements.historyPageJump.value, 10);
+        if (!Number.isFinite(target)) return;
+        historyPage = Math.min(Math.max(1, target), totalPages);
+        renderHistoryPage();
+        elements.historyPageJump.value = '';
+    };
+    if (elements.historyPageJumpBtn) {
+        elements.historyPageJumpBtn.addEventListener('click', jumpToPage);
+    }
+    if (elements.historyPageJump) {
+        elements.historyPageJump.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') jumpToPage();
+        });
+    }
+
+    if (elements.graphRangeTabs) {
+        elements.graphRangeTabs.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.range-btn');
+            if (!btn) return;
+            elements.graphRangeTabs.querySelectorAll('.range-btn').forEach(b => {
+                b.classList.toggle('active', b === btn);
+            });
+            if (btn.dataset.range === 'custom') {
+                graphCustomActive = true;
+                elements.graphRangeCustom.style.display = 'flex';
+                elements.graphSection.classList.add('custom-active');
+                seedCustomInputs(elements.graphRangeFrom, elements.graphRangeTo, graphCustomFrom, graphCustomTo, graphRangeMs);
+                if (!isCompactMode) resizeWidget();
+                return;
+            }
+            graphCustomActive = false;
+            elements.graphRangeCustom.style.display = 'none';
+            elements.graphSection.classList.remove('custom-active');
+            const range = parseInt(btn.dataset.range, 10);
+            if (!Number.isFinite(range)) return;
+            graphRangeMs = range;
+            if (!isCompactMode) resizeWidget();
+            await loadChart();
+        });
+    }
+
+    if (elements.graphRangeApply) {
+        elements.graphRangeApply.addEventListener('click', async () => {
+            const parsed = parseCustomInputs(elements.graphRangeFrom, elements.graphRangeTo);
+            if (!parsed) return;
+            graphCustomFrom = parsed.from;
+            graphCustomTo = parsed.to;
+            await loadChart();
+        });
+    }
+
+    if (elements.storagePathOpen && window.electronAPI.openPath) {
+        elements.storagePathOpen.addEventListener('click', () => {
+            const target = elements.storagePath ? elements.storagePath.dataset.userData : '';
+            if (target) window.electronAPI.openPath(target);
+        });
+    }
+
+    if (elements.clearHistoryBtn && window.electronAPI.clearHistory) {
+        elements.clearHistoryBtn.addEventListener('click', async () => {
+            if (!confirm('Delete all stored usage history? This cannot be undone.')) return;
+            await window.electronAPI.clearHistory();
+            await refreshStorageUsage();
+            if (historyVisible) loadHistoryTable();
+            if (graphVisible) loadChart();
+        });
+    }
+
+    if (elements.autoPruneToggle) {
+        elements.autoPruneToggle.addEventListener('change', () => {
+            if (elements.autoPruneDaysRow) {
+                elements.autoPruneDaysRow.style.display = elements.autoPruneToggle.checked ? 'flex' : 'none';
+            }
+        });
+    }
+
+    if (window.electronAPI.getStorageInfo) {
+        window.electronAPI.getStorageInfo().then((info) => {
+            if (!info || !elements.storagePath) return;
+            elements.storagePath.textContent = info.storeFile || info.userData;
+            elements.storagePath.title = info.storeFile || info.userData;
+            elements.storagePath.dataset.userData = info.userData || '';
+        }).catch(() => {});
+    }
+
+    if (elements.pinBtn) {
+        elements.pinBtn.addEventListener('click', async () => {
+            const current = !!(window._cachedSettings && window._cachedSettings.alwaysOnTop);
+            const next = !current;
+            if (elements.alwaysOnTopToggle) elements.alwaysOnTopToggle.checked = next;
+            elements.pinBtn.classList.toggle('active', next);
+            window._cachedSettings = { ...(window._cachedSettings || {}), alwaysOnTop: next };
+            await window.electronAPI.saveSettings({ ...window._cachedSettings });
+        });
+    }
 
     elements.closeBtn.addEventListener('click', () => {
         window.electronAPI.closeWindow();
@@ -272,19 +461,37 @@ function setupEventListeners() {
     elements.closeSettingsBtn.addEventListener('click', async () => {
         await saveSettings();
         elements.settingsOverlay.style.display = 'none';
-        if (!isCompactMode) resizeWidget();
+        _settingsOpen = false;
+        _lastResizeHeight = 0;
+        if (window.electronAPI.setSettingsWindow) {
+            window.electronAPI.setSettingsWindow(false);
+        }
+        resizeWidget();
         startAutoUpdate();
     });
+
+    // Live settings — save on every change inside the settings overlay
+    if (elements.settingsOverlay) {
+        let liveTimer = null;
+        const scheduleLiveSave = () => {
+            if (liveTimer) clearTimeout(liveTimer);
+            liveTimer = setTimeout(() => { saveSettings(); }, 180);
+        };
+        elements.settingsOverlay.addEventListener('change', (e) => {
+            if (e.target.closest('.settings-rows')) scheduleLiveSave();
+        });
+        elements.settingsOverlay.addEventListener('input', (e) => {
+            if (e.target.matches('input[type="number"], input[type="text"]')) scheduleLiveSave();
+        });
+    }
 
     elements.logoutBtn.addEventListener('click', async () => {
         await window.electronAPI.deleteCredentials();
         credentials = { sessionKey: null, organizationId: null };
         elements.settingsOverlay.style.display = 'none';
+        _settingsOpen = false;
+        _lastResizeHeight = 0;
         showLoginRequired();
-    });
-
-    elements.coffeeBtn.addEventListener('click', () => {
-        window.electronAPI.openExternal('https://paypal.me/SlavomirDurej?country.x=GB&locale.x=en_GB');
     });
 
     // Theme buttons
@@ -293,6 +500,15 @@ function setupEventListeners() {
             elements.themeBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             applyTheme(btn.dataset.theme);
+        });
+    });
+
+    // Theme style buttons
+    elements.themeStyleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            elements.themeStyleBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            applyThemeStyle(btn.dataset.themeStyle);
         });
     });
 
@@ -316,10 +532,10 @@ function setupEventListeners() {
         resizeWidget();
     });
     elements.updateBannerText.addEventListener('click', () => {
-        window.electronAPI.openExternal(`https://github.com/SlavomirDurej/claude-usage-widget/releases/latest`);
+        window.electronAPI.openExternal(`https://github.com/GTRows/claude-usage-widget/releases/latest`);
     });
     elements.settingsUpdateLink.addEventListener('click', () => {
-        window.electronAPI.openExternal(`https://github.com/SlavomirDurej/claude-usage-widget/releases/latest`);
+        window.electronAPI.openExternal(`https://github.com/GTRows/claude-usage-widget/releases/latest`);
     });
 
     // Compact mode — collapse chevron (normal → compact)
@@ -336,33 +552,18 @@ function setupEventListeners() {
 
     // Compact mode toggle in normal settings panel — deferred to Done click
 
-    // Compact mode toggle in compact settings panel — just updates the checkbox, Done applies it
-    elements.compactModeToggleCompact.addEventListener('change', () => {
-        // No immediate action — Done button reads this value and applies
-    });
-
-    // Settings button — open compact settings if in compact mode, full settings otherwise
+    // Settings button — always opens full settings, temporarily upsizing window
     elements.settingsBtn.addEventListener('click', async () => {
         stopAutoUpdate();
-        if (isCompactMode) {
-            elements.compactModeToggleCompact.checked = isCompactMode;
-            elements.compactSettingsOverlay.style.display = 'flex';
+        await loadSettings();
+        elements.settingsOverlay.style.display = 'flex';
+        _settingsOpen = true;
+        _lastResizeHeight = SETTINGS_HEIGHT;
+        if (window.electronAPI.setSettingsWindow) {
+            window.electronAPI.setSettingsWindow(true);
         } else {
-            await loadSettings();
-            elements.settingsOverlay.style.display = 'flex';
-            window.electronAPI.resizeWindow(288);
+            window.electronAPI.resizeWindow(SETTINGS_HEIGHT);
         }
-    });
-
-    // Close compact settings — apply compact toggle value then close
-    elements.closeCompactSettingsBtn.addEventListener('click', async () => {
-        const compact = elements.compactModeToggleCompact.checked;
-        if (compact !== isCompactMode) {
-            applyCompactMode(compact);
-            await _saveCompactSetting(compact);
-        }
-        elements.compactSettingsOverlay.style.display = 'none';
-        startAutoUpdate();
     });
 }
 
@@ -662,22 +863,52 @@ function refreshExtraTimers() {
     });
 }
 
-const BANNER_HEIGHT = 28;
-const EXPAND_OVERHEAD = 28; // margin-top(12) + padding-top(6) + bottom buffer(10)
+let _lastResizeHeight = 0;
+let _settingsOpen = false;
+const SETTINGS_HEIGHT = 640;
+function measureAndResize() {
+    if (_settingsOpen) return;
+    const container = document.getElementById('widgetContainer');
+    if (!container) return;
+    let total = 0;
+    for (const child of container.children) {
+        const style = getComputedStyle(child);
+        if (style.display === 'none' || style.position === 'absolute' || style.position === 'fixed') continue;
+        const mt = parseFloat(style.marginTop) || 0;
+        const mb = parseFloat(style.marginBottom) || 0;
+        total += child.offsetHeight + mt + mb;
+    }
+    const padding = 12;
+    const height = Math.max(Math.ceil(total) + padding, 120);
+    if (height === _lastResizeHeight) return;
+    _lastResizeHeight = height;
+    window.electronAPI.resizeWindow(height);
+}
 
-function resizeWidget(bannerVisible) {
-    const hasBanner = bannerVisible !== undefined
-        ? bannerVisible
-        : elements.updateBanner.style.display !== 'none';
-    const bannerOffset = hasBanner ? BANNER_HEIGHT : 0;
-    const extraCount = elements.extraRows.children.length;
-    const expandedOffset = isExpanded && extraCount > 0
-        ? EXPAND_OVERHEAD + (extraCount * WIDGET_ROW_HEIGHT)
-        : 0;
-    const graphOffset = graphVisible ? GRAPH_HEIGHT : 0;
-    const historyOffset = historyVisible ? HISTORY_HEIGHT : 0;
-    const totalHeight = WIDGET_HEIGHT_COLLAPSED + expandedOffset + graphOffset + historyOffset + bannerOffset;
-    window.electronAPI.resizeWindow(totalHeight);
+function resizeWidget() {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(measureAndResize);
+    });
+}
+
+let _contentObserver = null;
+function startContentObserver() {
+    if (_contentObserver) return;
+    const container = document.getElementById('widgetContainer');
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    let pending = false;
+    _contentObserver = new ResizeObserver(() => {
+        if (isCompactMode) return;
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(() => {
+            pending = false;
+            measureAndResize();
+        });
+    });
+    for (const child of container.children) {
+        _contentObserver.observe(child);
+    }
 }
 
 function updateUI(data) {
@@ -734,14 +965,14 @@ function checkUsageAlerts(data) {
         alertFired.session_danger = true;
         alertFired.session_warn = true; // suppress warn if we jumped straight to danger
         window.electronAPI.showNotification(
-            'Claude Usage Widget',
+            'Claude Widget (GTRows)',
             `Current Session usage is at ${Math.round(sessionPct)}% — running low`
         );
     // Current Session — warn threshold
     } else if (sessionPct >= warnThreshold && !alertFired.session_warn) {
         alertFired.session_warn = true;
         window.electronAPI.showNotification(
-            'Claude Usage Widget',
+            'Claude Widget (GTRows)',
             `Current Session usage has reached ${Math.round(sessionPct)}%`
         );
     }
@@ -751,14 +982,14 @@ function checkUsageAlerts(data) {
         alertFired.weekly_danger = true;
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
-            'Claude Usage Widget',
+            'Claude Widget (GTRows)',
             `Weekly Limit usage is at ${Math.round(weeklyPct)}% — running low`
         );
     // Weekly Limit — warn threshold
     } else if (weeklyPct >= warnThreshold && !alertFired.weekly_warn) {
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
-            'Claude Usage Widget',
+            'Claude Widget (GTRows)',
             `Weekly Limit usage has reached ${Math.round(weeklyPct)}%`
         );
     }
@@ -821,7 +1052,8 @@ function applyCompactMode(compact) {
 
     // Update compact bars if we have data
     if (compact && latestUsageData) updateCompactBars(latestUsageData);
-    if (!compact) resizeWidget();
+    _lastResizeHeight = 0;
+    resizeWidget();
 
     // Persist graph/expanded state changes caused by compact mode toggle
     _saveViewState();
@@ -996,7 +1228,7 @@ function startCountdown() {
 }
 
 // Build a pre-rendered tray icon frame for a single metric.
-// Draws a circular usage ring with the percentage in the centre.
+// Layout is controlled by the user's "Tray style" setting.
 function buildTrayFrame(label, percent) {
     const size = 32;
     const canvas = document.createElement('canvas');
@@ -1005,47 +1237,320 @@ function buildTrayFrame(label, percent) {
     const ctx = canvas.getContext('2d');
 
     const pct = Math.max(0, Math.min(100, percent));
+    const rounded = Math.round(pct);
     let color = '#10b981';
     if (pct >= dangerThreshold) color = '#ef4444';
     else if (pct >= warnThreshold) color = '#f59e0b';
 
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
-    ctx.stroke();
+    const style = (window._cachedSettings && window._cachedSettings.trayStyle) || 'bigNumber';
 
-    ctx.strokeStyle = color;
-    ctx.lineCap = 'round';
-    const start = -Math.PI / 2;
-    const end = start + (pct / 100) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, start, end);
-    ctx.stroke();
+    if (style === 'ring') {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+        ctx.stroke();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 12px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(pct >= 100 ? '100' : `${Math.round(pct)}`, size / 2, size / 2 + 1);
+        ctx.strokeStyle = color;
+        ctx.lineCap = 'round';
+        const start = -Math.PI / 2;
+        const end = start + (pct / 100) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 2, start, end);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(rounded >= 100 ? '100' : `${rounded}`, size / 2, size / 2 + 1);
+    } else if (style === 'bar') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+        ctx.fillRect(2, size - 7, size - 4, 5);
+        ctx.fillStyle = color;
+        ctx.fillRect(2, size - 7, Math.round((size - 4) * pct / 100), 5);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(rounded >= 100 ? '100' : `${rounded}`, size / 2, (size - 8) / 2 + 1);
+    } else if (style === 'dot') {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(rounded >= 100 ? '99' : `${rounded}`, size / 2, size / 2 + 1);
+    } else {
+        // bigNumber (default) — fills the tray edge-to-edge for maximum readability
+        ctx.fillStyle = color;
+        const text = rounded >= 100 ? '100' : `${rounded}`;
+        const maxW = size;
+        const maxH = size;
+        let fontSize = 64;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const family = text.length >= 3
+            ? '"Arial Narrow", "Segoe UI Semibold", system-ui, sans-serif'
+            : '"Segoe UI", system-ui, sans-serif';
+        while (fontSize > 8) {
+            ctx.font = `900 ${fontSize}px ${family}`;
+            const m = ctx.measureText(text);
+            const h = (m.actualBoundingBoxAscent || fontSize * 0.78) + (m.actualBoundingBoxDescent || fontSize * 0.22);
+            if (m.width <= maxW && h <= maxH) break;
+            fontSize -= 1;
+        }
+        ctx.fillText(text, size / 2, size / 2 + 1);
+    }
 
     return {
         dataURL: canvas.toDataURL('image/png'),
-        tooltip: `${label}: ${Math.round(pct)}%`,
-        title: ` ${Math.round(pct)}%`
+        tooltip: `${label}: ${rounded}%`,
+        title: ` ${rounded}%`,
+        duration: 2600
     };
+}
+
+// Parametric mascot painter — draws Claude's star with a given expression and
+// per-frame modifiers (scale pulse, rotation, jitter). All mascot animations
+// are generated by sweeping a time parameter through this function.
+function _drawMascot(ctx, size, opts) {
+    const {
+        color = '#d97757',
+        eye = 'open',     // 'open' | 'closed' | 'x' | 'happy' | 'wide' | 'dots'
+        mouth = 'smile',  // 'smile' | 'flat' | 'tongue' | 'ohh' | 'none'
+        scale = 1,
+        rotate = 0,
+        jitterX = 0,
+        jitterY = 0,
+        eyeOffsetX = 0,
+        accent = '#1f1203'
+    } = opts;
+
+    const cx = size / 2 + jitterX;
+    const cy = size / 2 + jitterY;
+    const outer = (size / 2 - 1) * scale;
+    const inner = outer * 0.40;
+    const spokes = 10;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotate);
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < spokes * 2; i += 1) {
+        const r = i % 2 === 0 ? outer : inner;
+        const angle = (Math.PI / spokes) * i - Math.PI / 2;
+        const x = Math.cos(angle) * r;
+        const y = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Face (drawn in fixed frame so expressions stay readable through rotation)
+    const eyeY = cy - 2;
+    const eyeLX = cx - 4 + eyeOffsetX;
+    const eyeRX = cx + 4 + eyeOffsetX;
+
+    ctx.strokeStyle = accent;
+    ctx.fillStyle = accent;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+
+    if (eye === 'open' || eye === 'dots') {
+        ctx.beginPath();
+        ctx.arc(eyeLX, eyeY, 1.4, 0, Math.PI * 2);
+        ctx.arc(eyeRX, eyeY, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (eye === 'wide') {
+        ctx.beginPath();
+        ctx.arc(eyeLX, eyeY, 2.2, 0, Math.PI * 2);
+        ctx.arc(eyeRX, eyeY, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (eye === 'closed') {
+        ctx.beginPath();
+        ctx.moveTo(eyeLX - 2, eyeY);
+        ctx.lineTo(eyeLX + 2, eyeY);
+        ctx.moveTo(eyeRX - 2, eyeY);
+        ctx.lineTo(eyeRX + 2, eyeY);
+        ctx.stroke();
+    } else if (eye === 'happy') {
+        ctx.beginPath();
+        ctx.arc(eyeLX, eyeY, 2, Math.PI, 0, true);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(eyeRX, eyeY, 2, Math.PI, 0, true);
+        ctx.stroke();
+    } else if (eye === 'x') {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        const drawX = (ex, ey, r) => {
+            ctx.beginPath();
+            ctx.moveTo(ex - r, ey - r);
+            ctx.lineTo(ex + r, ey + r);
+            ctx.moveTo(ex + r, ey - r);
+            ctx.lineTo(ex - r, ey + r);
+            ctx.stroke();
+        };
+        drawX(eyeLX, eyeY, 2.4);
+        drawX(eyeRX, eyeY, 2.4);
+    }
+
+    const mouthY = cy + 5;
+    ctx.strokeStyle = eye === 'x' ? '#ffffff' : accent;
+    ctx.lineWidth = 1.8;
+    if (mouth === 'smile') {
+        ctx.beginPath();
+        ctx.arc(cx, mouthY - 1, 3, 0, Math.PI, false);
+        ctx.stroke();
+    } else if (mouth === 'flat') {
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, mouthY);
+        ctx.lineTo(cx + 3, mouthY);
+        ctx.stroke();
+    } else if (mouth === 'ohh') {
+        ctx.beginPath();
+        ctx.arc(cx, mouthY, 1.8, 0, Math.PI * 2);
+        ctx.stroke();
+    } else if (mouth === 'tongue') {
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, mouthY - 1);
+        ctx.lineTo(cx - 2, mouthY + 1);
+        ctx.lineTo(cx, mouthY - 1);
+        ctx.lineTo(cx + 2, mouthY + 1);
+        ctx.lineTo(cx + 4, mouthY - 1);
+        ctx.stroke();
+    }
+}
+
+function _frameFromMascot(opts, overlay) {
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    _drawMascot(ctx, size, opts);
+    if (typeof overlay === 'function') overlay(ctx, size);
+    return canvas.toDataURL('image/png');
+}
+
+// Build a full animation sequence for a given status. Each returned frame
+// carries its own `duration` in ms so main.js can pace the cycle non-uniformly.
+function buildMascotAnimation(status) {
+    const frames = [];
+    const push = (dataURL, duration, tooltip, title) => frames.push({ dataURL, duration, tooltip: tooltip || '', title: title || '' });
+
+    if (status === 'zero') {
+        // Sleepy idle — gentle breathing, closed eyes, z's drifting.
+        const breath = [0.94, 0.98, 1.02, 1.00];
+        for (let i = 0; i < 4; i += 1) {
+            const s = breath[i];
+            const zPos = i; // drift frame
+            const dataURL = _frameFromMascot(
+                { color: '#6b7280', eye: 'closed', mouth: 'flat', scale: s, accent: '#e5e7eb' },
+                (ctx) => {
+                    ctx.fillStyle = '#e5e7eb';
+                    ctx.font = `bold ${9 + zPos}px "Segoe UI", system-ui, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.globalAlpha = 0.4 + zPos * 0.15;
+                    ctx.fillText('z', 25 + zPos, 8 - zPos);
+                    ctx.globalAlpha = 1;
+                }
+            );
+            push(dataURL, 420, 'Claude Usage — idle');
+        }
+    } else if (status === 'dead') {
+        // Limit reached — dead face shakes, tongue wiggles.
+        const jitter = [[0, 0], [1, 0], [-1, 0], [0, 1]];
+        const mouths = ['tongue', 'tongue', 'flat', 'tongue'];
+        for (let i = 0; i < 4; i += 1) {
+            const [jx, jy] = jitter[i];
+            const dataURL = _frameFromMascot({
+                color: '#b91c1c',
+                eye: 'x',
+                mouth: mouths[i],
+                jitterX: jx,
+                jitterY: jy
+            });
+            push(dataURL, 220, 'Claude Usage — limit reached', ' 100%');
+        }
+    } else if (status === 'danger') {
+        // Near-limit panic — amber star flashing red, wide darting eyes.
+        for (let i = 0; i < 4; i += 1) {
+            const pulse = i % 2 === 0 ? '#dc2626' : '#f59e0b';
+            const offset = i % 2 === 0 ? -1 : 1;
+            const dataURL = _frameFromMascot({
+                color: pulse,
+                eye: 'wide',
+                mouth: 'ohh',
+                eyeOffsetX: offset,
+                scale: 0.98 + (i % 2) * 0.04
+            });
+            push(dataURL, 180, 'Claude Usage — critical');
+        }
+    } else if (status === 'warn') {
+        // Watchful — amber star, wary eyes scan side-to-side, flat mouth.
+        const offsets = [-1.2, 0, 1.2, 0];
+        for (let i = 0; i < 4; i += 1) {
+            const dataURL = _frameFromMascot({
+                color: '#f59e0b',
+                eye: 'wide',
+                mouth: 'flat',
+                eyeOffsetX: offsets[i]
+            });
+            push(dataURL, 260, 'Claude Usage — high');
+        }
+    } else {
+        // Content — low/normal usage. Happy mascot blinks and breathes.
+        const seq = [
+            { eye: 'happy', mouth: 'smile', scale: 1.00 },
+            { eye: 'happy', mouth: 'smile', scale: 1.03 },
+            { eye: 'closed', mouth: 'smile', scale: 1.00 }, // blink
+            { eye: 'happy', mouth: 'smile', scale: 0.98 }
+        ];
+        seq.forEach((cfg, i) => {
+            const dataURL = _frameFromMascot({ color: '#d97757', ...cfg });
+            push(dataURL, i === 2 ? 140 : 340, 'Claude Usage');
+        });
+    }
+
+    return frames;
 }
 
 function updateTrayIcon(data) {
     try {
         const frames = [];
         const session = data.five_hour?.utilization;
-        const weekly = data.seven_day?.utilization;
-        const opus = data.seven_day_opus?.utilization;
+        const settings = window._cachedSettings || {};
 
-        if (typeof session === 'number') frames.push(buildTrayFrame('Session', session));
-        if (typeof weekly === 'number') frames.push(buildTrayFrame('Weekly', weekly));
-        if (typeof opus === 'number' && opus > 0) frames.push(buildTrayFrame('Opus (7d)', opus));
+        if (typeof session === 'number') {
+            const rounded = Math.round(Math.max(0, Math.min(100, session)));
+            let status = 'low';
+            if (rounded >= 100) status = 'dead';
+            else if (rounded === 0) status = 'zero';
+            else if (rounded >= dangerThreshold) status = 'danger';
+            else if (rounded >= warnThreshold) status = 'warn';
+
+            if (status === 'dead' || status === 'zero') {
+                frames.push(...buildMascotAnimation(status));
+            } else {
+                frames.push(buildTrayFrame('Session', session));
+                if (settings.trayShowLogo) {
+                    frames.push(...buildMascotAnimation(status));
+                }
+            }
+        } else if (settings.trayShowLogo) {
+            frames.push(...buildMascotAnimation('low'));
+        }
 
         if (window.electronAPI.setTrayFrames) {
             window.electronAPI.setTrayFrames(frames);
@@ -1238,41 +1743,87 @@ function stopAutoUpdate() {
 }
 
 async function loadChart() {
-    const history = await window.electronAPI.getUsageHistory();
-    if (!history.length) return;
+    const history = await fetchGraphHistory();
+    if (!history.length) {
+        if (usageChart) { usageChart.destroy(); usageChart = null; }
+        return;
+    }
     renderChart(history);
+}
+
+async function fetchGraphHistory() {
+    if (graphCustomActive && (graphCustomFrom != null || graphCustomTo != null)) {
+        if (window.electronAPI.getUsageHistoryWindow) {
+            return window.electronAPI.getUsageHistoryWindow(graphCustomFrom, graphCustomTo);
+        }
+    }
+    if (!graphCustomActive && Number.isFinite(graphRangeMs) && window.electronAPI.getUsageHistoryRange) {
+        return window.electronAPI.getUsageHistoryRange(graphRangeMs);
+    }
+    return window.electronAPI.getUsageHistory();
+}
+
+async function fetchHistoryTableData() {
+    if (historyCustomActive && (historyCustomFrom != null || historyCustomTo != null)) {
+        if (window.electronAPI.getUsageHistoryWindow) {
+            return window.electronAPI.getUsageHistoryWindow(historyCustomFrom, historyCustomTo);
+        }
+    }
+    if (!historyCustomActive && window.electronAPI.getUsageHistoryRange) {
+        return window.electronAPI.getUsageHistoryRange(historyRangeMs);
+    }
+    return window.electronAPI.getUsageHistory();
 }
 
 async function loadHistoryTable() {
     if (!elements.historyTableBody) return;
-    const fetchRange = window.electronAPI.getUsageHistoryRange;
-    const history = fetchRange
-        ? await fetchRange(historyRangeMs)
-        : await window.electronAPI.getUsageHistory();
+    const history = await fetchHistoryTableData();
+    historyLastEntries = [...history].sort((a, b) => b.timestamp - a.timestamp);
+    renderHistoryPage();
+}
 
-    const ordered = [...history].sort((a, b) => b.timestamp - a.timestamp);
+function renderHistoryPage() {
+    if (!elements.historyTableBody) return;
+    const total = historyLastEntries.length;
+    const totalPages = Math.max(1, Math.ceil(total / historyPageSize));
+    if (historyPage > totalPages) historyPage = totalPages;
+    if (historyPage < 1) historyPage = 1;
 
     if (elements.historyCount) {
-        elements.historyCount.textContent = `${ordered.length} sample${ordered.length === 1 ? '' : 's'}`;
+        elements.historyCount.textContent = `${total} sample${total === 1 ? '' : 's'}`;
     }
+    if (elements.historyPageIndicator) {
+        elements.historyPageIndicator.textContent = `Page ${historyPage} of ${totalPages}`;
+    }
+    if (elements.historyPageJump) {
+        elements.historyPageJump.max = totalPages;
+        elements.historyPageJump.placeholder = `${historyPage}`;
+    }
+    if (elements.historyPagePrev) elements.historyPagePrev.disabled = historyPage <= 1;
+    if (elements.historyPageNext) elements.historyPageNext.disabled = historyPage >= totalPages;
 
     elements.historyTableBody.innerHTML = '';
-    if (!ordered.length) {
+    if (!total) {
         elements.historyEmpty.style.display = 'block';
         return;
     }
     elements.historyEmpty.style.display = 'none';
 
+    const start = (historyPage - 1) * historyPageSize;
+    const pageEntries = historyLastEntries.slice(start, start + historyPageSize);
+
     const settings = window._cachedSettings || {};
     const timeFormat = settings.timeFormat || '12h';
     const hour12 = timeFormat !== '24h';
-    const now = Date.now();
-    const showDate = historyRangeMs === 0 || historyRangeMs > 24 * 60 * 60 * 1000;
+    const spanMs = historyCustomActive
+        ? estimateSpanMs(historyLastEntries)
+        : historyRangeMs;
+    const showDate = !spanMs || spanMs === 0 || spanMs > 24 * 60 * 60 * 1000;
 
     const frag = document.createDocumentFragment();
-    for (let i = 0; i < ordered.length; i++) {
-        const entry = ordered[i];
-        const next = ordered[i + 1];
+    for (let i = 0; i < pageEntries.length; i++) {
+        const entry = pageEntries[i];
+        const next = pageEntries[i + 1] || historyLastEntries[start + i + 1];
         const tr = document.createElement('tr');
 
         const timeCell = document.createElement('td');
@@ -1302,7 +1853,45 @@ async function loadHistoryTable() {
         frag.appendChild(tr);
     }
     elements.historyTableBody.appendChild(frag);
-    void now;
+}
+
+function estimateSpanMs(entries) {
+    if (!entries || entries.length < 2) return 0;
+    const first = entries[0].timestamp;
+    const last = entries[entries.length - 1].timestamp;
+    return Math.abs(first - last);
+}
+
+// datetime-local inputs use the user's local clock and emit strings in
+// the form "YYYY-MM-DDTHH:MM". Treat the value as local time.
+function parseLocalDateTime(value) {
+    if (!value) return null;
+    const t = new Date(value).getTime();
+    return Number.isFinite(t) ? t : null;
+}
+
+function toLocalDateTimeInputValue(ms) {
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function seedCustomInputs(fromEl, toEl, currentFrom, currentTo, fallbackRangeMs) {
+    const now = Date.now();
+    const from = currentFrom ?? (fallbackRangeMs > 0 ? now - fallbackRangeMs : now - 24 * 60 * 60 * 1000);
+    const to = currentTo ?? now;
+    if (fromEl && !fromEl.value) fromEl.value = toLocalDateTimeInputValue(from);
+    if (toEl && !toEl.value) toEl.value = toLocalDateTimeInputValue(to);
+}
+
+function parseCustomInputs(fromEl, toEl) {
+    const from = parseLocalDateTime(fromEl?.value);
+    const to = parseLocalDateTime(toEl?.value);
+    if (from == null && to == null) return null;
+    if (from != null && to != null && from > to) {
+        return { from: to, to: from };
+    }
+    return { from, to };
 }
 
 function makePctCell(value) {
@@ -1354,13 +1943,23 @@ function renderChart(history) {
     });
     const yMax = Math.max(10, Math.ceil(Math.max(...allValues) / 10) * 10);
 
+    const styles = getComputedStyle(document.documentElement);
+    const cssVar = (name, fallback) => {
+        const v = styles.getPropertyValue(name).trim();
+        return v || fallback;
+    };
+    const sessionColor = cssVar('--session-color', '#e79a4d');
+    const weeklyColor = cssVar('--weekly-color', '#7aa8c4');
+    const sonnetColor = cssVar('--sonnet-color', '#7ab685');
+    const extraColor = cssVar('--extra-color', '#d8b068');
+
     const datasets = [
         {
             label: 'Session',
             data: history.map((entry) => entry.session),
-            borderColor: '#8b5cf6',
+            borderColor: sessionColor,
             backgroundColor: 'transparent',
-            borderWidth: 2,
+            borderWidth: 1.5,
             stepped: true,
             pointRadius: 0,
             pointHoverRadius: 3,
@@ -1369,9 +1968,9 @@ function renderChart(history) {
         {
             label: 'Weekly',
             data: history.map((entry) => entry.weekly),
-            borderColor: '#3b82f6',
+            borderColor: weeklyColor,
             backgroundColor: 'transparent',
-            borderWidth: 2,
+            borderWidth: 1.5,
             stepped: true,
             pointRadius: 0,
             pointHoverRadius: 3,
@@ -1385,9 +1984,9 @@ function renderChart(history) {
             datasets.push({
             label: 'Sonnet',
             data: sonnetData,
-            borderColor: '#10b981',
+            borderColor: sonnetColor,
             backgroundColor: 'transparent',
-            borderWidth: 2,
+            borderWidth: 1.5,
             stepped: true,
             pointRadius: 0,
             pointHoverRadius: 3,
@@ -1402,9 +2001,9 @@ function renderChart(history) {
             datasets.push({
             label: 'Extra Usage',
             data: extraUsageData,
-            borderColor: '#f59e0b',
+            borderColor: extraColor,
             backgroundColor: 'transparent',
-            borderWidth: 2,
+            borderWidth: 1.5,
             stepped: true,
             pointRadius: 0,
             pointHoverRadius: 3,
@@ -1434,8 +2033,10 @@ function renderChart(history) {
                         autoSkip: false,
                         maxRotation: 0,
                         minRotation: 0,
+                        color: cssVar('--ink-mute', '#8a8070'),
                         font: {
-                            size: 10
+                            family: cssVar('--font-mono', 'monospace'),
+                            size: 9
                         },
                         callback(value, index) {
                             const tf = (window._cachedSettings || {}).timeFormat || '12h';
@@ -1444,19 +2045,28 @@ function renderChart(history) {
                     },
                     grid: {
                         display: false
+                    },
+                    border: {
+                        color: cssVar('--hairline-strong', 'rgba(236,214,170,0.18)')
                     }
                 },
                 y: {
                     min: 0,
                     max: yMax,
                     ticks: {
+                        color: cssVar('--ink-mute', '#8a8070'),
                         font: {
-                            size: 10
+                            family: cssVar('--font-mono', 'monospace'),
+                            size: 9
                         },
                         callback: (value) => `${value}%`
                     },
                     grid: {
-                        color: 'rgba(255, 255, 255, 0.05)'
+                        color: cssVar('--hairline', 'rgba(236,214,170,0.09)'),
+                        drawTicks: false
+                    },
+                    border: {
+                        color: cssVar('--hairline-strong', 'rgba(236,214,170,0.18)')
                     }
                 }
             },
@@ -1582,7 +2192,9 @@ async function loadSettings() {
     }
     elements.usageAlertsToggle.checked = settings.usageAlerts !== false;
     if (elements.compactModeToggle) elements.compactModeToggle.checked = !!settings.compactMode;
-    if (elements.trayPopupModeToggle) elements.trayPopupModeToggle.checked = !!settings.trayPopupMode;
+    if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
+    if (elements.trayStyleSelect) elements.trayStyleSelect.value = settings.trayStyle || 'bigNumber';
+    if (elements.trayShowLogoToggle) elements.trayShowLogoToggle.checked = !!settings.trayShowLogo;
 
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
@@ -1591,11 +2203,41 @@ async function loadSettings() {
         btn.classList.toggle('active', btn.dataset.theme === settings.theme);
     });
 
+    const currentStyle = settings.themeStyle || 'classic';
+    elements.themeStyleBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.themeStyle === currentStyle);
+    });
+
+    if (elements.autoPruneToggle) elements.autoPruneToggle.checked = !!settings.autoPrune;
+    if (elements.autoPruneDays) elements.autoPruneDays.value = Number.isFinite(settings.autoPruneDays) ? settings.autoPruneDays : 30;
+    if (elements.autoPruneDaysRow) elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';
+    if (elements.hideFromTaskbarToggle) elements.hideFromTaskbarToggle.checked = !!settings.hideFromTaskbar;
+
     applyTheme(settings.theme);
+    applyThemeStyle(currentStyle);
+    refreshStorageUsage();
+}
+
+async function refreshStorageUsage() {
+    if (!elements.storageUsageHint || !window.electronAPI.getStorageInfo) return;
+    try {
+        const info = await window.electronAPI.getStorageInfo();
+        if (!info) return;
+        const fmt = (bytes) => {
+            if (!Number.isFinite(bytes)) return '—';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        };
+        const total = (info.storeBytes || 0);
+        const samples = info.historyCount || 0;
+        elements.storageUsageHint.textContent = `${fmt(total)} on disk — ${samples.toLocaleString()} history ${samples === 1 ? 'sample' : 'samples'}`;
+    } catch {}
 }
 
 async function saveSettings() {
     const activeThemeBtn = document.querySelector('.theme-btn.active');
+    const activeThemeStyleBtn = document.querySelector('.theme-style-btn.active');
     const warn = parseInt(elements.warnThreshold.value) || 75;
     const danger = parseInt(elements.dangerThreshold.value) || 90;
 
@@ -1612,6 +2254,7 @@ async function saveSettings() {
         autoStart: elements.autoStartToggle.checked,
         alwaysOnTop: elements.alwaysOnTopToggle.checked,
         theme: activeThemeBtn ? activeThemeBtn.dataset.theme : 'dark',
+        themeStyle: activeThemeStyleBtn ? activeThemeStyleBtn.dataset.themeStyle : 'classic',
         warnThreshold: warn,
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
@@ -1621,12 +2264,21 @@ async function saveSettings() {
         compactMode: isCompactMode,
         graphVisible: graphVisible,
         expandedOpen: isExpanded,
-        trayPopupMode: elements.trayPopupModeToggle ? elements.trayPopupModeToggle.checked : false,
-        historyVisible: historyVisible
+        trayStyle: elements.trayStyleSelect ? elements.trayStyleSelect.value : 'bigNumber',
+        trayShowLogo: elements.trayShowLogoToggle ? elements.trayShowLogoToggle.checked : false,
+        historyVisible: historyVisible,
+        autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
+        autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,
+        hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false
     };
+    if (elements.autoPruneDaysRow) {
+        elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';
+    }
     await window.electronAPI.saveSettings(settings);
     window._cachedSettings = settings;
     applyTheme(settings.theme);
+    applyThemeStyle(settings.themeStyle);
+    if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
 
     // Re-render resets-at values immediately with new format
     if (latestUsageData) {
@@ -1636,15 +2288,23 @@ async function saveSettings() {
             buildExtraRows(latestUsageData);
             refreshExtraTimers();
         }
+        updateTrayIcon(latestUsageData);
     }
     // Restart auto-update with new interval if it changed
     startAutoUpdate();
+    refreshStorageUsage();
 }
 
 function applyTheme(theme) {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const useDark = theme === 'dark' || (theme === 'system' && prefersDark);
     document.body.classList.toggle('theme-light', !useDark);
+}
+
+function applyThemeStyle(style) {
+    const allowed = new Set(['classic', 'plate', 'nord', 'sunset', 'mono']);
+    const value = allowed.has(style) ? style : 'classic';
+    document.body.setAttribute('data-theme-style', value);
 }
 
 // Update check
