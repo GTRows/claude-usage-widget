@@ -1,4 +1,4 @@
-name: Build Linux (AppImage)
+name: Build Linux (AppImage + RPM)
 
 on:
   push:
@@ -7,6 +7,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to attach artifacts to (e.g. v1.11.0-gtrows.1). Leave blank to skip release upload.'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -36,13 +41,23 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           npm pkg set version="$VERSION"
 
-      - name: Install Linux build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libarchive-tools
+      - name: Override version for manual release upload
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        run: |
+          VERSION="${{ inputs.release_tag }}"
+          VERSION="${VERSION#v}"
+          npm pkg set version="$VERSION"
 
-      - name: Build Electron app (AppImage)
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
+
+      - name: Build Electron app (AppImage + RPM)
         run: npm run build:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List built artifacts
+        run: ls -lh dist/
 
       - name: Upload x64 AppImage
         uses: actions/upload-artifact@v4
@@ -58,7 +73,14 @@ jobs:
           path: dist/*arm64*.AppImage
           if-no-files-found: error
 
-      - name: Upload to Release
+      - name: Upload RPMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-linux-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+      - name: Upload to Release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
@@ -67,5 +89,13 @@ jobs:
           files: |
             dist/*x86_64*.AppImage
             dist/*arm64*.AppImage
+            dist/*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to existing release (manual dispatch)
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.release_tag }}" dist/*.AppImage dist/*.rpm --clobber --repo "$GITHUB_REPOSITORY"
