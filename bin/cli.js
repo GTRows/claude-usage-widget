@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
+const fs = require('fs');
 const { loadCredentials, writeConfig, getConfigPath } = require('../src/cli/config');
 const { fetchUsage, fetchOrganizations } = require('../src/cli/api');
 const { summary, inlinePrompt, pickPercent } = require('../src/cli/render');
+const { readWidgetHistory, getWidgetStorePath } = require('../src/cli/widget-store');
+const historyShared = require('../src/shared/history');
 const pkg = require('../package.json');
 
 const HELP = `claude-usage ${pkg.version}
@@ -18,6 +21,8 @@ Commands:
   prompt              Print a one-line summary for shell prompts
   login --key K --org O   Save credentials to the CLI config file
   organizations       List organizations the session can see
+  history [--since N] [--format csv|json] [--output FILE]
+                      Read the desktop widget's stored usage history
   config              Print the config file path
   version             Print the CLI version
   help                Show this message
@@ -133,6 +138,34 @@ async function cmdOrganizations(flags) {
   process.stdout.write(JSON.stringify(orgs, null, 2) + '\n');
 }
 
+function cmdHistory(flags) {
+  const history = readWidgetHistory();
+  if (history === null) {
+    throw new Error(`No widget store found at ${getWidgetStorePath()}. Run the desktop widget at least once or set CLAUDE_USAGE_WIDGET_DIR.`);
+  }
+  let rows = history;
+  const sinceDays = flags.since != null && flags.since !== true ? Number(flags.since) : NaN;
+  if (Number.isFinite(sinceDays) && sinceDays > 0) {
+    const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
+    rows = historyShared.filterByRange(rows, cutoff, Infinity);
+  }
+  const format = (flags.format || 'json').toLowerCase();
+  let out;
+  if (format === 'csv') {
+    out = historyShared.toCSV(rows);
+  } else if (format === 'json') {
+    out = JSON.stringify(historyShared.toJSON(rows), null, flags.compact ? 0 : 2);
+  } else {
+    throw new Error(`Unknown --format '${format}' (expected csv or json)`);
+  }
+  if (flags.output && flags.output !== true) {
+    fs.writeFileSync(flags.output, out);
+    process.stdout.write(`Wrote ${rows.length} rows to ${flags.output}\n`);
+  } else {
+    process.stdout.write(out + '\n');
+  }
+}
+
 function cmdConfig() {
   process.stdout.write(getConfigPath() + '\n');
 }
@@ -153,6 +186,7 @@ async function main() {
       case 'login': await cmdLogin(args.flags); break;
       case 'organizations':
       case 'orgs': await cmdOrganizations(args.flags); break;
+      case 'history': cmdHistory(args.flags); break;
       case 'config': cmdConfig(); break;
       case 'version':
       case '-v':
