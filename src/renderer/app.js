@@ -60,6 +60,7 @@ const elements = {
     autoPruneDays: document.getElementById('autoPruneDays'),
     autoPruneDaysRow: document.getElementById('autoPruneDaysRow'),
     hideFromTaskbarToggle: document.getElementById('hideFromTaskbarToggle'),
+    headlessModeToggle: document.getElementById('headlessModeToggle'),
     closeBtn: document.getElementById('closeBtn'),
 
     sessionPercentage: document.getElementById('sessionPercentage'),
@@ -2234,6 +2235,7 @@ async function loadSettings() {
     if (elements.autoPruneDays) elements.autoPruneDays.value = Number.isFinite(settings.autoPruneDays) ? settings.autoPruneDays : 30;
     if (elements.autoPruneDaysRow) elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';
     if (elements.hideFromTaskbarToggle) elements.hideFromTaskbarToggle.checked = !!settings.hideFromTaskbar;
+    if (elements.headlessModeToggle) elements.headlessModeToggle.checked = !!settings.headlessMode;
 
     applyTheme(settings.theme);
     applyThemeStyle(currentStyle);
@@ -2291,7 +2293,8 @@ async function saveSettings() {
         historyVisible: historyVisible,
         autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,
-        hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false
+        hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false,
+        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false
     };
     if (elements.autoPruneDaysRow) {
         elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';

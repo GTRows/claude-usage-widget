@@ -624,7 +624,8 @@ ipcMain.handle('get-settings', () => {
     historyVisible: store.get('settings.historyVisible', false),
     autoPrune: store.get('settings.autoPrune', false),
     autoPruneDays: store.get('settings.autoPruneDays', 30),
-    hideFromTaskbar: store.get('settings.hideFromTaskbar', false)
+    hideFromTaskbar: store.get('settings.hideFromTaskbar', false),
+    headlessMode: store.get('settings.headlessMode', false)
   };
 });
 
@@ -650,6 +651,7 @@ ipcMain.handle('save-settings', (event, settings) => {
     store.set('settings.autoPruneDays', Math.max(1, Math.floor(settings.autoPruneDays)));
   }
   store.set('settings.hideFromTaskbar', !!settings.hideFromTaskbar);
+  store.set('settings.headlessMode', !!settings.headlessMode);
   applyTaskbarVisibility();
 
   if (settings.autoPrune && settings.autoPruneDays >= 1) {
@@ -966,6 +968,7 @@ app.whenReady().then(async () => {
     if (kept.length !== history.length) store.set('usageHistory', kept);
   }
 
+  const headlessMode = store.get('settings.headlessMode', false);
   createMainWindow();
   createTray();
 
@@ -976,6 +979,9 @@ app.whenReady().then(async () => {
   }
   if (store.get('settings.compactMode', false)) {
     applyCompactWindowMode(true);
+  }
+  if (headlessMode && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.hide();
   }
   applyTaskbarVisibility();
 
