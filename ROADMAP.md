@@ -16,6 +16,11 @@ current Windows-focused desktop build.
 
 ## Next (short term)
 
+- [ ] Refresh visual assets (carried over from upstream)
+  - Replace app icon set (assets/icon.ico, icon.icns, logo.png) with
+    GTRows-fork artwork
+  - Update tray fallback images and any in-app screenshots in README
+  - Re-export Windows installer banner / NSIS sidebar art
 - [ ] Verify and polish macOS build
   - Test transparent window + rounded corners on macOS (vibrancy vs.
     plain transparency)
