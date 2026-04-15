@@ -28,34 +28,39 @@ Runs on **Windows, macOS, and Linux**.
 
 ---
 
-## What's New in v1.7.0
+## What's New in v1.11.0-gtrows.1
 
-### 🎨 Dynamic Threshold Colors
+### Tray mascot, reworked
 
-All usage bars (Session, Weekly, and Extra Usage) now respect your configured warning and danger thresholds:
-- **Green** below warning threshold
-- **Amber** at or above warning threshold
-- **Red** at or above danger threshold
+- Animate mascot renders on a 64 px canvas so Windows tray downscaling
+  stays crisp at 16–24 px.
+- Larger motion deltas: breathing pulse, head tilt, full-width eye
+  darts, red/amber flash with scale pulse near the limit.
+- New setting `Mascot animation length` (1–60 s, default 2 s) scales
+  a full play to the requested duration.
+- New setting `Pause between plays` (0–600 s, default 10 s) holds the
+  big-number tray icon between animations.
+- Launch shows the big number first; the mascot only plays after the
+  first pause elapses.
 
-Changes apply immediately when thresholds are adjusted in Settings.
+### CLI
 
-### 📈 Usage History Graph
+- `claude-usage history --since N --format csv|json [--output FILE]`
+  reads the widget's stored history without going through Electron.
+- `claude-usage doctor` diagnoses credentials, widget store presence,
+  and live API reachability.
+- `claude-usage prompt --segments 5h,7d,opus,sonnet,extra` selects
+  which usage segments render inline in shell prompts.
+- `claude-usage prompt --cache N` caches the latest response for N
+  seconds so prompts redraw without hitting the API on every keystroke.
 
-A toggleable usage history graph now sits below the main widget. Click the graph button in the toolbar to show or hide it.
+### Settings / Data
 
-![Claude Usage Widget - Graph](assets/screenshot-graph.png)
+- Export history now offers a date-range selector (All / 24h / 7d /
+  30d / 90d) before writing CSV or JSON.
 
-- Displays up to **7 days** of session and weekly usage history
-- History **persists across restarts** — no need to keep the app running continuously
-- Sonnet and Extra Usage lines appear automatically when those sections are relevant
-- **Adaptive x-axis labels** — shows times for short spans, weekday+hour for medium spans, and dates for longer spans
-- Respects your **12h/24h time format** setting
-- Hover tooltip shows exact timestamp and value
-
-### 🌍 Currency Support
-The Extra Usage row now displays the correct currency symbol based on your account's billing currency — **€**, **£**, or **$**.
-
-> For full release history, see the [Releases](../../releases) page.
+> For full release history, see [CHANGELOG.md](./CHANGELOG.md) and the
+> [Releases](../../releases) page.
 
 ---
 
@@ -207,6 +212,11 @@ If issues persist, open a [Support discussion](../../discussions/categories/supp
 - [x] Compact mode
 - [x] Usage history graph
 - [x] Currency support
+- [x] CLI companion (`claude-usage`) with history, doctor, prompt
+- [x] Animated tray mascot with configurable timing
+- [x] Export history with date-range filter
+- [ ] Fresh GTRows visual assets (icons, installer art, screenshots)
+- [ ] Verified macOS build with GTRows notarization
 - [ ] Multiple account support
 - [ ] Keyboard shortcuts
 
