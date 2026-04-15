@@ -24,7 +24,7 @@
     "electron"
   ],
   "author": {
-    "name": "GTRows (aciro)",
+    "name": "GTRows",
     "email": "aciroglu.fatih@gmail.com"
   },
   "contributors": [
@@ -119,7 +119,7 @@
       ],
       "icon": "assets/logo.png",
       "category": "Utility",
-      "maintainer": "GTRows (aciro) <aciroglu.fatih@gmail.com>",
+      "maintainer": "GTRows <aciroglu.fatih@gmail.com>",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
     }
   }
