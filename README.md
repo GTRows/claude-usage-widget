@@ -1,6 +1,8 @@
-# Claude Usage Widget
+# Claude Widget (GTRows fork)
 
-A beautiful, standalone desktop widget for **Windows, macOS, and Linux** that displays your Claude.ai usage statistics in real-time.
+Desktop widget for Claude.ai usage monitoring — a personal fork of the original [claude-usage-widget](https://github.com/SlavomirDurej/claude-usage-widget) by Slavomir Durej, with additional features and UI changes.
+
+Runs on **Windows, macOS, and Linux**.
 
 ![Claude Usage Widget - Main](assets/screenshot-main.png)
 
@@ -116,7 +118,7 @@ The Extra Usage row now displays the correct currency symbol based on your accou
 - npm (comes with Node.js)
 
 ```bash
-git clone https://github.com/SlavomirDurej/claude-usage-widget.git
+git clone https://github.com/GTRows/claude-usage-widget.git
 cd claude-usage-widget
 npm install
 npm start

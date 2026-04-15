@@ -3,8 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Allowed domains for openExternal — prevents renderer from opening arbitrary URLs
 const ALLOWED_EXTERNAL_DOMAINS = [
   'claude.ai',
-  'github.com',
-  'paypal.me'
+  'github.com'
 ];
 
 function isAllowedExternalUrl(url) {
@@ -48,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchUsageData: () => ipcRenderer.invoke('fetch-usage-data'),
   getUsageHistory: () => ipcRenderer.invoke('get-usage-history'),
   getUsageHistoryRange: (rangeMs) => ipcRenderer.invoke('get-usage-history-range', rangeMs),
+  getUsageHistoryWindow: (fromMs, toMs) => ipcRenderer.invoke('get-usage-history-window', fromMs, toMs),
   openExternal: (url) => {
     if (isAllowedExternalUrl(url)) {
       ipcRenderer.send('open-external', url);
@@ -66,6 +66,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Updates
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+
+  // Storage info
+  getStorageInfo: () => ipcRenderer.invoke('get-storage-info'),
+  pruneHistory: (days) => ipcRenderer.invoke('prune-history', days),
+  clearHistory: () => ipcRenderer.invoke('clear-history'),
+  openPath: (target) => ipcRenderer.send('open-path', target),
+  setSettingsWindow: (on) => ipcRenderer.send('set-settings-window', on),
 
   // Notifications
   showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
