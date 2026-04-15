@@ -40,4 +40,13 @@ describe('inlinePrompt', () => {
     const out = inlinePrompt(data, { color: false });
     expect(out).toBe('5h:42% 7d:88%');
   });
+  it('renders requested segments in order', () => {
+    const wide = { ...data, opus: { utilization: 12 }, sonnet: { utilization: 30 }, extra_usage: { utilization: 5 } };
+    const out = inlinePrompt(wide, { color: false, segments: ['opus', 'sonnet', 'extra'] });
+    expect(out).toBe('op:12% so:30% ex:5%');
+  });
+  it('ignores unknown segment names', () => {
+    const out = inlinePrompt(data, { color: false, segments: ['5h', 'bogus'] });
+    expect(out).toBe('5h:42%');
+  });
 });

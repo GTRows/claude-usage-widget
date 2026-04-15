@@ -73,14 +73,35 @@ function summary(data, opts = {}) {
   return lines.join('\n');
 }
 
+const SEGMENT_DEFS = {
+  '5h':     { label: '5h', keys: ['five_hour', 'fiveHour', 'session'] },
+  '7d':     { label: '7d', keys: ['seven_day', 'sevenDay', 'weekly'] },
+  'opus':   { label: 'op', keys: ['opus'] },
+  'sonnet': { label: 'so', keys: ['sonnet'] },
+  'extra':  { label: 'ex', keys: ['extra_usage', 'extraUsage'] },
+};
+
+function pickFirst(data, keys) {
+  for (const k of keys) {
+    const v = pickPercent(data, k);
+    if (v) return v;
+  }
+  return 0;
+}
+
 function inlinePrompt(data, opts = {}) {
   const useColor = opts.color !== false && process.stdout.isTTY;
   const thresholds = normalizeThresholds(opts.thresholds || {});
-  const sessionPct = pickPercent(data, 'five_hour') || pickPercent(data, 'fiveHour') || pickPercent(data, 'session');
-  const weeklyPct = pickPercent(data, 'seven_day') || pickPercent(data, 'sevenDay') || pickPercent(data, 'weekly');
-  const s = statusForPercent(sessionPct, thresholds);
-  const w = statusForPercent(weeklyPct, thresholds);
-  return `${colorize(`5h:${formatPercent(sessionPct)}`, colorForStatus(s), useColor)} ${colorize(`7d:${formatPercent(weeklyPct)}`, colorForStatus(w), useColor)}`;
+  const requested = Array.isArray(opts.segments) && opts.segments.length > 0 ? opts.segments : ['5h', '7d'];
+  const parts = [];
+  for (const name of requested) {
+    const def = SEGMENT_DEFS[name];
+    if (!def) continue;
+    const pct = pickFirst(data, def.keys);
+    const status = statusForPercent(pct, thresholds);
+    parts.push(colorize(`${def.label}:${formatPercent(pct)}`, colorForStatus(status), useColor));
+  }
+  return parts.join(' ');
 }
 
 module.exports = { summary, inlinePrompt, bar, pickPercent };

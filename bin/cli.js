@@ -18,7 +18,8 @@ Commands:
   status              Print current 5-hour and weekly usage (one shot)
   json                Print the raw usage JSON
   watch [--interval s]  Re-fetch every N seconds (default 60)
-  prompt              Print a one-line summary for shell prompts
+  prompt [--segments 5h,7d,opus,sonnet,extra]
+                      Print a one-line summary for shell prompts
   login --key K --org O   Save credentials to the CLI config file
   organizations       List organizations the session can see
   history [--since N] [--format csv|json] [--output FILE]
@@ -67,10 +68,14 @@ function getThresholds(flags) {
 }
 
 function getRenderOpts(flags) {
-  return {
+  const opts = {
     color: !flags['no-color'],
     thresholds: getThresholds(flags),
   };
+  if (typeof flags.segments === 'string') {
+    opts.segments = flags.segments.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return opts;
 }
 
 async function cmdStatus(flags) {
