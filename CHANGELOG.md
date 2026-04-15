@@ -5,6 +5,20 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ---
 
+## [1.11.0-gtrows.1] — 2026-04-15
+
+GTRows fork. CLI-focused additions on top of 1.10.0-gtrows.1.
+
+### New Features
+- `claude-usage history --since N --format csv|json [--output FILE]` reads the desktop widget's stored history without going through Electron, so users can pipe usage rows into their own tooling
+- `claude-usage doctor` diagnoses credentials (env vs file), widget store presence, and live API reachability in one command — useful for triaging shell-prompt setups
+- `claude-usage prompt --segments 5h,7d,opus,sonnet,extra` lets shell prompts pick which usage segments are rendered, in any order
+- Settings → Data → Export history now offers a date-range selector (All / 24h / 7d / 30d / 90d) before exporting CSV/JSON
+
+### Tests
+- 17 new vitest cases covering `src/cli/api.js` (error mapping, fetchUsage merging) and `src/cli/widget-store.js` (cross-platform store path resolution)
+- Test count climbs from 55 → 72, all green on Node 18 + 20
+
 ## [1.7.1] — 2026-03-21
 
 ### New Features
