@@ -23,7 +23,10 @@
     "widget",
     "electron"
   ],
-  "author": "GTRows (aciro)",
+  "author": {
+    "name": "GTRows (aciro)",
+    "email": "aciroglu.fatih@gmail.com"
+  },
   "contributors": [
     "Slavomir Durej (original author)"
   ],
@@ -116,6 +119,7 @@
       ],
       "icon": "assets/logo.png",
       "category": "Utility",
+      "maintainer": "GTRows (aciro) <aciroglu.fatih@gmail.com>",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
     }
   }
