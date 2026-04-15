@@ -54,6 +54,8 @@ const elements = {
     storagePathOpen: document.getElementById('storagePathOpen'),
     storageUsageHint: document.getElementById('storageUsageHint'),
     clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+    exportHistoryCsvBtn: document.getElementById('exportHistoryCsvBtn'),
+    exportHistoryJsonBtn: document.getElementById('exportHistoryJsonBtn'),
     autoPruneToggle: document.getElementById('autoPruneToggle'),
     autoPruneDays: document.getElementById('autoPruneDays'),
     autoPruneDaysRow: document.getElementById('autoPruneDaysRow'),
@@ -420,6 +422,26 @@ function setupEventListeners() {
             }
         });
     }
+
+    const wireExportButton = (btn, format) => {
+        if (!btn || !window.electronAPI || !window.electronAPI.exportHistory) return;
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                const result = await window.electronAPI.exportHistory(format);
+                if (result && !result.canceled && result.filePath) {
+                    btn.textContent = `Saved`;
+                    setTimeout(() => { btn.textContent = format.toUpperCase(); }, 1500);
+                }
+            } catch (err) {
+                console.error('exportHistory failed', err);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    };
+    wireExportButton(elements.exportHistoryCsvBtn, 'csv');
+    wireExportButton(elements.exportHistoryJsonBtn, 'json');
 
     if (window.electronAPI.getStorageInfo) {
         window.electronAPI.getStorageInfo().then((info) => {

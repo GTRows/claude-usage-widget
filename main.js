@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, Notification, safeStorage, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, Notification, safeStorage, nativeImage, dialog } = require('electron');
 const path = require('path');
 const https = require('https');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
+const historyShared = require('./src/shared/history');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -519,6 +520,27 @@ ipcMain.handle('prune-history', (event, days) => {
 ipcMain.handle('clear-history', () => {
   store.set('usageHistory', []);
   return true;
+});
+
+ipcMain.handle('export-history', async (event, options = {}) => {
+  const format = options.format === 'json' ? 'json' : 'csv';
+  const history = store.get('usageHistory', []);
+  const data = format === 'json'
+    ? JSON.stringify(historyShared.toJSON(history), null, 2)
+    : historyShared.toCSV(history);
+  const defaultName = `claude-usage-history-${new Date().toISOString().slice(0, 10)}.${format}`;
+  const result = await dialog.showSaveDialog(mainWindow || undefined, {
+    title: 'Export usage history',
+    defaultPath: defaultName,
+    filters: format === 'json'
+      ? [{ name: 'JSON', extensions: ['json'] }]
+      : [{ name: 'CSV', extensions: ['csv'] }],
+  });
+  if (result.canceled || !result.filePath) {
+    return { canceled: true };
+  }
+  fs.writeFileSync(result.filePath, data, 'utf8');
+  return { canceled: false, filePath: result.filePath, rows: Array.isArray(history) ? history.length : 0 };
 });
 
 ipcMain.on('open-path', (event, target) => {

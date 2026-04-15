@@ -1908,6 +1908,15 @@ body.theme-light .settings-item:hover { background: rgba(179, 100, 18, 0.04); }
     color: var(--accent);
     border-color: var(--accent);
 }
+.storage-path-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.export-history-actions {
+    display: inline-flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
 
 /* Toggle switch */
 .toggle-switch {
