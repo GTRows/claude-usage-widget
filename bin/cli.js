@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
-const { loadCredentials, writeConfig, getConfigPath } = require('../src/cli/config');
+const path = require('path');
+const { loadCredentials, writeConfig, getConfigPath, getConfigDir } = require('../src/cli/config');
 const { fetchUsage, fetchOrganizations } = require('../src/cli/api');
 const { summary, inlinePrompt, pickPercent } = require('../src/cli/render');
 const { readWidgetHistory, getWidgetStorePath } = require('../src/cli/widget-store');
@@ -18,8 +19,10 @@ Commands:
   status              Print current 5-hour and weekly usage (one shot)
   json                Print the raw usage JSON
   watch [--interval s]  Re-fetch every N seconds (default 60)
-  prompt [--segments 5h,7d,opus,sonnet,extra]
-                      Print a one-line summary for shell prompts
+  prompt [--segments 5h,7d,opus,sonnet,extra] [--cache N]
+                      Print a one-line summary for shell prompts; --cache
+                      reuses a stored response for N seconds (avoids
+                      hitting the API on every keystroke)
   login --key K --org O   Save credentials to the CLI config file
   organizations       List organizations the session can see
   history [--since N] [--format csv|json] [--output FILE]
@@ -90,9 +93,44 @@ async function cmdJson(flags) {
   process.stdout.write(JSON.stringify(data, null, flags.compact ? 0 : 2) + '\n');
 }
 
+function getCachePath() {
+  return path.join(getConfigDir(), 'prompt-cache.json');
+}
+
+function readPromptCache(maxAgeSec) {
+  try {
+    const raw = fs.readFileSync(getCachePath(), 'utf8');
+    const cached = JSON.parse(raw);
+    if (!cached || typeof cached !== 'object') return null;
+    const ageSec = (Date.now() - Number(cached.savedAt || 0)) / 1000;
+    if (!Number.isFinite(ageSec) || ageSec > maxAgeSec) return null;
+    return cached.data || null;
+  } catch {
+    return null;
+  }
+}
+
+function writePromptCache(data) {
+  try {
+    fs.mkdirSync(getConfigDir(), { recursive: true });
+    fs.writeFileSync(getCachePath(), JSON.stringify({ savedAt: Date.now(), data }));
+  } catch {
+    // best-effort cache; ignore disk errors
+  }
+}
+
 async function cmdPrompt(flags) {
+  const cacheSec = flags.cache != null && flags.cache !== true ? Number(flags.cache) : NaN;
+  if (Number.isFinite(cacheSec) && cacheSec > 0) {
+    const cached = readPromptCache(cacheSec);
+    if (cached) {
+      process.stdout.write(inlinePrompt(cached, getRenderOpts(flags)) + '\n');
+      return;
+    }
+  }
   const creds = loadCredentials();
   const data = await fetchUsage(creds);
+  if (Number.isFinite(cacheSec) && cacheSec > 0) writePromptCache(data);
   process.stdout.write(inlinePrompt(data, getRenderOpts(flags)) + '\n');
 }
 
