@@ -3,7 +3,7 @@
 GTRows fork of claude-usage-widget. Tracks planned work beyond the
 current Windows-focused desktop build.
 
-## Now (in progress)
+## Shipped in 1.9.0-gtrows.1
 
 - [x] Fork rebrand and MIT-compliant licensing
 - [x] Frameless transparent window with rounded corners
@@ -14,7 +14,21 @@ current Windows-focused desktop build.
 - [x] Independent hide-from-taskbar setting
 - [x] Auto-prune history settings
 
-## Next (short term)
+## Shipped in 1.10.0-gtrows.1
+
+- [x] CLI companion `claude-usage` (status / watch / json / prompt /
+      login / organizations / config)
+- [x] Shared `src/shared/` utility modules (version, thresholds,
+      formatters, history, settings schema)
+- [x] Headless start mode (launch hidden into the tray)
+- [x] Export usage history as CSV or JSON (settings → Data)
+- [x] Configurable warn / danger thresholds (already existed in
+      settings; verified surfaced in UI)
+- [x] CI matrix workflow (`.github/workflows/test.yml`) running
+      vitest on Linux, macOS, Windows under Node 18 + 20
+- [x] Unit test suite with 55+ cases (`npm test`)
+
+## Now (in progress / next short term)
 
 - [ ] Refresh visual assets (carried over from upstream)
   - Replace app icon set (assets/icon.ico, icon.icns, logo.png) with
@@ -35,22 +49,21 @@ current Windows-focused desktop build.
   - Document required system tray extensions for GNOME users
 - [ ] Cross-platform settings storage path audit
 - [ ] CI matrix builds for Windows / macOS (x64 + arm64) / Linux
+      (build artifacts, not just tests)
 
 ## Later (medium term)
 
-- [ ] CLI companion `claude-usage`
-  - `claude-usage status` prints current 5-hour and weekly usage to stdout
-  - `claude-usage watch` streams updates suitable for tmux/zsh prompt
-  - `claude-usage json` machine-readable output for scripting
-  - Shared session-key store with the desktop widget
-  - Optional shell prompt integration snippets (bash, zsh, fish, pwsh)
-- [ ] Headless mode: run the data-fetch loop without showing a window,
-      for users who only want the tray icon or CLI
-- [ ] Configurable thresholds for warn / danger / dead mascot states
 - [ ] Per-account multi-profile support (switch between work/personal
-      Claude accounts)
-- [ ] Export usage history as CSV / JSON
-- [ ] Optional desktop notifications when crossing thresholds
+      Claude accounts) — sketch: profiles map in store, accessor
+      indirection, per-profile sessionKey + organizationId + history
+- [ ] Optional shell prompt integration snippets for the CLI
+      (bash, zsh, fish, pwsh) packaged under docs/prompts/
+- [ ] Per-status configurable mascot expressions (let users override
+      the default eye/mouth combos for warn/danger/dead)
+- [ ] Configurable refresh interval per profile / per metric
+- [ ] Export filter by date range from the settings dialog
+- [ ] CLI: `claude-usage history --since N --format csv|json` (dump
+      data the widget already collected)
 
 ## Exploration (not committed)
 
