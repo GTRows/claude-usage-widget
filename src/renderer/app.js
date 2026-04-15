@@ -156,6 +156,10 @@ async function init() {
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
 
+    if (settings.trayShowLogo) {
+        updateTrayIcon({});
+    }
+
     // Restore compact mode from saved settings
     if (settings.compactMode) {
         applyCompactMode(true);
@@ -1557,27 +1561,30 @@ function buildMascotAnimation(status) {
 function updateTrayIcon(data) {
     try {
         const frames = [];
-        const session = data.five_hour?.utilization;
+        const session = data && data.five_hour ? data.five_hour.utilization : undefined;
         const settings = window._cachedSettings || {};
+        const animateMascot = !!settings.trayShowLogo;
 
+        let status = 'low';
+        let rounded = null;
         if (typeof session === 'number') {
-            const rounded = Math.round(Math.max(0, Math.min(100, session)));
-            let status = 'low';
+            rounded = Math.round(Math.max(0, Math.min(100, session)));
             if (rounded >= 100) status = 'dead';
             else if (rounded === 0) status = 'zero';
             else if (rounded >= dangerThreshold) status = 'danger';
             else if (rounded >= warnThreshold) status = 'warn';
+        }
 
-            if (status === 'dead' || status === 'zero') {
-                frames.push(...buildMascotAnimation(status));
-            } else {
-                frames.push(buildTrayFrame('Session', session));
-                if (settings.trayShowLogo) {
-                    frames.push(...buildMascotAnimation(status));
-                }
+        if (animateMascot) {
+            const mascotFrames = buildMascotAnimation(status);
+            const label = rounded != null ? `Claude Usage — ${rounded}%` : 'Claude Usage';
+            for (const f of mascotFrames) {
+                frames.push({ ...f, tooltip: label, title: rounded != null ? ` ${rounded}%` : '' });
             }
-        } else if (settings.trayShowLogo) {
-            frames.push(...buildMascotAnimation('low'));
+        } else if (status === 'dead' || status === 'zero') {
+            frames.push(...buildMascotAnimation(status));
+        } else if (typeof session === 'number') {
+            frames.push(buildTrayFrame('Session', session));
         }
 
         if (window.electronAPI.setTrayFrames) {
@@ -2319,6 +2326,8 @@ async function saveSettings() {
             refreshExtraTimers();
         }
         updateTrayIcon(latestUsageData);
+    } else {
+        updateTrayIcon({});
     }
     // Restart auto-update with new interval if it changed
     startAutoUpdate();
