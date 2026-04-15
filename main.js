@@ -525,10 +525,16 @@ ipcMain.handle('clear-history', () => {
 ipcMain.handle('export-history', async (event, options = {}) => {
   const format = options.format === 'json' ? 'json' : 'csv';
   const history = store.get('usageHistory', []);
+  const fromMs = Number.isFinite(options.fromMs) ? options.fromMs : null;
+  const toMs = Number.isFinite(options.toMs) ? options.toMs : null;
+  const filtered = (fromMs != null || toMs != null)
+    ? historyShared.filterByRange(history, fromMs != null ? fromMs : -Infinity, toMs != null ? toMs : Infinity)
+    : history;
   const data = format === 'json'
-    ? JSON.stringify(historyShared.toJSON(history), null, 2)
-    : historyShared.toCSV(history);
-  const defaultName = `claude-usage-history-${new Date().toISOString().slice(0, 10)}.${format}`;
+    ? JSON.stringify(historyShared.toJSON(filtered), null, 2)
+    : historyShared.toCSV(filtered);
+  const rangeTag = (fromMs != null || toMs != null) ? '-range' : '';
+  const defaultName = `claude-usage-history-${new Date().toISOString().slice(0, 10)}${rangeTag}.${format}`;
   const result = await dialog.showSaveDialog(mainWindow || undefined, {
     title: 'Export usage history',
     defaultPath: defaultName,
@@ -540,7 +546,7 @@ ipcMain.handle('export-history', async (event, options = {}) => {
     return { canceled: true };
   }
   fs.writeFileSync(result.filePath, data, 'utf8');
-  return { canceled: false, filePath: result.filePath, rows: Array.isArray(history) ? history.length : 0 };
+  return { canceled: false, filePath: result.filePath, rows: Array.isArray(filtered) ? filtered.length : 0 };
 });
 
 ipcMain.on('open-path', (event, target) => {

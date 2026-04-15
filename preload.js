@@ -71,7 +71,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStorageInfo: () => ipcRenderer.invoke('get-storage-info'),
   pruneHistory: (days) => ipcRenderer.invoke('prune-history', days),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
-  exportHistory: (format) => ipcRenderer.invoke('export-history', { format }),
+  exportHistory: (format, range) => ipcRenderer.invoke('export-history', { format, ...(range || {}) }),
   openPath: (target) => ipcRenderer.send('open-path', target),
   setSettingsWindow: (on) => ipcRenderer.send('set-settings-window', on),
 

@@ -56,6 +56,7 @@ const elements = {
     clearHistoryBtn: document.getElementById('clearHistoryBtn'),
     exportHistoryCsvBtn: document.getElementById('exportHistoryCsvBtn'),
     exportHistoryJsonBtn: document.getElementById('exportHistoryJsonBtn'),
+    exportHistoryRange: document.getElementById('exportHistoryRange'),
     autoPruneToggle: document.getElementById('autoPruneToggle'),
     autoPruneDays: document.getElementById('autoPruneDays'),
     autoPruneDaysRow: document.getElementById('autoPruneDaysRow'),
@@ -429,7 +430,11 @@ function setupEventListeners() {
         btn.addEventListener('click', async () => {
             btn.disabled = true;
             try {
-                const result = await window.electronAPI.exportHistory(format);
+                const days = elements.exportHistoryRange ? Number(elements.exportHistoryRange.value) : 0;
+                const range = (Number.isFinite(days) && days > 0)
+                    ? { fromMs: Date.now() - days * 24 * 60 * 60 * 1000 }
+                    : null;
+                const result = await window.electronAPI.exportHistory(format, range);
                 if (result && !result.canceled && result.filePath) {
                     btn.textContent = `Saved`;
                     setTimeout(() => { btn.textContent = format.toUpperCase(); }, 1500);

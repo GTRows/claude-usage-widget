@@ -551,9 +551,16 @@
                                 <div class="settings-item">
                                     <div class="settings-item-text">
                                         <span class="settings-item-label">Export history</span>
-                                        <span class="settings-item-hint">Save a copy of every recorded usage row.</span>
+                                        <span class="settings-item-hint">Save a copy of recorded usage rows. Choose a date range first.</span>
                                     </div>
                                     <div class="export-history-actions">
+                                        <select id="exportHistoryRange" class="storage-path-btn export-history-range" title="Date range">
+                                            <option value="0">All</option>
+                                            <option value="1">Last 24h</option>
+                                            <option value="7" selected>Last 7d</option>
+                                            <option value="30">Last 30d</option>
+                                            <option value="90">Last 90d</option>
+                                        </select>
                                         <button class="storage-path-btn" id="exportHistoryCsvBtn" title="Export as CSV">CSV</button>
                                         <button class="storage-path-btn" id="exportHistoryJsonBtn" title="Export as JSON">JSON</button>
                                     </div>

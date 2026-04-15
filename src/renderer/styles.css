@@ -1916,6 +1916,12 @@ body.theme-light .settings-item:hover { background: rgba(179, 100, 18, 0.04); }
     display: inline-flex;
     gap: 6px;
     flex-shrink: 0;
+    align-items: center;
+}
+.export-history-range {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 8px;
 }
 
 /* Toggle switch */
