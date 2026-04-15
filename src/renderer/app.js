@@ -1587,12 +1587,14 @@ function buildMascotAnimation(status, restFrame) {
 
     // Quiet interval between cycles. Show the provided rest frame (e.g. the
     // big-number tray icon) so the tray falls back to a readable state between
-    // animations instead of parking on the mascot.
+    // animations instead of parking on the mascot. The rest frame is placed
+    // first so the initial render is the static number; the mascot plays only
+    // after the pause elapses.
     if (gapSec > 0 && frames.length > 0) {
         const rest = restFrame
             ? { ...restFrame, duration: gapSec * 1000 }
             : { ...frames[0], duration: gapSec * 1000 };
-        frames.push(rest);
+        frames.unshift(rest);
     }
 
     return frames;
