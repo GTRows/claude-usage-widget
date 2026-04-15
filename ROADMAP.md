@@ -31,6 +31,8 @@ current Windows-focused desktop build.
       under `docs/prompts/`
 - [x] CLI: `claude-usage history --since N --format csv|json` reading
       the widget's stored history (with `--output FILE` for piping)
+- [x] Export filter by date range in the settings dialog (All / 24h /
+      7d / 30d / 90d)
 
 ## Now (in progress / next short term)
 
@@ -63,7 +65,6 @@ current Windows-focused desktop build.
 - [ ] Per-status configurable mascot expressions (let users override
       the default eye/mouth combos for warn/danger/dead)
 - [ ] Configurable refresh interval per profile / per metric
-- [ ] Export filter by date range from the settings dialog
 
 ## Exploration (not committed)
 
