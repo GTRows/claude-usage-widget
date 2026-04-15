@@ -27,6 +27,10 @@ current Windows-focused desktop build.
 - [x] CI matrix workflow (`.github/workflows/test.yml`) running
       vitest on Linux, macOS, Windows under Node 18 + 20
 - [x] Unit test suite with 55+ cases (`npm test`)
+- [x] Shell prompt integration snippets (bash / zsh / fish / pwsh)
+      under `docs/prompts/`
+- [x] CLI: `claude-usage history --since N --format csv|json` reading
+      the widget's stored history (with `--output FILE` for piping)
 
 ## Now (in progress / next short term)
 
@@ -56,14 +60,10 @@ current Windows-focused desktop build.
 - [ ] Per-account multi-profile support (switch between work/personal
       Claude accounts) — sketch: profiles map in store, accessor
       indirection, per-profile sessionKey + organizationId + history
-- [ ] Optional shell prompt integration snippets for the CLI
-      (bash, zsh, fish, pwsh) packaged under docs/prompts/
 - [ ] Per-status configurable mascot expressions (let users override
       the default eye/mouth combos for warn/danger/dead)
 - [ ] Configurable refresh interval per profile / per metric
 - [ ] Export filter by date range from the settings dialog
-- [ ] CLI: `claude-usage history --since N --format csv|json` (dump
-      data the widget already collected)
 
 ## Exploration (not committed)
 
