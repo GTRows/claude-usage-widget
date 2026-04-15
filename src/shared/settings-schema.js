@@ -6,6 +6,7 @@ const SETTINGS_DEFAULTS = {
   trayStyle: 'bigNumber',
   trayShowLogo: false,
   trayMascotInterval: 2,
+  trayMascotGap: 10,
   warnThreshold: 75,
   dangerThreshold: 90,
   timeFormat: '12h',
@@ -59,6 +60,7 @@ function normalizeSettings(input = {}) {
   out.refreshInterval = clampInt(out.refreshInterval, 15, 86400, SETTINGS_DEFAULTS.refreshInterval);
   out.autoPruneDays = clampInt(out.autoPruneDays, 1, 3650, SETTINGS_DEFAULTS.autoPruneDays);
   out.trayMascotInterval = clampInt(out.trayMascotInterval, 1, 60, SETTINGS_DEFAULTS.trayMascotInterval);
+  out.trayMascotGap = clampInt(out.trayMascotGap, 0, 600, SETTINGS_DEFAULTS.trayMascotGap);
   if (typeof out.activeProfile !== 'string' || !out.activeProfile) {
     out.activeProfile = 'default';
   }

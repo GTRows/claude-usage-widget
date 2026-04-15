@@ -120,6 +120,8 @@ const elements = {
     trayShowLogoToggle: document.getElementById('trayShowLogoToggle'),
     trayMascotInterval: document.getElementById('trayMascotInterval'),
     trayMascotIntervalRow: document.getElementById('trayMascotIntervalRow'),
+    trayMascotGap: document.getElementById('trayMascotGap'),
+    trayMascotGapRow: document.getElementById('trayMascotGapRow'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
     refreshInterval: document.getElementById('refreshInterval'),
@@ -1574,12 +1576,20 @@ function buildMascotAnimation(status) {
 
     const settings = window._cachedSettings || {};
     const targetSec = Math.max(1, Math.min(60, Number(settings.trayMascotInterval) || 2));
+    const gapSec = Math.max(0, Math.min(600, Number(settings.trayMascotGap) || 0));
     const totalMs = frames.reduce((sum, f) => sum + (f.duration || 0), 0);
     if (frames.length > 0 && totalMs > 0) {
         const scale = (targetSec * 1000) / totalMs;
         for (const f of frames) {
-            f.duration = Math.max(80, Math.min(10000, Math.round(f.duration * scale)));
+            f.duration = Math.max(80, Math.min(60000, Math.round(f.duration * scale)));
         }
+    }
+
+    // Quiet interval between cycles. Hold the first animation frame so the tray
+    // settles on a recognisable resting pose, not mid-blink.
+    if (gapSec > 0 && frames.length > 0) {
+        const rest = { ...frames[0], duration: gapSec * 1000 };
+        frames.push(rest);
     }
 
     return frames;
@@ -2261,6 +2271,10 @@ async function loadSettings() {
         const raw = parseInt(settings.trayMascotInterval);
         elements.trayMascotInterval.value = Number.isFinite(raw) && raw >= 1 ? String(Math.min(60, raw)) : '2';
     }
+    if (elements.trayMascotGap) {
+        const rawGap = parseInt(settings.trayMascotGap);
+        elements.trayMascotGap.value = Number.isFinite(rawGap) && rawGap >= 0 ? String(Math.min(600, rawGap)) : '10';
+    }
 
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
@@ -2334,6 +2348,7 @@ async function saveSettings() {
         trayStyle: elements.trayStyleSelect ? elements.trayStyleSelect.value : 'bigNumber',
         trayShowLogo: elements.trayShowLogoToggle ? elements.trayShowLogoToggle.checked : false,
         trayMascotInterval: elements.trayMascotInterval ? Math.max(1, Math.min(60, parseInt(elements.trayMascotInterval.value) || 2)) : 2,
+        trayMascotGap: elements.trayMascotGap ? Math.max(0, Math.min(600, parseInt(elements.trayMascotGap.value) || 10)) : 10,
         historyVisible: historyVisible,
         autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,

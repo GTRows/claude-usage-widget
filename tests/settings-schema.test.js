@@ -21,6 +21,9 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ trayMascotInterval: 0 }).trayMascotInterval).toBe(1);
     expect(normalizeSettings({ trayMascotInterval: 9999 }).trayMascotInterval).toBe(60);
     expect(normalizeSettings({ trayMascotInterval: 5 }).trayMascotInterval).toBe(5);
+    expect(normalizeSettings({ trayMascotGap: -1 }).trayMascotGap).toBe(0);
+    expect(normalizeSettings({ trayMascotGap: 99999 }).trayMascotGap).toBe(600);
+    expect(normalizeSettings({ trayMascotGap: 30 }).trayMascotGap).toBe(30);
   });
   it('keeps danger >= warn', () => {
     const s = normalizeSettings({ warnThreshold: 80, dangerThreshold: 50 });

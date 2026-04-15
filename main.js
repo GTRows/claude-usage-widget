@@ -619,6 +619,7 @@ ipcMain.handle('get-settings', () => {
     trayStyle: store.get('settings.trayStyle', 'bigNumber'),
     trayShowLogo: store.get('settings.trayShowLogo', false),
     trayMascotInterval: store.get('settings.trayMascotInterval', 2),
+    trayMascotGap: store.get('settings.trayMascotGap', 10),
     warnThreshold: store.get('settings.warnThreshold', 75),
     dangerThreshold: store.get('settings.dangerThreshold', 90),
     timeFormat: store.get('settings.timeFormat', '12h'),
@@ -646,6 +647,10 @@ ipcMain.handle('save-settings', (event, settings) => {
   if (Number.isFinite(settings.trayMascotInterval)) {
     const sec = Math.max(1, Math.min(60, Math.round(settings.trayMascotInterval)));
     store.set('settings.trayMascotInterval', sec);
+  }
+  if (Number.isFinite(settings.trayMascotGap)) {
+    const gap = Math.max(0, Math.min(600, Math.round(settings.trayMascotGap)));
+    store.set('settings.trayMascotGap', gap);
   }
   store.set('settings.warnThreshold', settings.warnThreshold);
   store.set('settings.dangerThreshold', settings.dangerThreshold);
@@ -934,7 +939,7 @@ function startTrayCycle() {
     trayIconIndex = (trayIconIndex + 1) % trayIconFrames.length;
     applyTrayFrame(trayIconIndex);
     const current = trayIconFrames[trayIconIndex];
-    const delay = Math.max(80, Math.min(10000, Number(current && current.duration) || 3000));
+    const delay = Math.max(80, Math.min(600000, Number(current && current.duration) || 3000));
     trayIconTimer = setTimeout(step, delay);
   };
   const first = trayIconFrames[trayIconIndex];

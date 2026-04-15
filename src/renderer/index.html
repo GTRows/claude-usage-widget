@@ -505,10 +505,17 @@
                                 </div>
                                 <div class="settings-item" id="trayMascotIntervalRow">
                                     <div class="settings-item-text">
-                                        <span class="settings-item-label">Mascot cycle duration</span>
-                                        <span class="settings-item-hint">Full animation length in seconds (1–60).</span>
+                                        <span class="settings-item-label">Mascot animation length</span>
+                                        <span class="settings-item-hint">How long one play lasts, in seconds (1–60).</span>
                                     </div>
                                     <input type="number" id="trayMascotInterval" class="threshold-input refresh-interval-input" min="1" max="60" step="1" value="2">
+                                </div>
+                                <div class="settings-item" id="trayMascotGapRow">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Pause between plays</span>
+                                        <span class="settings-item-hint">Idle seconds between animations (0–600). Default 10s gives roughly 5 plays per minute.</span>
+                                    </div>
+                                    <input type="number" id="trayMascotGap" class="threshold-input refresh-interval-input" min="0" max="600" step="1" value="10">
                                 </div>
                             </div>
                         </section>
