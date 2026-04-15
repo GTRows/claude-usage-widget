@@ -1,4 +1,4 @@
-name: Build Linux (AppImage + RPM)
+name: Build Linux (AppImage + RPM + DEB + Pacman + tar.gz)
 
 on:
   push:
@@ -51,7 +51,7 @@ jobs:
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
 
-      - name: Build Electron app (AppImage + RPM)
+      - name: Build Electron app (AppImage + RPM + DEB + Pacman + tar.gz)
         run: npm run build:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,6 +80,27 @@ jobs:
           path: dist/*.rpm
           if-no-files-found: error
 
+      - name: Upload DEBs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-linux-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+      - name: Upload Pacman packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-linux-pacman
+          path: dist/*.pacman
+          if-no-files-found: error
+
+      - name: Upload tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-linux-tar
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
       - name: Upload to Release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -90,6 +111,9 @@ jobs:
             dist/*x86_64*.AppImage
             dist/*arm64*.AppImage
             dist/*.rpm
+            dist/*.deb
+            dist/*.pacman
+            dist/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -98,4 +122,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ inputs.release_tag }}" dist/*.AppImage dist/*.rpm --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "${{ inputs.release_tag }}" \
+            dist/*.AppImage \
+            dist/*.rpm \
+            dist/*.deb \
+            dist/*.pacman \
+            dist/*.tar.gz \
+            --clobber --repo "$GITHUB_REPOSITORY"
