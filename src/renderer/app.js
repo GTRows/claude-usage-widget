@@ -118,6 +118,8 @@ const elements = {
     themeStyleBtns: document.querySelectorAll('.theme-style-btn'),
     trayStyleSelect: document.getElementById('trayStyleSelect'),
     trayShowLogoToggle: document.getElementById('trayShowLogoToggle'),
+    trayMascotInterval: document.getElementById('trayMascotInterval'),
+    trayMascotIntervalRow: document.getElementById('trayMascotIntervalRow'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
     refreshInterval: document.getElementById('refreshInterval'),
@@ -1476,6 +1478,8 @@ function _frameFromMascot(opts, overlay) {
 
 // Build a full animation sequence for a given status. Each returned frame
 // carries its own `duration` in ms so main.js can pace the cycle non-uniformly.
+// Frame durations are scaled so the full cycle matches settings.trayMascotInterval
+// (seconds), letting users speed up or slow down the mascot.
 function buildMascotAnimation(status) {
     const frames = [];
     const push = (dataURL, duration, tooltip, title) => frames.push({ dataURL, duration, tooltip: tooltip || '', title: title || '' });
@@ -1553,6 +1557,16 @@ function buildMascotAnimation(status) {
             const dataURL = _frameFromMascot({ color: '#d97757', ...cfg });
             push(dataURL, i === 2 ? 140 : 340, 'Claude Usage');
         });
+    }
+
+    const settings = window._cachedSettings || {};
+    const targetSec = Math.max(1, Math.min(60, Number(settings.trayMascotInterval) || 2));
+    const totalMs = frames.reduce((sum, f) => sum + (f.duration || 0), 0);
+    if (frames.length > 0 && totalMs > 0) {
+        const scale = (targetSec * 1000) / totalMs;
+        for (const f of frames) {
+            f.duration = Math.max(80, Math.min(10000, Math.round(f.duration * scale)));
+        }
     }
 
     return frames;
@@ -2230,6 +2244,10 @@ async function loadSettings() {
     if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
     if (elements.trayStyleSelect) elements.trayStyleSelect.value = settings.trayStyle || 'bigNumber';
     if (elements.trayShowLogoToggle) elements.trayShowLogoToggle.checked = !!settings.trayShowLogo;
+    if (elements.trayMascotInterval) {
+        const raw = parseInt(settings.trayMascotInterval);
+        elements.trayMascotInterval.value = Number.isFinite(raw) && raw >= 1 ? String(Math.min(60, raw)) : '2';
+    }
 
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
@@ -2302,6 +2320,7 @@ async function saveSettings() {
         expandedOpen: isExpanded,
         trayStyle: elements.trayStyleSelect ? elements.trayStyleSelect.value : 'bigNumber',
         trayShowLogo: elements.trayShowLogoToggle ? elements.trayShowLogoToggle.checked : false,
+        trayMascotInterval: elements.trayMascotInterval ? Math.max(1, Math.min(60, parseInt(elements.trayMascotInterval.value) || 2)) : 2,
         historyVisible: historyVisible,
         autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,

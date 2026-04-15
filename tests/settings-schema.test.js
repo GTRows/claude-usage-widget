@@ -18,6 +18,9 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ refreshInterval: 999999 }).refreshInterval).toBe(86400);
     expect(normalizeSettings({ warnThreshold: 0 }).warnThreshold).toBe(1);
     expect(normalizeSettings({ warnThreshold: 200 }).warnThreshold).toBe(99);
+    expect(normalizeSettings({ trayMascotInterval: 0 }).trayMascotInterval).toBe(1);
+    expect(normalizeSettings({ trayMascotInterval: 9999 }).trayMascotInterval).toBe(60);
+    expect(normalizeSettings({ trayMascotInterval: 5 }).trayMascotInterval).toBe(5);
   });
   it('keeps danger >= warn', () => {
     const s = normalizeSettings({ warnThreshold: 80, dangerThreshold: 50 });

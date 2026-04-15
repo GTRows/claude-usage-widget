@@ -618,6 +618,7 @@ ipcMain.handle('get-settings', () => {
     themeStyle: store.get('settings.themeStyle', 'classic'),
     trayStyle: store.get('settings.trayStyle', 'bigNumber'),
     trayShowLogo: store.get('settings.trayShowLogo', false),
+    trayMascotInterval: store.get('settings.trayMascotInterval', 2),
     warnThreshold: store.get('settings.warnThreshold', 75),
     dangerThreshold: store.get('settings.dangerThreshold', 90),
     timeFormat: store.get('settings.timeFormat', '12h'),
@@ -642,6 +643,10 @@ ipcMain.handle('save-settings', (event, settings) => {
   if (settings.themeStyle) store.set('settings.themeStyle', settings.themeStyle);
   if (settings.trayStyle) store.set('settings.trayStyle', settings.trayStyle);
   store.set('settings.trayShowLogo', !!settings.trayShowLogo);
+  if (Number.isFinite(settings.trayMascotInterval)) {
+    const sec = Math.max(1, Math.min(60, Math.round(settings.trayMascotInterval)));
+    store.set('settings.trayMascotInterval', sec);
+  }
   store.set('settings.warnThreshold', settings.warnThreshold);
   store.set('settings.dangerThreshold', settings.dangerThreshold);
   store.set('settings.timeFormat', settings.timeFormat);
