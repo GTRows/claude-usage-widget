@@ -4,7 +4,7 @@ const https = require('https');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 
-const GITHUB_OWNER = 'SlavomirDurej';
+const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
 
 // Migration: Handle old encrypted config files from v1.7.0 and earlier
@@ -60,8 +60,9 @@ let trayIconTimer = null;
 let defaultTrayImage = null;
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
+const WIDGET_COMPACT_WIDTH = 320;
 const WIDGET_HEIGHT = 155;
-const TRAY_POPUP_GAP = 8;
+const TRAY_ANCHOR_GAP = 6;
 const HISTORY_RETENTION_DAYS = 30;
 const CHART_DAYS = 7;
 const MAX_HISTORY_SAMPLES = 10000; // Cap total samples to prevent unbounded growth
@@ -112,16 +113,16 @@ async function setSessionCookie(sessionKey) {
 
 function createMainWindow() {
   const savedPosition = store.get('windowPosition');
-  const trayPopupMode = store.get('settings.trayPopupMode', false);
   const windowOptions = {
     width: WIDGET_WIDTH,
     height: WIDGET_HEIGHT,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    roundedCorners: false,
     alwaysOnTop: true,
     resizable: false,
-    skipTaskbar: trayPopupMode,
-    show: !trayPopupMode,
     icon: path.join(__dirname, process.platform === 'darwin' ? 'assets/icon.icns' : process.platform === 'linux' ? 'assets/logo.png' : 'assets/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
@@ -131,23 +132,16 @@ function createMainWindow() {
     }
   };
 
-  if (savedPosition && !trayPopupMode) {
+  if (savedPosition) {
     windowOptions.x = savedPosition.x;
     windowOptions.y = savedPosition.y;
   }
 
   mainWindow = new BrowserWindow(windowOptions);
-
-  mainWindow.on('blur', () => {
-    if (store.get('settings.trayPopupMode', false)) {
-      mainWindow.hide();
-    }
-  });
   mainWindow.loadFile('src/renderer/index.html');
 
   let positionSaveTimer = null;
   mainWindow.on('move', () => {
-    if (store.get('settings.trayPopupMode', false)) return;
     if (positionSaveTimer) clearTimeout(positionSaveTimer);
     positionSaveTimer = setTimeout(() => {
       const position = mainWindow.getBounds();
@@ -162,43 +156,6 @@ function createMainWindow() {
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
-}
-
-// Position the main window anchored to the tray icon bounds (for tray-popup mode).
-// Falls back to the screen's work area when tray bounds are unavailable.
-function positionWindowNearTray(trayBounds) {
-  if (!mainWindow) return;
-  const { screen } = require('electron');
-  const winBounds = mainWindow.getBounds();
-  let anchorX;
-  let anchorY;
-
-  if (trayBounds && trayBounds.x !== undefined) {
-    anchorX = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2);
-    anchorY = Math.round(trayBounds.y + trayBounds.height + TRAY_POPUP_GAP);
-  } else {
-    const display = screen.getPrimaryDisplay();
-    const area = display.workArea;
-    anchorX = area.x + area.width - winBounds.width - TRAY_POPUP_GAP;
-    anchorY = area.y + area.height - winBounds.height - TRAY_POPUP_GAP;
-  }
-
-  const display = screen.getDisplayMatching({
-    x: anchorX, y: anchorY, width: winBounds.width, height: winBounds.height
-  });
-  const area = display.workArea;
-  anchorX = Math.max(area.x + TRAY_POPUP_GAP, Math.min(anchorX, area.x + area.width - winBounds.width - TRAY_POPUP_GAP));
-  // If anchoring below tray would go off-screen, flip above
-  if (anchorY + winBounds.height > area.y + area.height) {
-    if (trayBounds && trayBounds.y !== undefined) {
-      anchorY = trayBounds.y - winBounds.height - TRAY_POPUP_GAP;
-    } else {
-      anchorY = area.y + area.height - winBounds.height - TRAY_POPUP_GAP;
-    }
-  }
-  anchorY = Math.max(area.y + TRAY_POPUP_GAP, anchorY);
-
-  mainWindow.setPosition(anchorX, anchorY);
 }
 
 function createTray() {
@@ -257,7 +214,7 @@ function createTray() {
       }
     ]);
 
-    tray.setToolTip('Claude Usage Widget');
+    tray.setToolTip('Claude Widget (GTRows)');
     tray.setContextMenu(contextMenu);
 
     tray.on('click', (event, bounds) => {
@@ -266,16 +223,81 @@ function createTray() {
         mainWindow.hide();
         return;
       }
-      if (store.get('settings.trayPopupMode', false)) {
-        positionWindowNearTray(bounds);
-      }
       if (mainWindow.isMinimized()) mainWindow.restore();
+      if (store.get('settings.compactMode', false) && bounds) {
+        anchorAboveTray(bounds);
+      }
       mainWindow.show();
       mainWindow.focus();
     });
   } catch (error) {
     console.error('Failed to create tray:', error);
   }
+}
+
+// Anchor the window so its bottom sits just above the tray icon.
+// Used for compact (tray-popup) mode: window grows upward as content grows.
+function anchorAboveTray(trayBounds) {
+  if (!mainWindow) return;
+  const { screen } = require('electron');
+  const bounds = trayBounds && trayBounds.x !== undefined ? trayBounds : (tray ? tray.getBounds() : null);
+  const winBounds = mainWindow.getBounds();
+  const display = bounds
+    ? screen.getDisplayMatching({ x: bounds.x, y: bounds.y, width: bounds.width || 1, height: bounds.height || 1 })
+    : screen.getPrimaryDisplay();
+  const area = display.workArea;
+
+  let x;
+  let y;
+  if (bounds && bounds.x !== undefined) {
+    x = Math.round(bounds.x + bounds.width / 2 - winBounds.width / 2);
+    // Bottom edge sits just above the tray (or below if taskbar is at top).
+    y = Math.round(bounds.y - winBounds.height - TRAY_ANCHOR_GAP);
+    if (y < area.y) {
+      y = Math.round(bounds.y + bounds.height + TRAY_ANCHOR_GAP);
+    }
+  } else {
+    x = area.x + area.width - winBounds.width - TRAY_ANCHOR_GAP;
+    y = area.y + area.height - winBounds.height - TRAY_ANCHOR_GAP;
+  }
+
+  x = Math.max(area.x + TRAY_ANCHOR_GAP, Math.min(x, area.x + area.width - winBounds.width - TRAY_ANCHOR_GAP));
+  y = Math.max(area.y + TRAY_ANCHOR_GAP, Math.min(y, area.y + area.height - winBounds.height - TRAY_ANCHOR_GAP));
+  mainWindow.setPosition(x, y);
+}
+
+function centerWindowOnDisplay() {
+  if (!mainWindow) return;
+  const { screen } = require('electron');
+  const display = screen.getDisplayMatching(mainWindow.getBounds());
+  const [w, h] = mainWindow.getSize();
+  const x = Math.round(display.workArea.x + (display.workArea.width - w) / 2);
+  const y = Math.round(display.workArea.y + (display.workArea.height - h) / 2);
+  mainWindow.setPosition(x, y);
+  store.set('windowPosition', { x, y });
+}
+
+function applyTaskbarVisibility() {
+  if (!mainWindow) return;
+  const compact = store.get('settings.compactMode', false);
+  const hide = store.get('settings.hideFromTaskbar', false);
+  mainWindow.setSkipTaskbar(compact || hide);
+}
+
+function applyCompactWindowMode(compact) {
+  if (!mainWindow) return;
+  if (compact) {
+    mainWindow.setMovable(false);
+    mainWindow.setContentSize(WIDGET_COMPACT_WIDTH, mainWindow.getContentSize()[1]);
+    if (tray) anchorAboveTray(tray.getBounds());
+  } else {
+    mainWindow.setMovable(true);
+    mainWindow.setContentSize(WIDGET_WIDTH, mainWindow.getContentSize()[1]);
+    const saved = store.get('windowPosition');
+    if (saved) mainWindow.setPosition(saved.x, saved.y);
+    if (!mainWindow.isVisible()) mainWindow.show();
+  }
+  applyTaskbarVisibility();
 }
 
 // IPC Handlers
@@ -390,9 +412,45 @@ ipcMain.on('close-window', () => {
   }
 });
 
+let _settingsModeActive = false;
+
 ipcMain.on('resize-window', (event, height) => {
-  if (mainWindow) {
-    mainWindow.setContentSize(WIDGET_WIDTH, height);
+  if (!mainWindow) return;
+  const { screen } = require('electron');
+  const bounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const maxH = Math.max(200, display.workArea.height - 40);
+  const clamped = Math.min(height, maxH);
+  const compact = store.get('settings.compactMode', false);
+  const width = _settingsModeActive ? WIDGET_WIDTH : (compact ? WIDGET_COMPACT_WIDTH : WIDGET_WIDTH);
+  mainWindow.setContentSize(width, clamped);
+  if (compact && !_settingsModeActive && tray) {
+    anchorAboveTray(tray.getBounds());
+  }
+});
+
+ipcMain.on('set-settings-window', (event, on) => {
+  if (!mainWindow) return;
+  _settingsModeActive = !!on;
+  const { screen } = require('electron');
+  const bounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const maxH = Math.max(200, display.workArea.height - 40);
+
+  if (on) {
+    const target = Math.min(640, maxH);
+    mainWindow.setMovable(true);
+    mainWindow.setContentSize(WIDGET_WIDTH, target);
+    if (store.get('settings.compactMode', false) && tray) {
+      anchorAboveTray(tray.getBounds());
+    }
+  } else {
+    const compact = store.get('settings.compactMode', false);
+    if (compact) {
+      applyCompactWindowMode(true);
+    } else {
+      applyCompactWindowMode(false);
+    }
   }
 });
 
@@ -433,6 +491,43 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+ipcMain.handle('get-storage-info', () => {
+  const fs = require('fs');
+  let storeBytes = 0;
+  try { storeBytes = fs.statSync(store.path).size; } catch {}
+  const history = store.get('usageHistory', []);
+  const historyCount = Array.isArray(history) ? history.length : 0;
+  const historyBytes = Buffer.byteLength(JSON.stringify(history), 'utf8');
+  return {
+    userData: app.getPath('userData'),
+    storeFile: store.path,
+    storeBytes,
+    historyBytes,
+    historyCount
+  };
+});
+
+ipcMain.handle('prune-history', (event, days) => {
+  const n = Math.max(1, Math.floor(days || 0));
+  const cutoff = Date.now() - n * 24 * 60 * 60 * 1000;
+  const history = store.get('usageHistory', []);
+  const kept = Array.isArray(history) ? history.filter((e) => e.timestamp >= cutoff) : [];
+  store.set('usageHistory', kept);
+  return { kept: kept.length, removed: (history.length || 0) - kept.length };
+});
+
+ipcMain.handle('clear-history', () => {
+  store.set('usageHistory', []);
+  return true;
+});
+
+ipcMain.on('open-path', (event, target) => {
+  const { shell } = require('electron');
+  if (typeof target === 'string' && target.length > 0) {
+    shell.openPath(target);
+  }
+});
+
 ipcMain.handle('get-usage-history', () => {
   const history = store.get('usageHistory', []);
   const cutoff = Date.now() - (CHART_DAYS * 24 * 60 * 60 * 1000);
@@ -454,6 +549,17 @@ ipcMain.handle('get-usage-history-range', (event, rangeMs) => {
     .sort((a, b) => a.timestamp - b.timestamp);
 });
 
+// Absolute window fetch: inclusive [fromMs, toMs].
+// Either bound may be null/undefined meaning "open on that side".
+ipcMain.handle('get-usage-history-window', (event, fromMs, toMs) => {
+  const history = store.get('usageHistory', []);
+  const lo = Number.isFinite(fromMs) ? fromMs : -Infinity;
+  const hi = Number.isFinite(toMs) ? toMs : Infinity;
+  return history
+    .filter((entry) => entry.timestamp >= lo && entry.timestamp <= hi)
+    .sort((a, b) => a.timestamp - b.timestamp);
+});
+
 // Show a native OS desktop notification (Windows toast, macOS NC, Linux libnotify)
 ipcMain.on('show-notification', (event, { title, body }) => {
   if (Notification.isSupported()) {
@@ -465,11 +571,13 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 // Resize window for compact vs normal mode
 // Compact: 290px wide, normal: 530px wide. Height stays managed by renderer.
 ipcMain.on('set-compact-mode', (event, compact) => {
-  if (mainWindow) {
-    const bounds = mainWindow.getBounds();
-    const width = compact ? 290 : WIDGET_WIDTH;
-    const height = compact ? 105 : WIDGET_HEIGHT;
-    mainWindow.setBounds({ x: bounds.x, y: bounds.y, width, height });
+  if (!mainWindow) return;
+  const wasCompact = store.get('settings.compactMode', false);
+  store.set('settings.compactMode', !!compact);
+  applyCompactWindowMode(!!compact);
+  if (wasCompact && !compact) {
+    centerWindowOnDisplay();
+    mainWindow.focus();
   }
 });
 
@@ -479,6 +587,9 @@ ipcMain.handle('get-settings', () => {
     autoStart: store.get('settings.autoStart', false),
     alwaysOnTop: store.get('settings.alwaysOnTop', true),
     theme: store.get('settings.theme', 'dark'),
+    themeStyle: store.get('settings.themeStyle', 'classic'),
+    trayStyle: store.get('settings.trayStyle', 'bigNumber'),
+    trayShowLogo: store.get('settings.trayShowLogo', false),
     warnThreshold: store.get('settings.warnThreshold', 75),
     dangerThreshold: store.get('settings.dangerThreshold', 90),
     timeFormat: store.get('settings.timeFormat', '12h'),
@@ -488,8 +599,10 @@ ipcMain.handle('get-settings', () => {
     refreshInterval: store.get('settings.refreshInterval', '300'),
     graphVisible: store.get('settings.graphVisible', false),
     expandedOpen: store.get('settings.expandedOpen', false),
-    trayPopupMode: store.get('settings.trayPopupMode', false),
-    historyVisible: store.get('settings.historyVisible', false)
+    historyVisible: store.get('settings.historyVisible', false),
+    autoPrune: store.get('settings.autoPrune', false),
+    autoPruneDays: store.get('settings.autoPruneDays', 30),
+    hideFromTaskbar: store.get('settings.hideFromTaskbar', false)
   };
 });
 
@@ -497,6 +610,9 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.autoStart', settings.autoStart);
   store.set('settings.alwaysOnTop', settings.alwaysOnTop);
   store.set('settings.theme', settings.theme);
+  if (settings.themeStyle) store.set('settings.themeStyle', settings.themeStyle);
+  if (settings.trayStyle) store.set('settings.trayStyle', settings.trayStyle);
+  store.set('settings.trayShowLogo', !!settings.trayShowLogo);
   store.set('settings.warnThreshold', settings.warnThreshold);
   store.set('settings.dangerThreshold', settings.dangerThreshold);
   store.set('settings.timeFormat', settings.timeFormat);
@@ -506,8 +622,20 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.refreshInterval', settings.refreshInterval);
   store.set('settings.graphVisible', settings.graphVisible);
   store.set('settings.expandedOpen', settings.expandedOpen);
-  store.set('settings.trayPopupMode', settings.trayPopupMode);
   store.set('settings.historyVisible', settings.historyVisible);
+  store.set('settings.autoPrune', !!settings.autoPrune);
+  if (Number.isFinite(settings.autoPruneDays)) {
+    store.set('settings.autoPruneDays', Math.max(1, Math.floor(settings.autoPruneDays)));
+  }
+  store.set('settings.hideFromTaskbar', !!settings.hideFromTaskbar);
+  applyTaskbarVisibility();
+
+  if (settings.autoPrune && settings.autoPruneDays >= 1) {
+    const cutoff = Date.now() - settings.autoPruneDays * 24 * 60 * 60 * 1000;
+    const history = store.get('usageHistory', []);
+    const kept = Array.isArray(history) ? history.filter((e) => e.timestamp >= cutoff) : [];
+    if (kept.length !== history.length) store.set('usageHistory', kept);
+  }
 
   // openAtLogin is not supported on Linux — Electron silently ignores it.
   // Skip the call entirely to avoid misleading behaviour.
@@ -519,11 +647,6 @@ ipcMain.handle('save-settings', (event, settings) => {
   }
 
   if (mainWindow) {
-    if (process.platform === 'darwin') {
-      if (settings.trayPopupMode) { app.dock.hide(); } else { app.dock.show(); }
-    } else {
-      mainWindow.setSkipTaskbar(!!settings.trayPopupMode);
-    }
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
   }
 
@@ -754,7 +877,7 @@ function applyTrayFrame(index) {
   if (!tray || tray.isDestroyed?.()) return;
   if (!trayIconFrames.length) {
     if (defaultTrayImage) tray.setImage(defaultTrayImage);
-    tray.setToolTip('Claude Usage Widget');
+    tray.setToolTip('Claude Widget (GTRows)');
     if (process.platform === 'darwin') tray.setTitle('');
     return;
   }
@@ -770,12 +893,18 @@ function applyTrayFrame(index) {
 }
 
 function startTrayCycle() {
-  if (trayIconTimer) clearInterval(trayIconTimer);
+  if (trayIconTimer) clearTimeout(trayIconTimer);
   if (trayIconFrames.length <= 1) return;
-  trayIconTimer = setInterval(() => {
+  const step = () => {
     trayIconIndex = (trayIconIndex + 1) % trayIconFrames.length;
     applyTrayFrame(trayIconIndex);
-  }, 3000);
+    const current = trayIconFrames[trayIconIndex];
+    const delay = Math.max(80, Math.min(10000, Number(current && current.duration) || 3000));
+    trayIconTimer = setTimeout(step, delay);
+  };
+  const first = trayIconFrames[trayIconIndex];
+  const firstDelay = Math.max(80, Math.min(10000, Number(first && first.duration) || 3000));
+  trayIconTimer = setTimeout(step, firstDelay);
 }
 
 ipcMain.on('set-tray-frames', (event, frames) => {
@@ -806,6 +935,15 @@ app.whenReady().then(async () => {
     await setSessionCookie(sessionKey);
   }
 
+  // Apply auto-prune on startup before window opens
+  if (store.get('settings.autoPrune', false)) {
+    const days = Math.max(1, Math.floor(store.get('settings.autoPruneDays', 30)));
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const history = store.get('usageHistory', []);
+    const kept = Array.isArray(history) ? history.filter((e) => e.timestamp >= cutoff) : [];
+    if (kept.length !== history.length) store.set('usageHistory', kept);
+  }
+
   createMainWindow();
   createTray();
 
@@ -814,6 +952,10 @@ app.whenReady().then(async () => {
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(alwaysOnTop, 'floating');
   }
+  if (store.get('settings.compactMode', false)) {
+    applyCompactWindowMode(true);
+  }
+  applyTaskbarVisibility();
 
   // Periodic always-on-top re-assertion to recover from z-order disruptions
   // (hidden window spawns, window manager shortcuts, alt-tab, etc.)
