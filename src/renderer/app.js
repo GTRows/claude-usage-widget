@@ -1366,8 +1366,9 @@ function _drawMascot(ctx, size, opts) {
         accent = '#1f1203'
     } = opts;
 
-    const cx = size / 2 + jitterX;
-    const cy = size / 2 + jitterY;
+    const u = size / 32; // all constants below were authored for a 32px canvas
+    const cx = size / 2 + jitterX * u;
+    const cy = size / 2 + jitterY * u;
     const outer = (size / 2 - 1) * scale;
     const inner = outer * 0.40;
     const spokes = 10;
@@ -1390,42 +1391,42 @@ function _drawMascot(ctx, size, opts) {
     ctx.restore();
 
     // Face (drawn in fixed frame so expressions stay readable through rotation)
-    const eyeY = cy - 2;
-    const eyeLX = cx - 4 + eyeOffsetX;
-    const eyeRX = cx + 4 + eyeOffsetX;
+    const eyeY = cy - 2 * u;
+    const eyeLX = cx - 4 * u + eyeOffsetX * u;
+    const eyeRX = cx + 4 * u + eyeOffsetX * u;
 
     ctx.strokeStyle = accent;
     ctx.fillStyle = accent;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.8 * u;
     ctx.lineCap = 'round';
 
     if (eye === 'open' || eye === 'dots') {
         ctx.beginPath();
-        ctx.arc(eyeLX, eyeY, 1.4, 0, Math.PI * 2);
-        ctx.arc(eyeRX, eyeY, 1.4, 0, Math.PI * 2);
+        ctx.arc(eyeLX, eyeY, 1.4 * u, 0, Math.PI * 2);
+        ctx.arc(eyeRX, eyeY, 1.4 * u, 0, Math.PI * 2);
         ctx.fill();
     } else if (eye === 'wide') {
         ctx.beginPath();
-        ctx.arc(eyeLX, eyeY, 2.2, 0, Math.PI * 2);
-        ctx.arc(eyeRX, eyeY, 2.2, 0, Math.PI * 2);
+        ctx.arc(eyeLX, eyeY, 2.2 * u, 0, Math.PI * 2);
+        ctx.arc(eyeRX, eyeY, 2.2 * u, 0, Math.PI * 2);
         ctx.fill();
     } else if (eye === 'closed') {
         ctx.beginPath();
-        ctx.moveTo(eyeLX - 2, eyeY);
-        ctx.lineTo(eyeLX + 2, eyeY);
-        ctx.moveTo(eyeRX - 2, eyeY);
-        ctx.lineTo(eyeRX + 2, eyeY);
+        ctx.moveTo(eyeLX - 2 * u, eyeY);
+        ctx.lineTo(eyeLX + 2 * u, eyeY);
+        ctx.moveTo(eyeRX - 2 * u, eyeY);
+        ctx.lineTo(eyeRX + 2 * u, eyeY);
         ctx.stroke();
     } else if (eye === 'happy') {
         ctx.beginPath();
-        ctx.arc(eyeLX, eyeY, 2, Math.PI, 0, true);
+        ctx.arc(eyeLX, eyeY, 2 * u, Math.PI, 0, true);
         ctx.stroke();
         ctx.beginPath();
-        ctx.arc(eyeRX, eyeY, 2, Math.PI, 0, true);
+        ctx.arc(eyeRX, eyeY, 2 * u, Math.PI, 0, true);
         ctx.stroke();
     } else if (eye === 'x') {
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * u;
         const drawX = (ex, ey, r) => {
             ctx.beginPath();
             ctx.moveTo(ex - r, ey - r);
@@ -1434,39 +1435,40 @@ function _drawMascot(ctx, size, opts) {
             ctx.lineTo(ex - r, ey + r);
             ctx.stroke();
         };
-        drawX(eyeLX, eyeY, 2.4);
-        drawX(eyeRX, eyeY, 2.4);
+        drawX(eyeLX, eyeY, 2.4 * u);
+        drawX(eyeRX, eyeY, 2.4 * u);
     }
 
-    const mouthY = cy + 5;
+    const mouthY = cy + 5 * u;
     ctx.strokeStyle = eye === 'x' ? '#ffffff' : accent;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.8 * u;
     if (mouth === 'smile') {
         ctx.beginPath();
-        ctx.arc(cx, mouthY - 1, 3, 0, Math.PI, false);
+        ctx.arc(cx, mouthY - 1 * u, 3 * u, 0, Math.PI, false);
         ctx.stroke();
     } else if (mouth === 'flat') {
         ctx.beginPath();
-        ctx.moveTo(cx - 3, mouthY);
-        ctx.lineTo(cx + 3, mouthY);
+        ctx.moveTo(cx - 3 * u, mouthY);
+        ctx.lineTo(cx + 3 * u, mouthY);
         ctx.stroke();
     } else if (mouth === 'ohh') {
         ctx.beginPath();
-        ctx.arc(cx, mouthY, 1.8, 0, Math.PI * 2);
+        ctx.arc(cx, mouthY, 1.8 * u, 0, Math.PI * 2);
         ctx.stroke();
     } else if (mouth === 'tongue') {
         ctx.beginPath();
-        ctx.moveTo(cx - 4, mouthY - 1);
-        ctx.lineTo(cx - 2, mouthY + 1);
-        ctx.lineTo(cx, mouthY - 1);
-        ctx.lineTo(cx + 2, mouthY + 1);
-        ctx.lineTo(cx + 4, mouthY - 1);
+        ctx.moveTo(cx - 4 * u, mouthY - 1 * u);
+        ctx.lineTo(cx - 2 * u, mouthY + 1 * u);
+        ctx.lineTo(cx, mouthY - 1 * u);
+        ctx.lineTo(cx + 2 * u, mouthY + 1 * u);
+        ctx.lineTo(cx + 4 * u, mouthY - 1 * u);
         ctx.stroke();
     }
 }
 
 function _frameFromMascot(opts, overlay) {
-    const size = 32;
+    // Render at 64px so the tray has enough detail after the OS downscales to 16–24px.
+    const size = 64;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
@@ -1485,73 +1487,84 @@ function buildMascotAnimation(status) {
     const push = (dataURL, duration, tooltip, title) => frames.push({ dataURL, duration, tooltip: tooltip || '', title: title || '' });
 
     if (status === 'zero') {
-        // Sleepy idle — gentle breathing, closed eyes, z's drifting.
-        const breath = [0.94, 0.98, 1.02, 1.00];
+        // Sleepy idle — pronounced breathing, tilted head, drifting z's.
+        const breath = [0.82, 0.92, 1.08, 0.96];
+        const tilt = [-0.12, 0, 0.12, 0];
         for (let i = 0; i < 4; i += 1) {
             const s = breath[i];
-            const zPos = i; // drift frame
+            const zPos = i;
             const dataURL = _frameFromMascot(
-                { color: '#6b7280', eye: 'closed', mouth: 'flat', scale: s, accent: '#e5e7eb' },
-                (ctx) => {
+                { color: '#6b7280', eye: 'closed', mouth: 'flat', scale: s, rotate: tilt[i], accent: '#e5e7eb' },
+                (ctx, size) => {
+                    const u = size / 32;
                     ctx.fillStyle = '#e5e7eb';
-                    ctx.font = `bold ${9 + zPos}px "Segoe UI", system-ui, sans-serif`;
+                    ctx.font = `bold ${(10 + zPos * 2) * u}px "Segoe UI", system-ui, sans-serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.globalAlpha = 0.4 + zPos * 0.15;
-                    ctx.fillText('z', 25 + zPos, 8 - zPos);
+                    ctx.globalAlpha = 0.35 + zPos * 0.2;
+                    ctx.fillText('z', (24 + zPos * 2) * u, (9 - zPos * 2) * u);
                     ctx.globalAlpha = 1;
                 }
             );
             push(dataURL, 420, 'Claude Usage — idle');
         }
     } else if (status === 'dead') {
-        // Limit reached — dead face shakes, tongue wiggles.
-        const jitter = [[0, 0], [1, 0], [-1, 0], [0, 1]];
+        // Limit reached — big shake and color flash.
+        const jitter = [[0, 0], [3, -1], [-3, 1], [1, 2]];
         const mouths = ['tongue', 'tongue', 'flat', 'tongue'];
+        const colors = ['#b91c1c', '#ef4444', '#b91c1c', '#7f1d1d'];
         for (let i = 0; i < 4; i += 1) {
             const [jx, jy] = jitter[i];
             const dataURL = _frameFromMascot({
-                color: '#b91c1c',
+                color: colors[i],
                 eye: 'x',
                 mouth: mouths[i],
                 jitterX: jx,
-                jitterY: jy
+                jitterY: jy,
+                rotate: (i - 1.5) * 0.08
             });
             push(dataURL, 220, 'Claude Usage — limit reached', ' 100%');
         }
     } else if (status === 'danger') {
-        // Near-limit panic — amber star flashing red, wide darting eyes.
+        // Near-limit panic — dramatic pulse between red and amber, scale swing.
+        const cfg = [
+            { color: '#dc2626', scale: 1.10, eyeOffsetX: -2 },
+            { color: '#f59e0b', scale: 0.88, eyeOffsetX: 2 },
+            { color: '#dc2626', scale: 1.10, eyeOffsetX: 0 },
+            { color: '#f59e0b', scale: 0.88, eyeOffsetX: -2 }
+        ];
         for (let i = 0; i < 4; i += 1) {
-            const pulse = i % 2 === 0 ? '#dc2626' : '#f59e0b';
-            const offset = i % 2 === 0 ? -1 : 1;
+            const c = cfg[i];
             const dataURL = _frameFromMascot({
-                color: pulse,
+                color: c.color,
                 eye: 'wide',
                 mouth: 'ohh',
-                eyeOffsetX: offset,
-                scale: 0.98 + (i % 2) * 0.04
+                eyeOffsetX: c.eyeOffsetX,
+                scale: c.scale
             });
             push(dataURL, 180, 'Claude Usage — critical');
         }
     } else if (status === 'warn') {
-        // Watchful — amber star, wary eyes scan side-to-side, flat mouth.
-        const offsets = [-1.2, 0, 1.2, 0];
+        // Watchful — wary eyes scan far side-to-side with slight rotation.
+        const offsets = [-3, 0, 3, 0];
+        const rotates = [-0.05, 0, 0.05, 0];
         for (let i = 0; i < 4; i += 1) {
             const dataURL = _frameFromMascot({
                 color: '#f59e0b',
                 eye: 'wide',
                 mouth: 'flat',
-                eyeOffsetX: offsets[i]
+                eyeOffsetX: offsets[i],
+                rotate: rotates[i]
             });
             push(dataURL, 260, 'Claude Usage — high');
         }
     } else {
-        // Content — low/normal usage. Happy mascot blinks and breathes.
+        // Content — breathing pulse + full blink.
         const seq = [
-            { eye: 'happy', mouth: 'smile', scale: 1.00 },
-            { eye: 'happy', mouth: 'smile', scale: 1.03 },
+            { eye: 'happy', mouth: 'smile', scale: 0.94 },
+            { eye: 'happy', mouth: 'smile', scale: 1.08 },
             { eye: 'closed', mouth: 'smile', scale: 1.00 }, // blink
-            { eye: 'happy', mouth: 'smile', scale: 0.98 }
+            { eye: 'happy', mouth: 'smile', scale: 1.04 }
         ];
         seq.forEach((cfg, i) => {
             const dataURL = _frameFromMascot({ color: '#d97757', ...cfg });
