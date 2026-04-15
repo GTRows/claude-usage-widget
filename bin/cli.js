@@ -23,6 +23,7 @@ Commands:
   organizations       List organizations the session can see
   history [--since N] [--format csv|json] [--output FILE]
                       Read the desktop widget's stored usage history
+  doctor              Diagnose credentials, widget store, and API reach
   config              Print the config file path
   version             Print the CLI version
   help                Show this message
@@ -138,6 +139,43 @@ async function cmdOrganizations(flags) {
   process.stdout.write(JSON.stringify(orgs, null, 2) + '\n');
 }
 
+async function cmdDoctor() {
+  const lines = [];
+  const ok = (label, value) => lines.push(`  [ok]   ${label}${value ? ': ' + value : ''}`);
+  const warn = (label, value) => lines.push(`  [warn] ${label}${value ? ': ' + value : ''}`);
+  const fail = (label, value) => lines.push(`  [fail] ${label}${value ? ': ' + value : ''}`);
+
+  lines.push(`claude-usage ${pkg.version} doctor`);
+  lines.push(`  node ${process.version}  platform ${process.platform}/${process.arch}`);
+  lines.push('Credentials');
+  const fromEnv = !!(process.env.CLAUDE_SESSION_KEY && process.env.CLAUDE_ORGANIZATION_ID);
+  const creds = loadCredentials();
+  if (fromEnv) ok('env vars set');
+  else if (creds.sessionKey && creds.organizationId) ok('config file', getConfigPath());
+  else fail('no credentials', 'run `claude-usage login --key K --org O`');
+
+  lines.push('Widget store');
+  const widgetPath = getWidgetStorePath();
+  const widget = readWidgetHistory();
+  if (widget === null) warn('not present', widgetPath);
+  else ok(`history rows: ${widget.length}`, widgetPath);
+
+  lines.push('API reachability');
+  if (creds.sessionKey && creds.organizationId) {
+    try {
+      const t0 = Date.now();
+      await fetchUsage(creds);
+      ok(`usage endpoint`, `${Date.now() - t0}ms`);
+    } catch (err) {
+      fail('usage endpoint', `${err.code || 'ERR'} ${err.message}`);
+    }
+  } else {
+    warn('skipped', 'no credentials');
+  }
+
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
 function cmdHistory(flags) {
   const history = readWidgetHistory();
   if (history === null) {
@@ -187,6 +225,7 @@ async function main() {
       case 'organizations':
       case 'orgs': await cmdOrganizations(args.flags); break;
       case 'history': cmdHistory(args.flags); break;
+      case 'doctor': await cmdDoctor(); break;
       case 'config': cmdConfig(); break;
       case 'version':
       case '-v':
