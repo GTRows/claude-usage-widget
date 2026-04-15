@@ -7,16 +7,27 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ## [1.11.0-gtrows.1] — 2026-04-15
 
-GTRows fork. CLI-focused additions on top of 1.10.0-gtrows.1.
+GTRows fork. CLI improvements plus a rework of the tray mascot.
 
-### New Features
-- `claude-usage history --since N --format csv|json [--output FILE]` reads the desktop widget's stored history without going through Electron, so users can pipe usage rows into their own tooling
-- `claude-usage doctor` diagnoses credentials (env vs file), widget store presence, and live API reachability in one command — useful for triaging shell-prompt setups
-- `claude-usage prompt --segments 5h,7d,opus,sonnet,extra` lets shell prompts pick which usage segments are rendered, in any order
+### Tray / Mascot
+- Animate mascot now renders the mascot at 64px so the OS downscale stays sharp, with larger motion deltas (scale pulse, head tilt, eye darts, color flash) that read at 16–24px
+- New setting Mascot animation length (1–60s, default 2s) scales the full play to the requested duration
+- New setting Pause between plays (0–600s, default 10s) holds the big-number tray icon between animations, so the tray is not in constant motion
+- Launch renders the big number first; the mascot plays only after the first pause elapses
+- Animate mascot toggle now dedicates the tray to the mascot cycle when on, rather than appending it to the number frame
+
+### CLI
+- `claude-usage history --since N --format csv|json [--output FILE]` reads the desktop widget's stored history without going through Electron
+- `claude-usage doctor` diagnoses credentials (env vs file), widget store presence, and live API reachability
+- `claude-usage prompt --segments 5h,7d,opus,sonnet,extra` selects which usage segments render inline
+- `claude-usage prompt --cache N` caches the latest response for N seconds, so shell prompts redraw without hitting the API each keystroke
+- Prompt snippets under `docs/prompts/` updated to lead with `--cache 60`
+
+### Settings / Data
 - Settings → Data → Export history now offers a date-range selector (All / 24h / 7d / 30d / 90d) before exporting CSV/JSON
 
 ### Tests
-- 17 new vitest cases covering `src/cli/api.js` (error mapping, fetchUsage merging) and `src/cli/widget-store.js` (cross-platform store path resolution)
+- New vitest coverage for `src/cli/api.js` (error mapping, fetchUsage merging), `src/cli/widget-store.js` (cross-platform store paths), and expanded `settings-schema` and `cli/render` cases
 - Test count climbs from 55 → 72, all green on Node 18 + 20
 
 ## [1.7.1] — 2026-03-21
