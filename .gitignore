@@ -39,6 +39,13 @@ yarn-error.log*
 # Local dev scratch files
 msg.txt
 RELEASE_NOTES_DRAFT.md
+run-dev.bat
+
+# Local tooling / Claude Code workspace state
+.claude/
+
+# Test coverage
+coverage/
 
 # Code signing credentials (NEVER COMMIT THESE)
 developer_id.key
