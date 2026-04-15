@@ -1484,7 +1484,7 @@ function _frameFromMascot(opts, overlay) {
 // carries its own `duration` in ms so main.js can pace the cycle non-uniformly.
 // Frame durations are scaled so the full cycle matches settings.trayMascotInterval
 // (seconds), letting users speed up or slow down the mascot.
-function buildMascotAnimation(status) {
+function buildMascotAnimation(status, restFrame) {
     const frames = [];
     const push = (dataURL, duration, tooltip, title) => frames.push({ dataURL, duration, tooltip: tooltip || '', title: title || '' });
 
@@ -1585,10 +1585,13 @@ function buildMascotAnimation(status) {
         }
     }
 
-    // Quiet interval between cycles. Hold the first animation frame so the tray
-    // settles on a recognisable resting pose, not mid-blink.
+    // Quiet interval between cycles. Show the provided rest frame (e.g. the
+    // big-number tray icon) so the tray falls back to a readable state between
+    // animations instead of parking on the mascot.
     if (gapSec > 0 && frames.length > 0) {
-        const rest = { ...frames[0], duration: gapSec * 1000 };
+        const rest = restFrame
+            ? { ...restFrame, duration: gapSec * 1000 }
+            : { ...frames[0], duration: gapSec * 1000 };
         frames.push(rest);
     }
 
@@ -1613,10 +1616,13 @@ function updateTrayIcon(data) {
         }
 
         if (animateMascot) {
-            const mascotFrames = buildMascotAnimation(status);
+            const restFrame = typeof session === 'number'
+                ? buildTrayFrame('Session', session)
+                : null;
+            const mascotFrames = buildMascotAnimation(status, restFrame);
             const label = rounded != null ? `Claude Usage — ${rounded}%` : 'Claude Usage';
             for (const f of mascotFrames) {
-                frames.push({ ...f, tooltip: label, title: rounded != null ? ` ${rounded}%` : '' });
+                frames.push({ ...f, tooltip: f.tooltip || label, title: rounded != null ? ` ${rounded}%` : '' });
             }
         } else if (status === 'dead' || status === 'zero') {
             frames.push(...buildMascotAnimation(status));
