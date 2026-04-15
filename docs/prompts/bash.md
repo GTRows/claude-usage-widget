@@ -2,28 +2,28 @@
 
 Adds a compact `5h:42% 7d:88%` segment to your bash `$PS1`.
 
-## One-shot version (cached, no async)
+## One-shot version with built-in cache
 
 Add to `~/.bashrc`:
 
 ```bash
 _claude_usage_segment() {
   if command -v claude-usage >/dev/null 2>&1; then
-    claude-usage prompt --no-color 2>/dev/null
+    claude-usage prompt --no-color --cache 60 2>/dev/null
   fi
 }
 
 export PS1='\u@\h \w $(_claude_usage_segment)\n\$ '
 ```
 
-Each new prompt invokes the CLI synchronously. Use `--interval`-aware
-caching below if your account is slow.
+`--cache 60` reuses the last response for up to 60 seconds, so most
+prompt redraws are served from a local file (no network round-trip).
+Drop the flag for always-fresh data, or raise it for slower accounts.
 
-## Cached background version
+## Background variant (only if --cache is not enough)
 
-Refreshes the segment in the background every 60 seconds and stores
-the result in `/tmp/claude-usage.txt`. The prompt only reads the
-cached file, so it never blocks.
+If even reading the cached JSON adds noticeable latency, run the CLI
+in the background and read a plain-text file instead:
 
 ```bash
 _claude_usage_cache=/tmp/claude-usage.txt

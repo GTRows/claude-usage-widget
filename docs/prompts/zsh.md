@@ -9,7 +9,7 @@ Add to `~/.zshrc`:
 ```zsh
 _claude_usage_segment() {
   if (( $+commands[claude-usage] )); then
-    claude-usage prompt --no-color 2>/dev/null
+    claude-usage prompt --no-color --cache 60 2>/dev/null
   fi
 }
 

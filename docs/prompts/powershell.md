@@ -8,7 +8,7 @@ Add to your profile (`$PROFILE`):
 function global:prompt {
   $segment = $null
   if (Get-Command claude-usage -ErrorAction SilentlyContinue) {
-    $segment = (claude-usage prompt --no-color 2>$null)
+    $segment = (claude-usage prompt --no-color --cache 60 2>$null)
   }
   $location = (Get-Location).Path
   if ($segment) {

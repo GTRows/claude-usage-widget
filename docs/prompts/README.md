@@ -25,7 +25,10 @@ with this fork.
 
 ## Performance notes
 
-The CLI hits Claude.ai's API on every invocation. If your account is
-slow, prefer the cached background variants in each snippet — they
-keep the prompt instant by reading a file that a background loop
-refreshes.
+By default the CLI hits Claude.ai's API on every invocation. The
+recommended snippets pass `--cache 60`, which reuses the last
+response for up to 60 seconds from a small file under the CLI's
+config directory — most prompt redraws are then served locally.
+
+For very slow accounts, a fully background-refreshed file cache is
+also documented in each shell's snippet.

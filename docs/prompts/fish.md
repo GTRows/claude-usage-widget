@@ -8,7 +8,7 @@ define `fish_prompt`):
 ```fish
 function _claude_usage_segment
   if type -q claude-usage
-    claude-usage prompt --no-color 2>/dev/null
+    claude-usage prompt --no-color --cache 60 2>/dev/null
   end
 end
 
