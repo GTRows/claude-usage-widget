@@ -688,42 +688,91 @@ body.theme-light .pin-btn.active {
     flex-direction: column;
 }
 
-/* Promotion banner — 2x off-peak boost indicator */
-.promo-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 10px;
-    margin-bottom: 10px;
+/* Promotion card — 2x boost indicator, sibling of the metric cards. */
+.promo-card {
+    position: relative;
+    padding: 8px 12px 9px;
+    margin-top: 10px;
     border: 1px solid var(--hairline);
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 60%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 60%),
         var(--surface);
     border-radius: var(--radius-md);
-    font-family: var(--font-body);
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
     overflow: hidden;
 }
 
-.promo-banner::before {
+.promo-card::before {
     content: "";
     position: absolute;
     top: 0; left: 0;
     width: 10px; height: 1px;
-    background: var(--jade);
-    opacity: 0.7;
+    background: var(--coral);
+    opacity: 0.55;
 }
-.promo-banner::after {
+
+.promo-card::after {
     content: "";
     position: absolute;
     top: 0; left: 0;
     width: 1px; height: 10px;
-    background: var(--jade);
-    opacity: 0.7;
-}
-.promo-banner[data-boost="off"]::before,
-.promo-banner[data-boost="off"]::after {
     background: var(--coral);
+    opacity: 0.55;
+}
+
+.promo-card[data-boost="on"]::before,
+.promo-card[data-boost="on"]::after {
+    background: var(--jade);
+    opacity: 0.75;
+}
+
+.promo-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    min-height: 14px;
+}
+
+.promo-card-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 18px;
+}
+
+.promo-card-status {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+}
+
+.promo-card-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.promo-card-foot .timer-text {
+    color: var(--ink);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    text-transform: none;
+    letter-spacing: 0.02em;
 }
 
 .promo-chip {
@@ -737,16 +786,16 @@ body.theme-light .pin-btn.active {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--jade) 45%, transparent);
-    background: color-mix(in srgb, var(--jade) 14%, transparent);
-    color: var(--jade);
+    border: 1px solid color-mix(in srgb, var(--coral) 45%, transparent);
+    background: color-mix(in srgb, var(--coral) 14%, transparent);
+    color: var(--coral);
     flex-shrink: 0;
 }
 
-.promo-chip[data-state="off"] {
-    border-color: color-mix(in srgb, var(--coral) 45%, transparent);
-    background: color-mix(in srgb, var(--coral) 14%, transparent);
-    color: var(--coral);
+.promo-chip[data-state="on"] {
+    border-color: color-mix(in srgb, var(--jade) 45%, transparent);
+    background: color-mix(in srgb, var(--jade) 14%, transparent);
+    color: var(--jade);
 }
 
 .promo-chip-dot {
@@ -764,66 +813,6 @@ body.theme-light .pin-btn.active {
 @keyframes promo-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.55; transform: scale(0.82); }
-}
-
-.promo-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.promo-headline {
-    font-family: var(--font-body);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--ink);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.promo-sub {
-    font-family: var(--font-mono);
-    font-size: 9.5px;
-    color: var(--ink-mute);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: 0.02em;
-}
-
-.promo-range {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: var(--ink-faint);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    flex-shrink: 0;
-    padding-left: 6px;
-    border-left: 1px dashed var(--hairline);
-}
-
-/* Collapsed variant — only the chip, tiny footprint when boost is off. */
-.promo-banner[data-boost="off"] {
-    padding: 3px 8px;
-    margin-bottom: 6px;
-    background: transparent;
-    border-color: transparent;
-    justify-content: flex-end;
-    gap: 6px;
-}
-
-.promo-banner[data-boost="off"] .promo-meta,
-.promo-banner[data-boost="off"] .promo-range {
-    display: none;
-}
-
-.promo-banner[data-boost="off"] .promo-chip {
-    font-size: 9px;
-    padding: 2px 7px 2px 6px;
-    title: attr(data-tooltip);
 }
 
 /* Hero metric grid — two cards side by side */

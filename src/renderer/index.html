@@ -143,19 +143,6 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
 
-                <!-- Promotion banner (2x usage boost indicator) -->
-                <div class="promo-banner" id="promoBanner" style="display: none;" aria-live="polite">
-                    <span class="promo-chip" id="promoChip" data-state="off">
-                        <span class="promo-chip-dot" aria-hidden="true"></span>
-                        <span class="promo-chip-text" id="promoChipText">2x OFF</span>
-                    </span>
-                    <div class="promo-meta">
-                        <span class="promo-headline" id="promoHeadline">--</span>
-                        <span class="promo-sub" id="promoSub">--</span>
-                    </div>
-                    <span class="promo-range" id="promoRange">--</span>
-                </div>
-
                 <!-- Hero metric cards -->
                 <div class="metric-grid">
                     <div class="metric-card metric-card--session">
@@ -208,6 +195,25 @@
                             <span class="metric-foot-label">Resets in</span>
                             <span class="timer-text" id="weeklyTimeText">--:--</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Promotion card (2x usage boost indicator) -->
+                <div class="promo-card" id="promoBanner" data-boost="off" style="display: none;" aria-live="polite">
+                    <div class="promo-card-head">
+                        <span class="metric-label">2x Boost</span>
+                        <span class="metric-dateline" id="promoRange">--</span>
+                    </div>
+                    <div class="promo-card-body">
+                        <span class="promo-chip" id="promoChip" data-state="off">
+                            <span class="promo-chip-dot" aria-hidden="true"></span>
+                            <span class="promo-chip-text" id="promoChipText">NO</span>
+                        </span>
+                        <span class="promo-card-status" id="promoHeadline">--</span>
+                    </div>
+                    <div class="promo-card-foot">
+                        <span class="metric-foot-label" id="promoSubLabel">Peak window</span>
+                        <span class="timer-text" id="promoSub">--</span>
                     </div>
                 </div>
 

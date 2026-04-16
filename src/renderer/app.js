@@ -253,38 +253,36 @@ function renderPromotionBanner() {
     elements.promoBanner.style.display = 'flex';
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const peakLabel = formatPeakWindow(status, tz);
+    const footLabel = document.getElementById('promoSubLabel');
 
     if (status.state === 'ended') {
         elements.promoBanner.dataset.boost = 'off';
         elements.promoChip.dataset.state = 'off';
-        elements.promoChipText.textContent = '2x NO';
-        elements.promoHeadline.textContent = 'No active 2x promotion';
-        elements.promoSub.textContent = `Last window ended ${formatPromoDate(status.endsAt, tz, false)} — peak was ${peakLabel}`;
-        elements.promoBanner.title = `No active Claude 2x promotion. Last window ended ${formatPromoDate(status.endsAt, tz, false)}.`;
+        elements.promoChipText.textContent = 'NO';
+        elements.promoHeadline.textContent = 'No active promotion';
+        if (footLabel) footLabel.textContent = 'Last ended';
+        elements.promoSub.textContent = formatPromoDate(status.endsAt, tz, false);
     } else if (status.state === 'upcoming') {
         elements.promoBanner.dataset.boost = 'off';
         elements.promoChip.dataset.state = 'off';
-        elements.promoChipText.textContent = '2x SOON';
-        elements.promoHeadline.textContent = 'Claude 2x boost starts soon';
-        elements.promoSub.textContent = `Begins ${formatPromoDate(status.startsAt, tz, true)} — peak (no boost) ${peakLabel}`;
-        elements.promoBanner.title = `Claude 2x boost starts ${formatPromoDate(status.startsAt, tz, true)}. Peak hours (no boost): ${peakLabel}.`;
+        elements.promoChipText.textContent = 'SOON';
+        elements.promoHeadline.textContent = `Starts ${formatPromoDate(status.startsAt, tz, true)}`;
+        if (footLabel) footLabel.textContent = 'Peak window';
+        elements.promoSub.textContent = peakLabel;
     } else {
         const isBoost = !!status.isBoost;
         elements.promoBanner.dataset.boost = isBoost ? 'on' : 'off';
         elements.promoChip.dataset.state = isBoost ? 'on' : 'off';
-        elements.promoChipText.textContent = isBoost ? '2x YES' : '2x NO';
-        if (isBoost) {
-            elements.promoHeadline.textContent = 'Claude 2x boost active now';
-        } else {
-            elements.promoHeadline.textContent = 'Peak hours — standard usage';
-        }
+        elements.promoChipText.textContent = isBoost ? 'YES' : 'NO';
         const nextMs = Number(status.nextTransitionAt) || 0;
         const delta = Math.max(0, nextMs - Date.now());
-        const transitionLabel = isBoost ? 'Boost ends' : 'Boost resumes';
-        elements.promoSub.textContent =
-            `${transitionLabel} in ${formatShortDuration(delta)} — peak (no boost) ${peakLabel}`;
-        elements.promoBanner.title =
-            `${isBoost ? 'Claude 2x boost is active.' : 'Peak hours — standard usage.'} ${transitionLabel} in ${formatShortDuration(delta)}. Peak: ${peakLabel}.`;
+        if (isBoost) {
+            elements.promoHeadline.textContent = `Boost ends in ${formatShortDuration(delta)}`;
+        } else {
+            elements.promoHeadline.textContent = `Boost resumes in ${formatShortDuration(delta)}`;
+        }
+        if (footLabel) footLabel.textContent = 'Peak window';
+        elements.promoSub.textContent = peakLabel;
     }
 
     elements.promoRange.textContent = formatPromoRange(status, tz);
