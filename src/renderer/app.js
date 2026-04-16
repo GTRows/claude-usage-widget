@@ -250,24 +250,27 @@ async function loadPromotionStatus() {
 function renderPromotionBanner() {
     const status = window._promotionStatus;
     if (!status || !elements.promoBanner) return;
-    if (status.state === 'ended') {
-        elements.promoBanner.style.display = 'none';
-        return;
-    }
     elements.promoBanner.style.display = 'flex';
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const peakLabel = formatPeakWindow(status, tz);
 
-    if (status.state === 'upcoming') {
+    if (status.state === 'ended') {
+        elements.promoBanner.dataset.boost = 'off';
+        elements.promoChip.dataset.state = 'off';
+        elements.promoChipText.textContent = '2x NO';
+        elements.promoHeadline.textContent = 'No active 2x promotion';
+        elements.promoSub.textContent = `Last window ended ${formatPromoDate(status.endsAt, tz, false)} — peak hours were ${peakLabel}`;
+    } else if (status.state === 'upcoming') {
         elements.promoBanner.dataset.boost = 'off';
         elements.promoChip.dataset.state = 'off';
         elements.promoChipText.textContent = '2x SOON';
         elements.promoHeadline.textContent = 'Claude 2x boost starts soon';
-        elements.promoSub.textContent = `Begins ${formatPromoDate(status.startsAt, tz, true)} — peak (no boost) ${formatPeakWindow(status, tz)}`;
+        elements.promoSub.textContent = `Begins ${formatPromoDate(status.startsAt, tz, true)} — peak (no boost) ${peakLabel}`;
     } else {
         const isBoost = !!status.isBoost;
         elements.promoBanner.dataset.boost = isBoost ? 'on' : 'off';
         elements.promoChip.dataset.state = isBoost ? 'on' : 'off';
-        elements.promoChipText.textContent = isBoost ? '2x ON' : '2x OFF';
+        elements.promoChipText.textContent = isBoost ? '2x YES' : '2x NO';
         if (isBoost) {
             elements.promoHeadline.textContent = 'Claude 2x boost active now';
         } else {
@@ -276,7 +279,6 @@ function renderPromotionBanner() {
         const nextMs = Number(status.nextTransitionAt) || 0;
         const delta = Math.max(0, nextMs - Date.now());
         const transitionLabel = isBoost ? 'Boost ends' : 'Boost resumes';
-        const peakLabel = formatPeakWindow(status, tz);
         elements.promoSub.textContent =
             `${transitionLabel} in ${formatShortDuration(delta)} — peak (no boost) ${peakLabel}`;
     }
