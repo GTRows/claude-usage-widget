@@ -129,6 +129,12 @@ const elements = {
     updateBanner: document.getElementById('updateBanner'),
     updateBannerText: document.getElementById('updateBannerText'),
     updateBannerDismiss: document.getElementById('updateBannerDismiss'),
+    promoBanner: document.getElementById('promoBanner'),
+    promoChip: document.getElementById('promoChip'),
+    promoChipText: document.getElementById('promoChipText'),
+    promoHeadline: document.getElementById('promoHeadline'),
+    promoSub: document.getElementById('promoSub'),
+    promoRange: document.getElementById('promoRange'),
     settingsVersionLabel: document.getElementById('settingsVersionLabel'),
     settingsUpdateLink: document.getElementById('settingsUpdateLink'),
     usageAlertsToggle: document.getElementById('usageAlertsToggle'),
@@ -216,8 +222,109 @@ async function init() {
     // Also check once every 24 hours for users who never close the app
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
 
+    await loadPromotionStatus();
+    // Refresh promo status periodically so we cross peak/off-peak boundaries.
+    // Re-render every 30s for countdown; re-fetch every 5 minutes.
+    setInterval(renderPromotionBanner, 30 * 1000);
+    setInterval(loadPromotionStatus, 5 * 60 * 1000);
+
     // Startup restore complete — allow _saveViewState to persist changes
     appInitializing = false;
+}
+
+async function loadPromotionStatus() {
+    try {
+        if (!window.electronAPI.getPromotionStatus) return;
+        const status = await window.electronAPI.getPromotionStatus();
+        const prevBoost = !!(window._promotionStatus && window._promotionStatus.isBoost);
+        window._promotionStatus = status;
+        renderPromotionBanner();
+        if (prevBoost !== !!status.isBoost && latestUsageData) {
+            updateTrayIcon(latestUsageData);
+        }
+    } catch (err) {
+        debugLog('loadPromotionStatus failed:', err);
+    }
+}
+
+function renderPromotionBanner() {
+    const status = window._promotionStatus;
+    if (!status || !elements.promoBanner) return;
+    if (status.state === 'ended') {
+        elements.promoBanner.style.display = 'none';
+        return;
+    }
+    elements.promoBanner.style.display = 'flex';
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    if (status.state === 'upcoming') {
+        elements.promoBanner.dataset.boost = 'off';
+        elements.promoChip.dataset.state = 'off';
+        elements.promoChipText.textContent = '2x SOON';
+        elements.promoHeadline.textContent = 'Claude 2x boost starts soon';
+        elements.promoSub.textContent = `Begins ${formatPromoDate(status.startsAt, tz, true)} — peak (no boost) ${formatPeakWindow(status, tz)}`;
+    } else {
+        const isBoost = !!status.isBoost;
+        elements.promoBanner.dataset.boost = isBoost ? 'on' : 'off';
+        elements.promoChip.dataset.state = isBoost ? 'on' : 'off';
+        elements.promoChipText.textContent = isBoost ? '2x ON' : '2x OFF';
+        if (isBoost) {
+            elements.promoHeadline.textContent = 'Claude 2x boost active now';
+        } else {
+            elements.promoHeadline.textContent = 'Peak hours — standard usage';
+        }
+        const nextMs = Number(status.nextTransitionAt) || 0;
+        const delta = Math.max(0, nextMs - Date.now());
+        const transitionLabel = isBoost ? 'Boost ends' : 'Boost resumes';
+        const peakLabel = formatPeakWindow(status, tz);
+        elements.promoSub.textContent =
+            `${transitionLabel} in ${formatShortDuration(delta)} — peak (no boost) ${peakLabel}`;
+    }
+
+    elements.promoRange.textContent = formatPromoRange(status, tz);
+}
+
+function formatShortDuration(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return '0m';
+    const totalMin = Math.round(ms / 60000);
+    const days = Math.floor(totalMin / (60 * 24));
+    const hours = Math.floor((totalMin - days * 60 * 24) / 60);
+    const mins = totalMin - days * 60 * 24 - hours * 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+}
+
+function formatPromoDate(ms, tz, withTime) {
+    try {
+        const opts = { timeZone: tz, month: 'short', day: 'numeric' };
+        if (withTime) { opts.hour = 'numeric'; opts.minute = '2-digit'; opts.hour12 = false; }
+        return new Intl.DateTimeFormat(undefined, opts).format(new Date(ms));
+    } catch {
+        return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+    }
+}
+
+function formatPromoRange(status, tz) {
+    const start = formatPromoDate(status.startsAt, tz, false);
+    const end = formatPromoDate(status.endsAt, tz, false);
+    return `${start} – ${end}`.toUpperCase();
+}
+
+function formatPeakWindow(status, tz) {
+    try {
+        const peak = status.peakWindowUTC;
+        if (!peak) return '';
+        const sampleDay = Date.UTC(2026, 2, 16);
+        const start = new Date(sampleDay + peak.startHour * 3600000);
+        const end = new Date(sampleDay + peak.endHour * 3600000);
+        const fmt = new Intl.DateTimeFormat(undefined, {
+            timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        return `${fmt.format(start)}–${fmt.format(end)} weekdays`;
+    } catch {
+        return '12:00–18:00 UTC weekdays';
+    }
 }
 
 // Event Listeners
@@ -1265,7 +1372,8 @@ function startCountdown() {
 
 // Build a pre-rendered tray icon frame for a single metric.
 // Layout is controlled by the user's "Tray style" setting.
-function buildTrayFrame(label, percent) {
+function buildTrayFrame(label, percent, opts) {
+    const boost = !!(opts && opts.boost);
     const size = 32;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -1344,9 +1452,14 @@ function buildTrayFrame(label, percent) {
         ctx.fillText(text, size / 2, size / 2 + 1);
     }
 
+    if (boost) {
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(Math.round(size * 0.18), size - 2, Math.round(size * 0.64), 2);
+    }
+
     return {
         dataURL: canvas.toDataURL('image/png'),
-        tooltip: `${label}: ${rounded}%`,
+        tooltip: boost ? `${label}: ${rounded}% (2x boost)` : `${label}: ${rounded}%`,
         title: ` ${rounded}%`,
         duration: 2600
     };
@@ -1617,9 +1730,11 @@ function updateTrayIcon(data) {
             else if (rounded >= warnThreshold) status = 'warn';
         }
 
+        const boost = !!(window._promotionStatus && window._promotionStatus.state === 'active' && window._promotionStatus.isBoost);
+
         if (animateMascot) {
             const restFrame = typeof session === 'number'
-                ? buildTrayFrame('Session', session)
+                ? buildTrayFrame('Session', session, { boost })
                 : null;
             const mascotFrames = buildMascotAnimation(status, restFrame);
             const label = rounded != null ? `Claude Usage — ${rounded}%` : 'Claude Usage';
@@ -1629,7 +1744,7 @@ function updateTrayIcon(data) {
         } else if (status === 'dead' || status === 'zero') {
             frames.push(...buildMascotAnimation(status));
         } else if (typeof session === 'number') {
-            frames.push(buildTrayFrame('Session', session));
+            frames.push(buildTrayFrame('Session', session, { boost }));
         }
 
         if (window.electronAPI.setTrayFrames) {

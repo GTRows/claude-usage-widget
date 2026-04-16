@@ -5,6 +5,7 @@ const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
+const promotionShared = require('./src/shared/promotion');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -948,6 +949,10 @@ function startTrayCycle() {
   const firstDelay = Math.max(80, Math.min(10000, Number(first && first.duration) || 3000));
   trayIconTimer = setTimeout(step, firstDelay);
 }
+
+ipcMain.handle('get-promotion-status', () => {
+  return promotionShared.getPromotionStatus(Date.now());
+});
 
 ipcMain.on('set-tray-frames', (event, frames) => {
   trayIconFrames = Array.isArray(frames) ? frames.filter(f => f && f.dataURL) : [];

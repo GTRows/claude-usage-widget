@@ -67,6 +67,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // Promotion windows (2x usage boost)
+  getPromotionStatus: () => ipcRenderer.invoke('get-promotion-status'),
+
   // Storage info
   getStorageInfo: () => ipcRenderer.invoke('get-storage-info'),
   pruneHistory: (days) => ipcRenderer.invoke('prune-history', days),

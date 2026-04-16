@@ -143,6 +143,19 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
 
+                <!-- Promotion banner (2x usage boost indicator) -->
+                <div class="promo-banner" id="promoBanner" style="display: none;" aria-live="polite">
+                    <span class="promo-chip" id="promoChip" data-state="off">
+                        <span class="promo-chip-dot" aria-hidden="true"></span>
+                        <span class="promo-chip-text" id="promoChipText">2x OFF</span>
+                    </span>
+                    <div class="promo-meta">
+                        <span class="promo-headline" id="promoHeadline">--</span>
+                        <span class="promo-sub" id="promoSub">--</span>
+                    </div>
+                    <span class="promo-range" id="promoRange">--</span>
+                </div>
+
                 <!-- Hero metric cards -->
                 <div class="metric-grid">
                     <div class="metric-card metric-card--session">
