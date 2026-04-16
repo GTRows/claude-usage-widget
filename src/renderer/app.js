@@ -1427,7 +1427,7 @@ function buildTrayFrame(label, percent, opts) {
 
     if (throttled) {
         ctx.fillStyle = '#ef4444';
-        ctx.fillRect(Math.round(size * 0.18), size - 2, Math.round(size * 0.64), 2);
+        ctx.fillRect(0, size - 2, size, 2);
     }
 
     return {
