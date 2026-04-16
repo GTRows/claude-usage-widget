@@ -4,6 +4,7 @@ const https = require('https');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
+const { isNewerVersion, compareVersions } = require('./src/shared/version');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -748,12 +749,15 @@ ipcMain.handle('detect-session-key', async () => {
   });
 });
 
-// Check GitHub releases for a newer version
+// Check GitHub releases for a newer version.
+// Scans the full releases list (including prereleases) and picks the
+// highest semver, so fork tags like 1.11.0-gtrows.1 are compared
+// correctly even when they are published as prereleases.
 ipcMain.handle('check-for-update', () => {
   return new Promise((resolve) => {
     const options = {
       hostname: 'api.github.com',
-      path: `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
+      path: `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`,
       method: 'GET',
       headers: {
         'User-Agent': 'claude-usage-widget',
@@ -768,10 +772,20 @@ ipcMain.handle('check-for-update', () => {
       res.on('end', () => {
         try {
           const data = JSON.parse(body);
-          const tag = (data.tag_name || '').replace(/^v/, '');
+          if (!Array.isArray(data)) {
+            resolve({ hasUpdate: false, version: null });
+            return;
+          }
           const current = app.getVersion();
-          if (tag && isNewerVersion(tag, current)) {
-            resolve({ hasUpdate: true, version: tag });
+          let best = null;
+          for (const rel of data) {
+            if (rel.draft) continue;
+            const tag = (rel.tag_name || '').replace(/^v/, '');
+            if (!tag) continue;
+            if (!best || compareVersions(tag, best) > 0) best = tag;
+          }
+          if (best && isNewerVersion(best, current)) {
+            resolve({ hasUpdate: true, version: best });
           } else {
             resolve({ hasUpdate: false, version: null });
           }
@@ -786,18 +800,6 @@ ipcMain.handle('check-for-update', () => {
     req.end();
   });
 });
-
-function isNewerVersion(remote, local) {
-  try {
-    const r = remote.split('.').map(Number);
-    const l = local.split('.').map(Number);
-    for (let i = 0; i < 3; i++) {
-      if ((r[i] || 0) > (l[i] || 0)) return true;
-      if ((r[i] || 0) < (l[i] || 0)) return false;
-    }
-    return false;
-  } catch { return false; }
-}
 
 ipcMain.handle('fetch-usage-data', async () => {
   // Use the same credential retrieval logic as get-credentials
