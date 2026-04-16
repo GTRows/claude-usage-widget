@@ -805,6 +805,27 @@ body.theme-light .pin-btn.active {
     border-left: 1px dashed var(--hairline);
 }
 
+/* Collapsed variant — only the chip, tiny footprint when boost is off. */
+.promo-banner[data-boost="off"] {
+    padding: 3px 8px;
+    margin-bottom: 6px;
+    background: transparent;
+    border-color: transparent;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.promo-banner[data-boost="off"] .promo-meta,
+.promo-banner[data-boost="off"] .promo-range {
+    display: none;
+}
+
+.promo-banner[data-boost="off"] .promo-chip {
+    font-size: 9px;
+    padding: 2px 7px 2px 6px;
+    title: attr(data-tooltip);
+}
+
 /* Hero metric grid — two cards side by side */
 .metric-grid {
     display: grid;
