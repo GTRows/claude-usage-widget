@@ -222,70 +222,55 @@ async function init() {
     // Also check once every 24 hours for users who never close the app
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
 
-    await loadPromotionStatus();
-    // Refresh promo status periodically so we cross peak/off-peak boundaries.
+    await loadPeakThrottleStatus();
+    // Refresh throttle status periodically so we cross peak/off-peak boundaries.
     // Re-render every 30s for countdown; re-fetch every 5 minutes.
-    setInterval(renderPromotionBanner, 30 * 1000);
-    setInterval(loadPromotionStatus, 5 * 60 * 1000);
+    setInterval(renderPeakThrottleCard, 30 * 1000);
+    setInterval(loadPeakThrottleStatus, 5 * 60 * 1000);
 
     // Startup restore complete — allow _saveViewState to persist changes
     appInitializing = false;
 }
 
-async function loadPromotionStatus() {
+async function loadPeakThrottleStatus() {
     try {
-        if (!window.electronAPI.getPromotionStatus) return;
-        const status = await window.electronAPI.getPromotionStatus();
-        const prevBoost = !!(window._promotionStatus && window._promotionStatus.isBoost);
-        window._promotionStatus = status;
-        renderPromotionBanner();
-        if (prevBoost !== !!status.isBoost && latestUsageData) {
+        if (!window.electronAPI.getPeakThrottleStatus) return;
+        const status = await window.electronAPI.getPeakThrottleStatus();
+        const prevThrottled = !!(window._peakThrottleStatus && window._peakThrottleStatus.isThrottled);
+        window._peakThrottleStatus = status;
+        renderPeakThrottleCard();
+        if (prevThrottled !== !!status.isThrottled && latestUsageData) {
             updateTrayIcon(latestUsageData);
         }
     } catch (err) {
-        debugLog('loadPromotionStatus failed:', err);
+        debugLog('loadPeakThrottleStatus failed:', err);
     }
 }
 
-function renderPromotionBanner() {
-    const status = window._promotionStatus;
+function renderPeakThrottleCard() {
+    const status = window._peakThrottleStatus;
     if (!status || !elements.promoBanner) return;
     elements.promoBanner.style.display = 'flex';
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const peakLabel = formatPeakWindow(status, tz);
     const footLabel = document.getElementById('promoSubLabel');
+    const isThrottled = !!status.isThrottled;
 
-    if (status.state === 'ended') {
-        elements.promoBanner.dataset.boost = 'off';
-        elements.promoChip.dataset.state = 'off';
-        elements.promoChipText.textContent = 'NO';
-        elements.promoHeadline.textContent = 'No active promotion';
-        if (footLabel) footLabel.textContent = 'Last ended';
-        elements.promoSub.textContent = formatPromoDate(status.endsAt, tz, false);
-    } else if (status.state === 'upcoming') {
-        elements.promoBanner.dataset.boost = 'off';
-        elements.promoChip.dataset.state = 'off';
-        elements.promoChipText.textContent = 'SOON';
-        elements.promoHeadline.textContent = `Starts ${formatPromoDate(status.startsAt, tz, true)}`;
-        if (footLabel) footLabel.textContent = 'Peak window';
-        elements.promoSub.textContent = peakLabel;
-    } else {
-        const isBoost = !!status.isBoost;
-        elements.promoBanner.dataset.boost = isBoost ? 'on' : 'off';
-        elements.promoChip.dataset.state = isBoost ? 'on' : 'off';
-        elements.promoChipText.textContent = isBoost ? 'YES' : 'NO';
-        const nextMs = Number(status.nextTransitionAt) || 0;
-        const delta = Math.max(0, nextMs - Date.now());
-        if (isBoost) {
-            elements.promoHeadline.textContent = `Boost ends in ${formatShortDuration(delta)}`;
-        } else {
-            elements.promoHeadline.textContent = `Boost resumes in ${formatShortDuration(delta)}`;
-        }
-        if (footLabel) footLabel.textContent = 'Peak window';
-        elements.promoSub.textContent = peakLabel;
+    elements.promoBanner.dataset.boost = isThrottled ? 'on' : 'off';
+    elements.promoChip.dataset.state = isThrottled ? 'on' : 'off';
+    elements.promoChipText.textContent = isThrottled ? 'PEAK' : 'OFF-PEAK';
+    elements.promoHeadline.textContent = isThrottled
+        ? 'Throttled — session drains faster'
+        : 'Normal rate';
+
+    const nextMs = Number(status.nextTransitionAt) || 0;
+    const delta = Math.max(0, nextMs - Date.now());
+    if (footLabel) {
+        footLabel.textContent = isThrottled ? 'Throttle ends in' : 'Throttle resumes in';
     }
+    elements.promoSub.textContent = formatShortDuration(delta);
 
-    elements.promoRange.textContent = formatPromoRange(status, tz);
+    elements.promoRange.textContent = peakLabel;
 }
 
 function formatShortDuration(ms) {
@@ -299,22 +284,6 @@ function formatShortDuration(ms) {
     return `${mins}m`;
 }
 
-function formatPromoDate(ms, tz, withTime) {
-    try {
-        const opts = { timeZone: tz, month: 'short', day: 'numeric' };
-        if (withTime) { opts.hour = 'numeric'; opts.minute = '2-digit'; opts.hour12 = false; }
-        return new Intl.DateTimeFormat(undefined, opts).format(new Date(ms));
-    } catch {
-        return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
-    }
-}
-
-function formatPromoRange(status, tz) {
-    const start = formatPromoDate(status.startsAt, tz, false);
-    const end = formatPromoDate(status.endsAt, tz, false);
-    return `${start} – ${end}`.toUpperCase();
-}
-
 function formatPeakWindow(status, tz) {
     try {
         const peak = status.peakWindowUTC;
@@ -325,9 +294,9 @@ function formatPeakWindow(status, tz) {
         const fmt = new Intl.DateTimeFormat(undefined, {
             timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
         });
-        return `${fmt.format(start)}–${fmt.format(end)} weekdays`;
+        return `${fmt.format(start)}–${fmt.format(end)} WEEKDAYS`;
     } catch {
-        return '12:00–18:00 UTC weekdays';
+        return '12:00–18:00 UTC WEEKDAYS';
     }
 }
 
@@ -1377,7 +1346,7 @@ function startCountdown() {
 // Build a pre-rendered tray icon frame for a single metric.
 // Layout is controlled by the user's "Tray style" setting.
 function buildTrayFrame(label, percent, opts) {
-    const boost = !!(opts && opts.boost);
+    const throttled = !!(opts && opts.throttled);
     const size = 32;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -1456,14 +1425,14 @@ function buildTrayFrame(label, percent, opts) {
         ctx.fillText(text, size / 2, size / 2 + 1);
     }
 
-    if (boost) {
+    if (throttled) {
         ctx.fillStyle = '#ef4444';
         ctx.fillRect(Math.round(size * 0.18), size - 2, Math.round(size * 0.64), 2);
     }
 
     return {
         dataURL: canvas.toDataURL('image/png'),
-        tooltip: boost ? `${label}: ${rounded}% (2x boost)` : `${label}: ${rounded}%`,
+        tooltip: throttled ? `${label}: ${rounded}% (peak throttle)` : `${label}: ${rounded}%`,
         title: ` ${rounded}%`,
         duration: 2600
     };
@@ -1734,11 +1703,11 @@ function updateTrayIcon(data) {
             else if (rounded >= warnThreshold) status = 'warn';
         }
 
-        const boost = !!(window._promotionStatus && window._promotionStatus.state === 'active' && window._promotionStatus.isBoost);
+        const throttled = !!(window._peakThrottleStatus && window._peakThrottleStatus.isThrottled);
 
         if (animateMascot) {
             const restFrame = typeof session === 'number'
-                ? buildTrayFrame('Session', session, { boost })
+                ? buildTrayFrame('Session', session, { throttled })
                 : null;
             const mascotFrames = buildMascotAnimation(status, restFrame);
             const label = rounded != null ? `Claude Usage — ${rounded}%` : 'Claude Usage';
@@ -1748,7 +1717,7 @@ function updateTrayIcon(data) {
         } else if (status === 'dead' || status === 'zero') {
             frames.push(...buildMascotAnimation(status));
         } else if (typeof session === 'number') {
-            frames.push(buildTrayFrame('Session', session, { boost }));
+            frames.push(buildTrayFrame('Session', session, { throttled }));
         }
 
         if (window.electronAPI.setTrayFrames) {

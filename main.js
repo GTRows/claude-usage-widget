@@ -5,7 +5,7 @@ const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
-const promotionShared = require('./src/shared/promotion');
+const peakThrottleShared = require('./src/shared/peak-throttle');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -950,8 +950,8 @@ function startTrayCycle() {
   trayIconTimer = setTimeout(step, firstDelay);
 }
 
-ipcMain.handle('get-promotion-status', () => {
-  return promotionShared.getPromotionStatus(Date.now());
+ipcMain.handle('get-peak-throttle-status', () => {
+  return peakThrottleShared.getPeakThrottleStatus(Date.now());
 });
 
 ipcMain.on('set-tray-frames', (event, frames) => {
