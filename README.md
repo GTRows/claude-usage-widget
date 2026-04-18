@@ -248,6 +248,8 @@ If issues persist, open a [Support discussion](../../discussions/categories/supp
 - [ ] Verified macOS build with GTRows notarization
 - [ ] Multiple account support
 - [x] Keyboard shortcuts (Ctrl/Cmd + R / G / H / M / P / , / Q)
+- [ ] Desktop notifications when the peak-throttle window starts / ends
+- [ ] Keep the window draggable while the settings panel is open
 
 ---
 
