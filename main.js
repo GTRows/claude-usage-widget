@@ -415,6 +415,10 @@ ipcMain.on('close-window', () => {
   }
 });
 
+ipcMain.on('quit-app', () => {
+  app.quit();
+});
+
 let _settingsModeActive = false;
 
 ipcMain.on('resize-window', (event, height) => {
@@ -963,6 +967,10 @@ ipcMain.on('set-tray-frames', (event, frames) => {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Disable default application menu so its accelerators (Ctrl+R reload,
+  // Ctrl+Shift+I devtools, etc.) don't collide with widget shortcuts.
+  Menu.setApplicationMenu(null);
+
   // Restore session cookie if we have stored credentials
   let sessionKey = null;
   if (safeStorage.isEncryptionAvailable()) {

@@ -27,32 +27,32 @@
                     <span>Claude Usage</span>
                 </div>
                 <div class="controls">
-                    <button class="control-btn settings-btn" id="settingsBtn" title="Settings">
+                    <button class="control-btn settings-btn" id="settingsBtn" title="Settings (Ctrl/Cmd+,)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="3"/>
                             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                         </svg>
                     </button>
-                    <button class="control-btn refresh-btn" id="refreshBtn" title="Refresh">
+                    <button class="control-btn refresh-btn" id="refreshBtn" title="Refresh (Ctrl/Cmd+R)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M23 4v6h-6M1 20v-6h6" />
                             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                         </svg>
                     </button>
-                    <button class="control-btn graph-btn" id="graphBtn" title="Toggle Usage Graph">
+                    <button class="control-btn graph-btn" id="graphBtn" title="Toggle Usage Graph (Ctrl/Cmd+G)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                         </svg>
                     </button>
-                    <button class="control-btn history-btn" id="historyBtn" title="Toggle History Table">
+                    <button class="control-btn history-btn" id="historyBtn" title="Toggle History Table (Ctrl/Cmd+H)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="3" y1="6" x2="21" y2="6" />
                             <line x1="3" y1="12" x2="21" y2="12" />
                             <line x1="3" y1="18" x2="21" y2="18" />
                         </svg>
                     </button>
-                    <button class="control-btn pin-btn" id="pinBtn" title="Always on top">
+                    <button class="control-btn pin-btn" id="pinBtn" title="Always on top (Ctrl/Cmd+P)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 2l2 6h6l-5 4 2 7-5-4-5 4 2-7-5-4h6z"/>
                         </svg>
@@ -627,6 +627,65 @@
                                         <code class="storage-path" id="storagePath" title="">—</code>
                                         <button class="storage-path-btn" id="storagePathOpen" title="Open folder">Open</button>
                                     </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="settings-group" id="shortcutsSection">
+                            <header class="settings-group-head">
+                                <span class="settings-group-num">06</span>
+                                <h4 class="settings-group-title">Shortcuts</h4>
+                                <span class="settings-group-rule"></span>
+                            </header>
+                            <div class="settings-list shortcuts-list">
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Refresh usage</span>
+                                        <span class="settings-item-hint">Re-fetch now instead of waiting for auto-update.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="refresh"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">R</kbd></span>
+                                </div>
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Toggle usage graph</span>
+                                        <span class="settings-item-hint">Show or hide the trend chart.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="graph"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">G</kbd></span>
+                                </div>
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Toggle history table</span>
+                                        <span class="settings-item-hint">Show or hide recorded rows.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="history"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">H</kbd></span>
+                                </div>
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Toggle compact mode</span>
+                                        <span class="settings-item-hint">Collapse to a two-bar tray-anchored view.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="compact"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">M</kbd></span>
+                                </div>
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Pin on top</span>
+                                        <span class="settings-item-hint">Keep the widget above other windows.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="pin"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">P</kbd></span>
+                                </div>
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Open settings</span>
+                                        <span class="settings-item-hint">Press again to close.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="settings"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">,</kbd></span>
+                                </div>
+                                <div class="settings-item shortcut-row">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label">Quit widget</span>
+                                        <span class="settings-item-hint">Fully exits — tray icon goes away.</span>
+                                    </div>
+                                    <span class="shortcut-keys" data-shortcut="quit"><kbd class="kbd kbd-mod"></kbd><kbd class="kbd">Q</kbd></span>
                                 </div>
                             </div>
                         </section>

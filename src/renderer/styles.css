@@ -2051,6 +2051,49 @@ body.theme-light .settings-item:hover { background: rgba(179, 100, 18, 0.04); }
     padding-right: 8px;
 }
 
+/* Keyboard shortcuts (settings section 06) */
+.shortcuts-list .settings-item { min-height: 40px; padding-top: 9px; padding-bottom: 9px; }
+.shortcut-keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    background: var(--bg);
+    border: 1px solid var(--hairline-strong);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    min-width: 18px;
+    min-height: 18px;
+    line-height: 14px;
+    text-align: center;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.kbd-mod { min-width: 30px; letter-spacing: 0.04em; color: var(--accent); border-color: var(--amber-low); background: rgba(231, 154, 77, 0.08); }
+.kbd + .kbd { margin-left: 2px; }
+.kbd + .kbd::before {
+    content: "+";
+    display: inline-block;
+    margin-right: 6px;
+    margin-left: -2px;
+    color: var(--ink-faint);
+    font-weight: 400;
+    letter-spacing: 0;
+}
+.shortcut-row:hover .kbd { color: var(--ink); border-color: var(--accent); }
+.shortcut-row:hover .kbd-mod { background: rgba(231, 154, 77, 0.14); }
+body.theme-light .kbd { background: var(--bg-raised); }
+body.theme-light .kbd-mod { background: rgba(179, 100, 18, 0.08); }
+
 /* Toggle switch */
 .toggle-switch {
     position: relative;

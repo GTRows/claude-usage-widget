@@ -681,6 +681,80 @@ function setupEventListeners() {
             window.electronAPI.resizeWindow(SETTINGS_HEIGHT);
         }
     });
+
+    setupKeyboardShortcuts();
+}
+
+function setupKeyboardShortcuts() {
+    const isMac = window.electronAPI && window.electronAPI.platform === 'darwin';
+    const modLabel = isMac ? '\u2318' : 'Ctrl';
+    document.querySelectorAll('.kbd-mod').forEach((el) => { el.textContent = modLabel; });
+
+    const isTextTarget = (t) => {
+        if (!t || !t.tagName) return false;
+        if (t.isContentEditable) return true;
+        const tag = t.tagName;
+        if (tag === 'TEXTAREA') return true;
+        if (tag === 'INPUT') {
+            const type = (t.type || 'text').toLowerCase();
+            return type !== 'checkbox' && type !== 'radio' && type !== 'button' && type !== 'submit';
+        }
+        return false;
+    };
+
+    window.addEventListener('keydown', async (e) => {
+        const mod = isMac ? e.metaKey : e.ctrlKey;
+        if (!mod || e.altKey) return;
+        if (isTextTarget(e.target)) return;
+
+        const key = e.key.toLowerCase();
+        switch (key) {
+            case 'r':
+                if (e.shiftKey) return;
+                e.preventDefault();
+                if (elements.refreshBtn) elements.refreshBtn.click();
+                break;
+            case 'g':
+                if (e.shiftKey) return;
+                e.preventDefault();
+                if (elements.graphBtn) elements.graphBtn.click();
+                break;
+            case 'h':
+                if (e.shiftKey) return;
+                e.preventDefault();
+                if (elements.historyBtn) elements.historyBtn.click();
+                break;
+            case 'm':
+                if (e.shiftKey) return;
+                e.preventDefault();
+                {
+                    const next = !isCompactMode;
+                    applyCompactMode(next);
+                    await _saveCompactSetting(next);
+                }
+                break;
+            case 'p':
+                if (e.shiftKey) return;
+                e.preventDefault();
+                if (elements.pinBtn) elements.pinBtn.click();
+                break;
+            case ',':
+                e.preventDefault();
+                if (_settingsOpen && elements.closeSettingsBtn) {
+                    elements.closeSettingsBtn.click();
+                } else if (elements.settingsBtn) {
+                    elements.settingsBtn.click();
+                }
+                break;
+            case 'q':
+                if (e.shiftKey) return;
+                e.preventDefault();
+                if (window.electronAPI && window.electronAPI.quitApp) {
+                    window.electronAPI.quitApp();
+                }
+                break;
+        }
+    });
 }
 
 // Handle manual sessionKey connect
