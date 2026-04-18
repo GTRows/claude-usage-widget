@@ -28,36 +28,36 @@ Runs on **Windows, macOS, and Linux**.
 
 ---
 
-## What's New in v1.11.0-gtrows.1
+## What's New in v1.13.0-gtrows.1
 
-### Tray mascot, reworked
+### CLI on npm — one install, every OS
 
-- Animate mascot renders on a 64 px canvas so Windows tray downscaling
-  stays crisp at 16–24 px.
-- Larger motion deltas: breathing pulse, head tilt, full-width eye
-  darts, red/amber flash with scale pulse near the limit.
-- New setting `Mascot animation length` (1–60 s, default 2 s) scales
-  a full play to the requested duration.
-- New setting `Pause between plays` (0–600 s, default 10 s) holds the
-  big-number tray icon between animations.
-- Launch shows the big number first; the mascot only plays after the
-  first pause elapses.
+- `npm install -g claude-usage-widget` installs the `claude-usage`
+  CLI on Windows, macOS, and Linux with Node.js 18+.
+- Prereleases publish under dist-tag `next`, stable under `latest`.
+- The tarball is deliberately small (~25 kB, CLI + shared helpers
+  only), so the global install footprint stays light.
 
-### CLI
+### Keyboard shortcuts
 
-- `claude-usage history --since N --format csv|json [--output FILE]`
-  reads the widget's stored history without going through Electron.
-- `claude-usage doctor` diagnoses credentials, widget store presence,
-  and live API reachability.
-- `claude-usage prompt --segments 5h,7d,opus,sonnet,extra` selects
-  which usage segments render inline in shell prompts.
-- `claude-usage prompt --cache N` caches the latest response for N
-  seconds so prompts redraw without hitting the API on every keystroke.
+Window-focused, no global accelerators. Shortcuts skip editable
+targets so typing in inputs still works.
 
-### Settings / Data
+| Shortcut          | Action                    |
+| ----------------- | ------------------------- |
+| `Ctrl/Cmd + R`    | Refresh usage             |
+| `Ctrl/Cmd + G`    | Toggle usage graph        |
+| `Ctrl/Cmd + H`    | Toggle history table      |
+| `Ctrl/Cmd + M`    | Toggle compact mode       |
+| `Ctrl/Cmd + P`    | Pin on top                |
+| `Ctrl/Cmd + ,`    | Open / close settings     |
+| `Ctrl/Cmd + Q`    | Quit the widget           |
 
-- Export history now offers a date-range selector (All / 24h / 7d /
-  30d / 90d) before writing CSV or JSON.
+- Settings now has a `06 Shortcuts` section listing every mapping
+  with mono keycaps. The mod key renders as `⌘` on macOS, `Ctrl`
+  elsewhere.
+- The default Electron menu is disabled, so `Ctrl+R` no longer
+  reloads the renderer mid-session.
 
 > For full release history, see [CHANGELOG.md](./CHANGELOG.md) and the
 > [Releases](../../releases) page.

@@ -5,6 +5,40 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ---
 
+## [1.13.0-gtrows.1] — 2026-04-18
+
+GTRows fork. Cross-platform CLI on npm plus keyboard shortcuts for every widget control.
+
+### CLI
+- Cross-platform install via `npm install -g claude-usage-widget` (Node.js 18+); prereleases under dist-tag `next`, stable under `latest`
+- Tarball ships only CLI sources + shared helpers (~25 kB, 15 files)
+- New GitHub Actions workflow `publish-npm.yml` publishes on every `v*` tag with npm provenance
+
+### Keyboard shortcuts
+- `Ctrl/Cmd + R` refresh, `G` graph, `H` history, `M` compact, `P` pin, `,` settings, `Q` quit
+- Shortcuts are window-focused and skip editable targets (inputs, textareas)
+- Default Electron menu disabled (`Menu.setApplicationMenu(null)`) so `Ctrl+R` no longer reloads the renderer
+- Settings → `06 Shortcuts` section lists all mappings with mono keycaps; mod key renders as `⌘` on macOS, `Ctrl` elsewhere
+- Title-bar button tooltips now include the shortcut hint
+
+## [1.12.0-gtrows.1] — 2026-04-17
+
+GTRows fork. Surfaces Anthropic's 2026-03-26 peak-hour session throttle and expands Linux packaging.
+
+### Peak-hour throttle indicator
+- Tray icon shows an edge-to-edge red underline whenever the user is inside the peak window (5–11 AM PT / 8 AM–2 PM ET / 1–7 PM GMT, Mon–Fri)
+- Dashboard gains a thin card under Session / Weekly with a `PEAK` / `OFF-PEAK` chip, `Throttled` vs `Normal rate` label, countdown to the next boundary, and the peak window translated to the local time zone
+
+### Update check
+- Fork prereleases now surface: `/releases?per_page=20` replaces `/releases/latest`, compared with the shared semver helper
+
+### Linux packaging
+- Adds RPM, DEB, Pacman, and tar.gz targets for both x64 and arm64, alongside the existing AppImage
+
+### CI
+- Tests no longer try to restore an npm cache (package-lock.json is gitignored)
+- macOS build is manual-only until notarization secrets are configured
+
 ## [1.11.0-gtrows.1] — 2026-04-15
 
 GTRows fork. CLI improvements plus a rework of the tray mascot.
