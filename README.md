@@ -116,6 +116,34 @@ Runs on **Windows, macOS, and Linux**.
 
 ---
 
+### CLI via npm (cross-platform)
+
+The `claude-usage` CLI ships as a separate npm package and works on Windows, macOS, and Linux without installing the Electron desktop app. It reuses the same credential store when the desktop app is installed, and falls back to a headless login flow when it is not.
+
+```bash
+npm install -g claude-usage-widget
+```
+
+Prereleases are published under the `next` dist-tag:
+
+```bash
+npm install -g claude-usage-widget@next
+```
+
+Then from any terminal:
+
+```bash
+claude-usage login --key <sessionKey> --org <orgId>   # first-time auth
+claude-usage status                                   # one-shot usage snapshot
+claude-usage history --since 7 --format csv
+claude-usage doctor                                   # diagnose credentials and API reachability
+claude-usage prompt --segments 5h,7d,opus,sonnet,extra --cache 30
+```
+
+Credentials can also come from `CLAUDE_SESSION_KEY` + `CLAUDE_ORGANIZATION_ID` environment variables. Run `claude-usage help` for the full command list. Requires Node.js 18+.
+
+---
+
 ### Build from Source
 
 **Prerequisites:**
@@ -215,6 +243,7 @@ If issues persist, open a [Support discussion](../../discussions/categories/supp
 - [x] CLI companion (`claude-usage`) with history, doctor, prompt
 - [x] Animated tray mascot with configurable timing
 - [x] Export history with date-range filter
+- [x] Cross-platform CLI install via npm (`npm install -g claude-usage-widget`)
 - [ ] Fresh GTRows visual assets (icons, installer art, screenshots)
 - [ ] Verified macOS build with GTRows notarization
 - [ ] Multiple account support
