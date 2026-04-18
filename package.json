@@ -36,21 +36,6 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
-  "files": [
-    "bin/cli.js",
-    "src/cli/**/*.js",
-    "src/shared/**/*.js",
-    "LICENSE",
-    "README.md"
-  ],
-  "homepage": "https://github.com/GTRows/claude-usage-widget#readme",
-  "bugs": {
-    "url": "https://github.com/GTRows/claude-usage-widget/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/GTRows/claude-usage-widget.git"
-  },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
     "cross-env": "^7.0.3",

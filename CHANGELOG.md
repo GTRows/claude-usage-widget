@@ -7,12 +7,7 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ## [1.13.0-gtrows.1] — 2026-04-18
 
-GTRows fork. Cross-platform CLI on npm plus keyboard shortcuts for every widget control.
-
-### CLI
-- Cross-platform install via `npm install -g claude-usage-widget` (Node.js 18+); prereleases under dist-tag `next`, stable under `latest`
-- Tarball ships only CLI sources + shared helpers (~25 kB, 15 files)
-- New GitHub Actions workflow `publish-npm.yml` publishes on every `v*` tag with npm provenance
+GTRows fork. Keyboard shortcuts for every widget control.
 
 ### Keyboard shortcuts
 - `Ctrl/Cmd + R` refresh, `G` graph, `H` history, `M` compact, `P` pin, `,` settings, `Q` quit
