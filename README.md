@@ -247,7 +247,7 @@ If issues persist, open a [Support discussion](../../discussions/categories/supp
 - [ ] Fresh GTRows visual assets (icons, installer art, screenshots)
 - [ ] Verified macOS build with GTRows notarization
 - [ ] Multiple account support
-- [ ] Keyboard shortcuts
+- [x] Keyboard shortcuts (Ctrl/Cmd + R / G / H / M / P / , / Q)
 
 ---
 
