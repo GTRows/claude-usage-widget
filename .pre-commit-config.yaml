@@ -1,0 +1,44 @@
+# pre-commit configuration for claude-usage-widget.
+#
+# Install:
+#   pipx install pre-commit
+#   pre-commit install
+#
+# Run on staged files: triggered automatically by `git commit`.
+# Run on all files: `pre-commit run --all-files`.
+#
+# This stack is JavaScript (Electron + vanilla JS). The hooks below are
+# the minimal set that keeps formatting and basic hygiene consistent
+# without blocking commits on heavy tooling. Add or enable more hooks
+# as the project's tooling decisions firm up.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+        args: [--maxkb=512]
+
+  # Optional hooks the project can opt into later. Uncomment after the
+  # tool is added to devDependencies and configured.
+  #
+  # - repo: https://github.com/pre-commit/mirrors-prettier
+  #   rev: v3.1.0
+  #   hooks:
+  #     - id: prettier
+  #       additional_dependencies:
+  #         - prettier@3.1.0
+  #       types_or: [javascript, json, markdown, yaml, css, html]
+  #
+  # - repo: https://github.com/pre-commit/mirrors-eslint
+  #   rev: v9.0.0
+  #   hooks:
+  #     - id: eslint
+  #       files: \.(js|mjs|cjs)$

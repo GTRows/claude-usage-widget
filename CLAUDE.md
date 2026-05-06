@@ -158,7 +158,23 @@ Postponed work goes in GSD's `.planning/ISSUES.md` once GSD is initialized. Each
 - **Versioning:** Use `/gtr:release <version>` for the mechanical bump (IDENTITY.yaml, CHANGELOG rotation, derived manifests, commit, tag). Push is always manual.
 - **GTRows fork tags:** versions in this fork carry the `-gtrows.N` suffix. Keep the suffix in `IDENTITY.yaml#version` and `package.json#version` aligned.
 
+## Localization
+
+- Supported UI languages: tr, en.
+- Default / fallback: tr.
+- Translation source format: TBD (gettext, JSON, ICU, ...) — set when picking the i18n library.
+- User-facing strings must NOT be hard-coded. Wrap them in the project's translation function.
+
+## Branch Strategy
+
+This is a fork. `main` tracks upstream.
+- Never commit directly to `main`.
+- Use `feature/<name>` or `fix/<name>` branches.
+- One PR per feature. Rebase onto upstream before opening.
+
 ## Communication
 
-- Default conversation language: Turkish if the user writes in Turkish, otherwise English. Code, identifiers, and comments stay in English regardless.
+- Speak with the user in Turkish. All conversational responses, prompts, summaries, questions, and slash-command output (including `/gtr:help`, `/gtr:doctor`, `/gsd:*` commands) must be in this language.
+- Code, identifiers, comments, commit messages, and file contents must always be in English regardless of conversation language.
+- Status lines, table headers, and command names stay verbatim (e.g. `/gtr:setup`, `IDENTITY.yaml`) — do not translate them.
 - Be concise and direct. No filler, no end-of-response summaries.

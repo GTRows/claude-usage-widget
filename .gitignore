@@ -49,6 +49,7 @@ __pycache__/
 # Local tooling / Claude Code workspace state (template tracks .claude/, only local state is ignored)
 .claude/settings.local.json
 .claude/.setup-complete
+.claude/setup-followups.md
 .claude/scheduled_tasks.lock
 .claude/commands.pre-*/
 .claude/migration-log.md
