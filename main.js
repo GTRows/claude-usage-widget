@@ -1041,6 +1041,10 @@ app.whenReady().then(async () => {
   }, 5000);
 });
 
+app.on('before-quit', () => {
+  autoFireScheduler.disarm();
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     // Keep running in tray
