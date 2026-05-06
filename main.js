@@ -7,6 +7,9 @@ const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
 const peakThrottleShared = require('./src/shared/peak-throttle');
 const { createAutoFireScheduler } = require('./src/main/auto-fire/scheduler');
+const { fireViaWebSession } = require('./src/main/auto-fire/web-channel');
+const { createAutoFireDispatcher } = require('./src/main/auto-fire/dispatcher');
+const { normalizeSettings } = require('./src/shared/settings-schema');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -67,6 +70,39 @@ const autoFireScheduler = createAutoFireScheduler();
 autoFireScheduler.on('expired', (payload) => {
   debugLog('[AutoFire] window expired', payload.resetsAtIso, 'fired at', new Date(payload.firedAt).toISOString());
 });
+
+// Mirror the credential-decrypt logic used by `get-credentials` and
+// `fetch-usage-data`. Lifted here so the auto-fire dispatcher can resolve
+// credentials without crossing IPC. A future cleanup pass will share one
+// helper across all three handlers (see CONCERNS.md).
+async function getCredentialsForAutoFire() {
+  let sessionKey = null;
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = store.get('sessionKey_encrypted');
+    if (encrypted) {
+      try {
+        sessionKey = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+      } catch (err) {
+        console.error('[Keychain] Failed to decrypt session key:', err.message);
+      }
+    }
+  } else {
+    sessionKey = store.get('sessionKey');
+  }
+  const organizationId = store.get('organizationId');
+  if (!sessionKey || !organizationId) return null;
+  return { sessionKey, organizationId };
+}
+
+const autoFireDispatcher = createAutoFireDispatcher({
+  scheduler: autoFireScheduler,
+  getSettings: () => normalizeSettings(store.get('settings', {})),
+  getCredentials: getCredentialsForAutoFire,
+  channels: { webSession: fireViaWebSession },
+  now: Date.now,
+  debugLog,
+});
+autoFireDispatcher.start();
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_COMPACT_WIDTH = 320;
@@ -1042,6 +1078,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  autoFireDispatcher.stop();
   autoFireScheduler.disarm();
 });
 
