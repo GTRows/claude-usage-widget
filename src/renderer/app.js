@@ -112,6 +112,7 @@ const elements = {
     logoutBtn: document.getElementById('logoutBtn'),
     autoStartToggle: document.getElementById('autoStartToggle'),
     alwaysOnTopToggle: document.getElementById('alwaysOnTopToggle'),
+    autoFireToggle: document.getElementById('autoFireToggle'),
     warnThreshold: document.getElementById('warnThreshold'),
     dangerThreshold: document.getElementById('dangerThreshold'),
     themeBtns: document.querySelectorAll('.theme-btn'),
@@ -2424,6 +2425,7 @@ async function loadSettings() {
 
     elements.autoStartToggle.checked = settings.autoStart;
     elements.alwaysOnTopToggle.checked = settings.alwaysOnTop;
+    if (elements.autoFireToggle) elements.autoFireToggle.checked = !!settings.autoFireEnabled;
     elements.warnThreshold.value = settings.warnThreshold;
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
@@ -2523,7 +2525,8 @@ async function saveSettings() {
         autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,
         hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false,
-        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false
+        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false,
+        autoFireEnabled: elements.autoFireToggle ? !!elements.autoFireToggle.checked : false
     };
     if (elements.autoPruneDaysRow) {
         elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';
