@@ -82,4 +82,89 @@ function fetchViaWindow(url, { timeoutMs = 30000 } = {}) {
   });
 }
 
-module.exports = { fetchViaWindow };
+/**
+ * postViaWindow
+ *
+ * Performs an HTTP POST against a Claude.ai endpoint from inside a hidden
+ * BrowserWindow so the request inherits the same Cloudflare-bypass posture
+ * as `fetchViaWindow`. The window loads `about:blank`, then a fetch() runs
+ * inside the page using `credentials: 'include'` so the existing sessionKey
+ * cookie set on the Electron session is sent automatically.
+ *
+ * Returns `{ ok, status, text }`. The caller decides whether to JSON-parse
+ * the text. On a Cloudflare interstitial (matched against `BLOCKED_SIGNATURES`)
+ * this rejects with the same `CloudflareBlocked` / `CloudflareChallenge` /
+ * `UnexpectedHTML` error codes used by `fetchViaWindow` so the dispatcher can
+ * treat them as session-expired rather than transient transport errors.
+ */
+function postViaWindow(url, body, { timeoutMs = 30000, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const win = new BrowserWindow({
+      width: 800,
+      height: 600,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+
+    const timeout = setTimeout(() => {
+      win.close();
+      reject(new Error('Request timeout'));
+    }, timeoutMs);
+
+    win.webContents.on('did-finish-load', async () => {
+      try {
+        // Build the fetch script. Inline-serialise URL/body/headers via
+        // JSON.stringify because executeJavaScript runs the source in the
+        // page's V8 isolate — we cannot capture closures across the bridge.
+        const headersLiteral = JSON.stringify({
+          'content-type': 'application/json',
+          ...headers,
+        });
+        const bodyLiteral = JSON.stringify(JSON.stringify(body));
+        const urlLiteral = JSON.stringify(url);
+        const script = `
+          (async () => {
+            const res = await fetch(${urlLiteral}, {
+              method: 'POST',
+              credentials: 'include',
+              headers: ${headersLiteral},
+              body: ${bodyLiteral}
+            });
+            const text = await res.text();
+            return { ok: res.ok, status: res.status, text };
+          })()
+        `;
+        const result = await win.webContents.executeJavaScript(script);
+        clearTimeout(timeout);
+        win.close();
+
+        const text = typeof result?.text === 'string' ? result.text : '';
+        for (const sig of BLOCKED_SIGNATURES) {
+          if (text.includes(sig.pattern)) {
+            reject(new Error(`${sig.error}: ${text.substring(0, 200)}`));
+            return;
+          }
+        }
+
+        resolve({ ok: !!result?.ok, status: Number(result?.status) || 0, text });
+      } catch (err) {
+        clearTimeout(timeout);
+        win.close();
+        reject(err);
+      }
+    });
+
+    win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      clearTimeout(timeout);
+      win.close();
+      reject(new Error(`LoadFailed: ${errorCode} ${errorDescription}`));
+    });
+
+    win.loadURL('about:blank');
+  });
+}
+
+module.exports = { fetchViaWindow, postViaWindow, BLOCKED_SIGNATURES };
