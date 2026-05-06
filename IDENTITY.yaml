@@ -1,0 +1,45 @@
+# IDENTITY.yaml
+#
+# Single source of truth for this project's identity and release config.
+# Every other artifact - package manifests, installer metadata, release
+# titles, tag names, asset file names - derives from values here.
+#
+# When you change a value, run `/gtr:doctor` to catch drift in downstream files.
+# Protected by the pre_guard_release_files.py hook: edits require confirmation.
+
+identity:
+  name: claude-usage-widget
+  display_name: Claude-Usage-Widget
+  description: Desktop widget for Claude.ai usage monitoring - GTRows fork.
+  homepage: "https://github.com/GTRows/claude-usage-widget"
+  icon: assets/icon.png
+  license: MIT
+
+version: 1.13.0-gtrows.1
+
+release:
+  platforms:
+    - windows-x64
+    - linux-x64
+    - linux-arm64
+    - macos-arm64
+    - macos-x64
+
+  artifact_pattern: "{name}-v{version}-{platform}.{ext}"
+  artifact_dir: dist
+  checksum_file: SHA256SUMS
+
+  prerelease_tags: [alpha, beta, rc, gtrows]
+
+  draft_first: true
+  require_changelog_entry: true
+  require_tests_pass: true
+
+  notes:
+    source: CHANGELOG.md
+    format: keep-a-changelog
+
+  assets:
+    include:
+      - "{artifact_dir}/*"
+      - "{checksum_file}"
