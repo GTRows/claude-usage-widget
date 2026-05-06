@@ -6,6 +6,7 @@ const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
 const peakThrottleShared = require('./src/shared/peak-throttle');
+const { createAutoFireScheduler } = require('./src/main/auto-fire/scheduler');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -61,6 +62,11 @@ let trayIconFrames = [];
 let trayIconIndex = 0;
 let trayIconTimer = null;
 let defaultTrayImage = null;
+
+const autoFireScheduler = createAutoFireScheduler();
+autoFireScheduler.on('expired', (payload) => {
+  debugLog('[AutoFire] window expired', payload.resetsAtIso, 'fired at', new Date(payload.firedAt).toISOString());
+});
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_COMPACT_WIDTH = 320;
@@ -904,6 +910,13 @@ ipcMain.handle('fetch-usage-data', async () => {
   }
 
   storeUsageHistory(data);
+
+  const fiveHourResetsAt = data?.five_hour?.resets_at;
+  if (fiveHourResetsAt) {
+    autoFireScheduler.arm(fiveHourResetsAt);
+  } else {
+    autoFireScheduler.disarm();
+  }
 
   // Re-assert always-on-top after hidden BrowserWindows from fetchViaWindow
   // are destroyed — creating/destroying BrowserWindows can temporarily disrupt
