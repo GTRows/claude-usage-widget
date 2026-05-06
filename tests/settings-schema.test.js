@@ -33,4 +33,10 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ activeProfile: '' }).activeProfile).toBe('default');
     expect(normalizeSettings({ activeProfile: 123 }).activeProfile).toBe('123');
   });
+  it('defaults autoFireEnabled to false and autoFireChannel to webSession', () => {
+    expect(normalizeSettings({})).toMatchObject({ autoFireEnabled: false, autoFireChannel: 'webSession' });
+  });
+  it('rejects an unknown autoFireChannel value', () => {
+    expect(normalizeSettings({ autoFireChannel: 'random' }).autoFireChannel).toBe('webSession');
+  });
 });
