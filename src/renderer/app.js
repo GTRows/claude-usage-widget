@@ -1,3 +1,27 @@
+// Temporary inline strings until the i18n library decision is taken (see CONCERNS.md).
+// Replace by the project `t(key)` helper when it lands.
+const _AUTO_FIRE_STRINGS = {
+  en: {
+    'settings.autoFire.label': 'Auto-renew 5-hour window',
+    'settings.autoFire.hint': 'When the active window resets, send a tiny request so the next window starts immediately.'
+  },
+  tr: {
+    'settings.autoFire.label': '5 saatlik pencereyi otomatik yenile',
+    'settings.autoFire.hint': 'Aktif pencere sıfırlandığında küçük bir istek göndererek bir sonraki pencerenin hemen başlamasını sağlar.'
+  }
+};
+function _autoFireT(key) {
+  const lang = (navigator.language || 'en').toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  return _AUTO_FIRE_STRINGS[lang][key] || _AUTO_FIRE_STRINGS.en[key] || key;
+}
+function _applyAutoFireStrings() {
+  const keys = ['settings.autoFire.label', 'settings.autoFire.hint'];
+  for (const key of keys) {
+    const nodes = document.querySelectorAll(`[data-i18n="${key}"]`);
+    nodes.forEach((el) => { el.textContent = _autoFireT(key); });
+  }
+}
+
 // Application state
 let credentials = null;
 let updateInterval = null;
@@ -154,6 +178,7 @@ const elements = {
 
 // Initialize
 async function init() {
+    _applyAutoFireStrings();
     setupEventListeners();
     startContentObserver();
     credentials = await window.electronAPI.getCredentials();
