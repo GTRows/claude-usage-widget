@@ -72,7 +72,9 @@ describe('createAutoFireDispatcher', () => {
     scheduler.emit('expired', { resetsAtIso: 'x', firedAt: 1 });
     await flush();
     expect(channel).toHaveBeenCalledTimes(1);
-    expect(channel).toHaveBeenCalledWith({ sessionKey: 'sk', organizationId: 'org' });
+    expect(channel).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionKey: 'sk', organizationId: 'org' }),
+    );
     const stats = dispatcher.getStats();
     expect(stats.successCount).toBe(1);
     expect(stats.errorCount).toBe(0);
@@ -175,6 +177,27 @@ describe('createAutoFireDispatcher', () => {
     const stats = dispatcher.getStats();
     expect(stats.errorCount).toBe(1);
     expect(stats.lastResult.reason).toBe('unknown-channel');
+  });
+
+  it("routes to the apiKey channel when settings.autoFireChannel === 'apiKey'", async () => {
+    const scheduler = makeFakeScheduler();
+    const webSessionChannel = vi.fn();
+    const apiKeyChannel = vi.fn().mockResolvedValue({ status: 'ok', latencyMs: 12 });
+    const dispatcher = mod.createAutoFireDispatcher({
+      scheduler,
+      getSettings: () => ({ autoFireEnabled: true, autoFireChannel: 'apiKey' }),
+      getCredentials: async () => ({ apiKey: 'sk-ant-test' }),
+      channels: { webSession: webSessionChannel, apiKey: apiKeyChannel },
+    });
+    dispatcher.start();
+    scheduler.emit('expired', { resetsAtIso: 'a', firedAt: 1 });
+    await flush();
+    expect(apiKeyChannel).toHaveBeenCalledTimes(1);
+    expect(apiKeyChannel).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'sk-ant-test' }),
+    );
+    expect(webSessionChannel).not.toHaveBeenCalled();
+    expect(dispatcher.getStats().lastResult.status).toBe('ok');
   });
 
   it('stop() removes the listener registered with the scheduler', async () => {
