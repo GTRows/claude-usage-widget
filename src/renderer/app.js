@@ -184,6 +184,12 @@ const elements = {
     autoStartToggle: document.getElementById('autoStartToggle'),
     alwaysOnTopToggle: document.getElementById('alwaysOnTopToggle'),
     autoFireToggle: document.getElementById('autoFireToggle'),
+    autoFireChannelSelect: document.getElementById('autoFireChannelSelect'),
+    autoFireApiKeyRow: document.getElementById('autoFireApiKeyRow'),
+    autoFireApiKeyInput: document.getElementById('autoFireApiKeyInput'),
+    autoFireApiKeySaveBtn: document.getElementById('autoFireApiKeySaveBtn'),
+    autoFireApiKeyClearBtn: document.getElementById('autoFireApiKeyClearBtn'),
+    autoFireApiKeyStatus: document.getElementById('autoFireApiKeyStatus'),
     warnThreshold: document.getElementById('warnThreshold'),
     dangerThreshold: document.getElementById('dangerThreshold'),
     themeBtns: document.querySelectorAll('.theme-btn'),
@@ -582,6 +588,43 @@ function setupEventListeners() {
         elements.autoPruneToggle.addEventListener('change', () => {
             if (elements.autoPruneDaysRow) {
                 elements.autoPruneDaysRow.style.display = elements.autoPruneToggle.checked ? 'flex' : 'none';
+            }
+        });
+    }
+
+    if (elements.autoFireChannelSelect) {
+        elements.autoFireChannelSelect.addEventListener('change', async () => {
+            const next = elements.autoFireChannelSelect.value === 'apiKey' ? 'apiKey' : 'webSession';
+            _applyAutoFireRowVisibility(next);
+            await window.electronAPI.saveSettings({ autoFireChannel: next });
+            if (window._cachedSettings && typeof window._cachedSettings === 'object') {
+                window._cachedSettings.autoFireChannel = next;
+            }
+            if (next === 'apiKey' && elements.autoFireApiKeyStatus && window.electronAPI.hasApiKey) {
+                const stored = await window.electronAPI.hasApiKey();
+                elements.autoFireApiKeyStatus.textContent = _autoFireT(
+                    stored ? 'settings.autoFire.apiKeySaved' : 'settings.autoFire.apiKeyMissing'
+                );
+            }
+        });
+    }
+    if (elements.autoFireApiKeySaveBtn) {
+        elements.autoFireApiKeySaveBtn.addEventListener('click', async () => {
+            const value = (elements.autoFireApiKeyInput && elements.autoFireApiKeyInput.value) || '';
+            if (!value) return;
+            await window.electronAPI.saveApiKey(value);
+            if (elements.autoFireApiKeyInput) elements.autoFireApiKeyInput.value = '';
+            if (elements.autoFireApiKeyStatus) {
+                elements.autoFireApiKeyStatus.textContent = _autoFireT('settings.autoFire.apiKeySaved');
+            }
+        });
+    }
+    if (elements.autoFireApiKeyClearBtn) {
+        elements.autoFireApiKeyClearBtn.addEventListener('click', async () => {
+            await window.electronAPI.clearApiKey();
+            if (elements.autoFireApiKeyInput) elements.autoFireApiKeyInput.value = '';
+            if (elements.autoFireApiKeyStatus) {
+                elements.autoFireApiKeyStatus.textContent = _autoFireT('settings.autoFire.apiKeyCleared');
             }
         });
     }
@@ -2498,6 +2541,17 @@ async function loadSettings() {
     elements.autoStartToggle.checked = settings.autoStart;
     elements.alwaysOnTopToggle.checked = settings.alwaysOnTop;
     if (elements.autoFireToggle) elements.autoFireToggle.checked = !!settings.autoFireEnabled;
+    if (elements.autoFireChannelSelect) {
+        const channel = settings.autoFireChannel === 'apiKey' ? 'apiKey' : 'webSession';
+        elements.autoFireChannelSelect.value = channel;
+        _applyAutoFireRowVisibility(channel);
+    }
+    if (elements.autoFireApiKeyStatus && window.electronAPI.hasApiKey) {
+        const stored = await window.electronAPI.hasApiKey();
+        elements.autoFireApiKeyStatus.textContent = _autoFireT(
+            stored ? 'settings.autoFire.apiKeySaved' : 'settings.autoFire.apiKeyMissing'
+        );
+    }
     elements.warnThreshold.value = settings.warnThreshold;
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
@@ -2598,7 +2652,8 @@ async function saveSettings() {
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,
         hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false,
         headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false,
-        autoFireEnabled: elements.autoFireToggle ? !!elements.autoFireToggle.checked : false
+        autoFireEnabled: elements.autoFireToggle ? !!elements.autoFireToggle.checked : false,
+        autoFireChannel: elements.autoFireChannelSelect && elements.autoFireChannelSelect.value === 'apiKey' ? 'apiKey' : 'webSession'
     };
     if (elements.autoPruneDaysRow) {
         elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';
