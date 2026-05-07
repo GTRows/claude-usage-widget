@@ -207,12 +207,6 @@ const elements = {
     updateBanner: document.getElementById('updateBanner'),
     updateBannerText: document.getElementById('updateBannerText'),
     updateBannerDismiss: document.getElementById('updateBannerDismiss'),
-    promoBanner: document.getElementById('promoBanner'),
-    promoChip: document.getElementById('promoChip'),
-    promoChipText: document.getElementById('promoChipText'),
-    promoHeadline: document.getElementById('promoHeadline'),
-    promoSub: document.getElementById('promoSub'),
-    promoRange: document.getElementById('promoRange'),
     settingsVersionLabel: document.getElementById('settingsVersionLabel'),
     settingsUpdateLink: document.getElementById('settingsUpdateLink'),
     usageAlertsToggle: document.getElementById('usageAlertsToggle'),
@@ -301,82 +295,8 @@ async function init() {
     // Also check once every 24 hours for users who never close the app
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
 
-    await loadPeakThrottleStatus();
-    // Refresh throttle status periodically so we cross peak/off-peak boundaries.
-    // Re-render every 30s for countdown; re-fetch every 5 minutes.
-    setInterval(renderPeakThrottleCard, 30 * 1000);
-    setInterval(loadPeakThrottleStatus, 5 * 60 * 1000);
-
     // Startup restore complete — allow _saveViewState to persist changes
     appInitializing = false;
-}
-
-async function loadPeakThrottleStatus() {
-    try {
-        if (!window.electronAPI.getPeakThrottleStatus) return;
-        const status = await window.electronAPI.getPeakThrottleStatus();
-        const prevThrottled = !!(window._peakThrottleStatus && window._peakThrottleStatus.isThrottled);
-        window._peakThrottleStatus = status;
-        renderPeakThrottleCard();
-        if (prevThrottled !== !!status.isThrottled && latestUsageData) {
-            updateTrayIcon(latestUsageData);
-        }
-    } catch (err) {
-        debugLog('loadPeakThrottleStatus failed:', err);
-    }
-}
-
-function renderPeakThrottleCard() {
-    const status = window._peakThrottleStatus;
-    if (!status || !elements.promoBanner) return;
-    elements.promoBanner.style.display = 'flex';
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const peakLabel = formatPeakWindow(status, tz);
-    const footLabel = document.getElementById('promoSubLabel');
-    const isThrottled = !!status.isThrottled;
-
-    elements.promoBanner.dataset.boost = isThrottled ? 'on' : 'off';
-    elements.promoChip.dataset.state = isThrottled ? 'on' : 'off';
-    elements.promoChipText.textContent = isThrottled ? 'PEAK' : 'OFF-PEAK';
-    elements.promoHeadline.textContent = isThrottled
-        ? 'Throttled — session drains faster'
-        : 'Normal rate';
-
-    const nextMs = Number(status.nextTransitionAt) || 0;
-    const delta = Math.max(0, nextMs - Date.now());
-    if (footLabel) {
-        footLabel.textContent = isThrottled ? 'Throttle ends in' : 'Throttle resumes in';
-    }
-    elements.promoSub.textContent = formatShortDuration(delta);
-
-    elements.promoRange.textContent = peakLabel;
-}
-
-function formatShortDuration(ms) {
-    if (!Number.isFinite(ms) || ms <= 0) return '0m';
-    const totalMin = Math.round(ms / 60000);
-    const days = Math.floor(totalMin / (60 * 24));
-    const hours = Math.floor((totalMin - days * 60 * 24) / 60);
-    const mins = totalMin - days * 60 * 24 - hours * 60;
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${mins}m`;
-    return `${mins}m`;
-}
-
-function formatPeakWindow(status, tz) {
-    try {
-        const peak = status.peakWindowUTC;
-        if (!peak) return '';
-        const sampleDay = Date.UTC(2026, 2, 16);
-        const start = new Date(sampleDay + peak.startHour * 3600000);
-        const end = new Date(sampleDay + peak.endHour * 3600000);
-        const fmt = new Intl.DateTimeFormat(undefined, {
-            timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
-        });
-        return `${fmt.format(start)}–${fmt.format(end)} WEEKDAYS`;
-    } catch {
-        return '12:00–18:00 UTC WEEKDAYS';
-    }
 }
 
 // Event Listeners
@@ -1535,8 +1455,7 @@ function startCountdown() {
 
 // Build a pre-rendered tray icon frame for a single metric.
 // Layout is controlled by the user's "Tray style" setting.
-function buildTrayFrame(label, percent, opts) {
-    const throttled = !!(opts && opts.throttled);
+function buildTrayFrame(label, percent) {
     const size = 32;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -1615,14 +1534,9 @@ function buildTrayFrame(label, percent, opts) {
         ctx.fillText(text, size / 2, size / 2 + 1);
     }
 
-    if (throttled) {
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(0, size - 2, size, 2);
-    }
-
     return {
         dataURL: canvas.toDataURL('image/png'),
-        tooltip: throttled ? `${label}: ${rounded}% (peak throttle)` : `${label}: ${rounded}%`,
+        tooltip: `${label}: ${rounded}%`,
         title: ` ${rounded}%`,
         duration: 2600
     };
@@ -1893,11 +1807,9 @@ function updateTrayIcon(data) {
             else if (rounded >= warnThreshold) status = 'warn';
         }
 
-        const throttled = !!(window._peakThrottleStatus && window._peakThrottleStatus.isThrottled);
-
         if (animateMascot) {
             const restFrame = typeof session === 'number'
-                ? buildTrayFrame('Session', session, { throttled })
+                ? buildTrayFrame('Session', session)
                 : null;
             const mascotFrames = buildMascotAnimation(status, restFrame);
             const label = rounded != null ? `Claude Usage — ${rounded}%` : 'Claude Usage';
@@ -1907,7 +1819,7 @@ function updateTrayIcon(data) {
         } else if (status === 'dead' || status === 'zero') {
             frames.push(...buildMascotAnimation(status));
         } else if (typeof session === 'number') {
-            frames.push(buildTrayFrame('Session', session, { throttled }));
+            frames.push(buildTrayFrame('Session', session));
         }
 
         if (window.electronAPI.setTrayFrames) {
