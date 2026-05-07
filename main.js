@@ -90,8 +90,43 @@ async function getCredentialsForAutoFire() {
     sessionKey = store.get('sessionKey');
   }
   const organizationId = store.get('organizationId');
-  if (!sessionKey || !organizationId) return null;
-  return { sessionKey, organizationId };
+  const apiKey = readStoredApiKey();
+  if (!sessionKey && !apiKey) return null;
+  return { sessionKey, organizationId, apiKey };
+}
+
+// Anthropic API key storage. Same policy as sessionKey: encrypt with the OS
+// keychain via safeStorage when available, fall back to plain electron-store
+// only when isEncryptionAvailable() is false (e.g. headless Linux without a
+// keyring service). Reads return null when no key is stored.
+function readStoredApiKey() {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = store.get('apiKey_encrypted');
+    if (!encrypted) return null;
+    try {
+      return safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+    } catch (err) {
+      console.error('[Keychain] Failed to decrypt API key:', err.message);
+      return null;
+    }
+  }
+  return store.get('apiKey') || null;
+}
+
+function writeStoredApiKey(apiKey) {
+  if (typeof apiKey !== 'string' || apiKey.length === 0) {
+    store.delete('apiKey');
+    store.delete('apiKey_encrypted');
+    return;
+  }
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = safeStorage.encryptString(apiKey);
+    store.set('apiKey_encrypted', encrypted.toString('base64'));
+    store.delete('apiKey');
+  } else {
+    store.set('apiKey', apiKey);
+    store.delete('apiKey_encrypted');
+  }
 }
 
 const autoFireDispatcher = createAutoFireDispatcher({
