@@ -430,6 +430,7 @@ ipcMain.handle('delete-credentials', async () => {
   store.delete('sessionKey');
   store.delete('sessionKey_encrypted');
   store.delete('organizationId');
+  writeStoredApiKey('');
   // Remove all Claude.ai cookies
   const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
   for (const cookie of cookies) {
