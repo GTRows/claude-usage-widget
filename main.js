@@ -426,6 +426,23 @@ ipcMain.handle('save-credentials', async (event, { sessionKey, organizationId })
   return true;
 });
 
+ipcMain.handle('save-api-key', (event, apiKey) => {
+  if (typeof apiKey !== 'string' || apiKey.length === 0) {
+    return { ok: false, reason: 'empty' };
+  }
+  writeStoredApiKey(apiKey);
+  return { ok: true };
+});
+
+ipcMain.handle('clear-api-key', () => {
+  writeStoredApiKey('');
+  return { ok: true };
+});
+
+ipcMain.handle('has-api-key', () => {
+  return readStoredApiKey() !== null;
+});
+
 ipcMain.handle('delete-credentials', async () => {
   store.delete('sessionKey');
   store.delete('sessionKey_encrypted');
