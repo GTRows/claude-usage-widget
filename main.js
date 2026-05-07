@@ -8,6 +8,7 @@ const { isNewerVersion, compareVersions } = require('./src/shared/version');
 const peakThrottleShared = require('./src/shared/peak-throttle');
 const { createAutoFireScheduler } = require('./src/main/auto-fire/scheduler');
 const { fireViaWebSession } = require('./src/main/auto-fire/web-channel');
+const { fireViaApiKey } = require('./src/main/auto-fire/api-channel');
 const { createAutoFireDispatcher } = require('./src/main/auto-fire/dispatcher');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 
@@ -133,7 +134,11 @@ const autoFireDispatcher = createAutoFireDispatcher({
   scheduler: autoFireScheduler,
   getSettings: () => normalizeSettings(store.get('settings', {})),
   getCredentials: getCredentialsForAutoFire,
-  channels: { webSession: fireViaWebSession },
+  channels: {
+    webSession: ({ sessionKey, organizationId }) =>
+      fireViaWebSession({ sessionKey, organizationId }),
+    apiKey: ({ apiKey }) => fireViaApiKey({ apiKey }),
+  },
   now: Date.now,
   debugLog,
 });

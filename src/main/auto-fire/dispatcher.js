@@ -55,7 +55,7 @@ function createAutoFireDispatcher({
 
     try {
       const creds = await getCredentials();
-      if (!creds || !creds.sessionKey || !creds.organizationId) {
+      if (!creds) {
         const result = { status: 'error', reason: 'missing-credentials' };
         state.lastResult = result;
         state.lastFiredAt = now();
@@ -78,6 +78,7 @@ function createAutoFireDispatcher({
       const result = await channel({
         sessionKey: creds.sessionKey,
         organizationId: creds.organizationId,
+        apiKey: creds.apiKey,
       });
       state.lastResult = result;
       state.lastFiredAt = now();
