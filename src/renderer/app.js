@@ -3,11 +3,35 @@
 const _AUTO_FIRE_STRINGS = {
   en: {
     'settings.autoFire.label': 'Auto-renew 5-hour window',
-    'settings.autoFire.hint': 'When the active window resets, send a tiny request so the next window starts immediately.'
+    'settings.autoFire.hint': 'When the active window resets, send a tiny request so the next window starts immediately.',
+    'settings.autoFire.channelLabel': 'Auto-renew channel',
+    'settings.autoFire.channelHint': 'Pick how the renewal request is sent.',
+    'settings.autoFire.channel.webSession': 'Web session (claude.ai login)',
+    'settings.autoFire.channel.apiKey': 'Anthropic API key',
+    'settings.autoFire.apiKeyLabel': 'Anthropic API key',
+    'settings.autoFire.apiKeyHint': 'Used only when "Anthropic API key" is selected. Stored encrypted in your OS keychain when available.',
+    'settings.autoFire.apiKeyPlaceholder': 'sk-ant-...',
+    'settings.autoFire.apiKeySaved': 'Key saved.',
+    'settings.autoFire.apiKeyCleared': 'Key cleared.',
+    'settings.autoFire.apiKeyMissing': 'No key stored.',
+    'settings.autoFire.apiKeySaveBtn': 'Save key',
+    'settings.autoFire.apiKeyClearBtn': 'Clear'
   },
   tr: {
     'settings.autoFire.label': '5 saatlik pencereyi otomatik yenile',
-    'settings.autoFire.hint': 'Aktif pencere sıfırlandığında küçük bir istek göndererek bir sonraki pencerenin hemen başlamasını sağlar.'
+    'settings.autoFire.hint': 'Aktif pencere sıfırlandığında küçük bir istek göndererek bir sonraki pencerenin hemen başlamasını sağlar.',
+    'settings.autoFire.channelLabel': 'Otomatik yenileme kanalı',
+    'settings.autoFire.channelHint': 'Yenileme isteğinin nasıl gönderileceğini seçin.',
+    'settings.autoFire.channel.webSession': 'Web oturumu (claude.ai girişi)',
+    'settings.autoFire.channel.apiKey': 'Anthropic API anahtarı',
+    'settings.autoFire.apiKeyLabel': 'Anthropic API anahtarı',
+    'settings.autoFire.apiKeyHint': 'Yalnızca "Anthropic API anahtarı" seçildiğinde kullanılır. Mümkün olduğunda işletim sisteminin anahtarlığında şifrelenerek saklanır.',
+    'settings.autoFire.apiKeyPlaceholder': 'sk-ant-...',
+    'settings.autoFire.apiKeySaved': 'Anahtar kaydedildi.',
+    'settings.autoFire.apiKeyCleared': 'Anahtar silindi.',
+    'settings.autoFire.apiKeyMissing': 'Kayıtlı anahtar yok.',
+    'settings.autoFire.apiKeySaveBtn': 'Anahtarı kaydet',
+    'settings.autoFire.apiKeyClearBtn': 'Sil'
   }
 };
 function _autoFireT(key) {
@@ -15,11 +39,34 @@ function _autoFireT(key) {
   return _AUTO_FIRE_STRINGS[lang][key] || _AUTO_FIRE_STRINGS.en[key] || key;
 }
 function _applyAutoFireStrings() {
-  const keys = ['settings.autoFire.label', 'settings.autoFire.hint'];
+  const keys = [
+    'settings.autoFire.label',
+    'settings.autoFire.hint',
+    'settings.autoFire.channelLabel',
+    'settings.autoFire.channelHint',
+    'settings.autoFire.channel.webSession',
+    'settings.autoFire.channel.apiKey',
+    'settings.autoFire.apiKeyLabel',
+    'settings.autoFire.apiKeyHint',
+    'settings.autoFire.apiKeySaveBtn',
+    'settings.autoFire.apiKeyClearBtn'
+  ];
   for (const key of keys) {
     const nodes = document.querySelectorAll(`[data-i18n="${key}"]`);
     nodes.forEach((el) => { el.textContent = _autoFireT(key); });
   }
+  const placeholderNodes = document.querySelectorAll('[data-i18n-placeholder]');
+  placeholderNodes.forEach((el) => {
+    const k = el.getAttribute('data-i18n-placeholder');
+    if (k && _AUTO_FIRE_STRINGS.en[k]) {
+      el.placeholder = _autoFireT(k);
+    }
+  });
+}
+function _applyAutoFireRowVisibility(channel) {
+  const row = document.getElementById('autoFireApiKeyRow');
+  if (!row) return;
+  row.style.display = channel === 'apiKey' ? '' : 'none';
 }
 
 // Application state
