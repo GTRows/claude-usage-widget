@@ -2270,6 +2270,23 @@ body.theme-light .kbd-mod { background: rgba(179, 100, 18, 0.08); }
     box-shadow: var(--glow-accent);
 }
 
+.auto-fire-api-key-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.auto-fire-api-key-input {
+    flex: 1 1 200px;
+    min-width: 0;
+    font-family: var(--font-mono);
+}
+
+.auto-fire-api-key-status {
+    flex-basis: 100%;
+}
+
 /* Settings footer */
 .settings-footer {
     display: flex;
