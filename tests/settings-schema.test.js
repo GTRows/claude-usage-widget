@@ -39,4 +39,8 @@ describe('normalizeSettings', () => {
   it('rejects an unknown autoFireChannel value', () => {
     expect(normalizeSettings({ autoFireChannel: 'random' }).autoFireChannel).toBe('webSession');
   });
+  it('preserves a valid autoFireChannel value of apiKey through normalization', () => {
+    const result = normalizeSettings({ autoFireChannel: 'apiKey' });
+    expect(result.autoFireChannel).toBe('apiKey');
+  });
 });
