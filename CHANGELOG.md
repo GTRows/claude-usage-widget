@@ -5,6 +5,27 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ---
 
+## [1.14.0-gtrows.1] — 2026-05-07
+
+GTRows fork. Auto-renew the active 5-hour usage window the moment it expires,
+and soft-deprecate the peak-hour throttle indicator.
+
+### Auto-window-renewal
+- Background scheduler arms on every fresh `data.five_hour.resets_at` and fires once when that timestamp passes, even when the widget is unfocused or in tray
+- Single-flight dispatcher with 60s debounce and idempotent re-arm
+- User-selectable channel:
+  - Web session: minimal `(smallest model, 1-char prompt, max_tokens=1)` request via the existing claude.ai session — burns one quota message, no dollar cost
+  - Anthropic API key: separate paid channel via Node `fetch` — no quota burn, no bot-flag risk
+- API key stored encrypted via Electron `safeStorage` (same policy as `sessionKey`; plain-text fallback only when encryption is unavailable)
+- Settings drawer gains an Auto-renew window toggle, channel selector, and masked API-key input with save / clear / status indicator
+
+### Peak-throttle (soft-deprecated)
+- Default off; promo card removed from the renderer; `get-peak-throttle-status` IPC handler and preload bridge dropped
+- `src/shared/peak-throttle.js` and its 13 vitest cases retained for re-use
+
+### Tests
+- 14 test files / 118 vitest cases green, including 7 scheduler, 5 web-channel, 8 dispatcher, 9 api-channel, and 1 schema/apiKey-preservation specs
+
 ## [1.13.0-gtrows.1] — 2026-04-18
 
 GTRows fork. Keyboard shortcuts for every widget control.
