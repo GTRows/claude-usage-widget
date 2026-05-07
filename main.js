@@ -5,7 +5,6 @@ const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
-const peakThrottleShared = require('./src/shared/peak-throttle');
 const { createAutoFireScheduler } = require('./src/main/auto-fire/scheduler');
 const { fireViaWebSession } = require('./src/main/auto-fire/web-channel');
 const { fireViaApiKey } = require('./src/main/auto-fire/api-channel');
@@ -1060,10 +1059,6 @@ function startTrayCycle() {
   const firstDelay = Math.max(80, Math.min(10000, Number(first && first.duration) || 3000));
   trayIconTimer = setTimeout(step, firstDelay);
 }
-
-ipcMain.handle('get-peak-throttle-status', () => {
-  return peakThrottleShared.getPeakThrottleStatus(Date.now());
-});
 
 ipcMain.on('set-tray-frames', (event, frames) => {
   trayIconFrames = Array.isArray(frames) ? frames.filter(f => f && f.dataURL) : [];
