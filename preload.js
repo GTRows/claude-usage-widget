@@ -73,9 +73,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
-  // Peak-hour throttle (session limits drain faster in the peak window)
-  getPeakThrottleStatus: () => ipcRenderer.invoke('get-peak-throttle-status'),
-
   // Storage info
   getStorageInfo: () => ipcRenderer.invoke('get-storage-info'),
   pruneHistory: (days) => ipcRenderer.invoke('prune-history', days),
