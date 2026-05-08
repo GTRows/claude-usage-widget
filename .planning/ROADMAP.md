@@ -65,7 +65,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 05-01: Diagnose root cause in `src/renderer/index.html` + `styles.css` + `app.js`, restore `-webkit-app-region: drag` while drawer is open, manual UAT
+- [x] 05-01: Diagnose root cause in `src/renderer/index.html` + `styles.css` + `app.js`, restore `-webkit-app-region: drag` while drawer is open, manual UAT
 
 #### Phase 6: Manual update-check button
 **Goal**: Add a "Check for updates" button to the settings drawer that triggers the existing update-check flow on demand and surfaces the result inline.
@@ -99,6 +99,6 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 2. Anthropic API channel + selector | v1.0 | 2/2 | Complete | 2026-05-07 |
 | 3. Peak-throttle soft-deprecate | v1.0 | 1/1 | Complete | 2026-05-07 |
 | 4. Remove auto-fire feature | v1.15 | 1/1 | Complete | 2026-05-08 |
-| 5. Settings drawer drag fix | v1.15 | 0/1 | Not started | - |
+| 5. Settings drawer drag fix | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 6. Manual update-check button | v1.15 | 0/1 | Not started | - |
 | 7. Localization (tr + en) | v1.15 | 0/3 | Not started | - |
