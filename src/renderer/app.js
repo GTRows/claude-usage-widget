@@ -131,6 +131,9 @@ const elements = {
     updateBannerDismiss: document.getElementById('updateBannerDismiss'),
     settingsVersionLabel: document.getElementById('settingsVersionLabel'),
     settingsUpdateLink: document.getElementById('settingsUpdateLink'),
+    checkUpdatesBtn: document.getElementById('checkUpdatesBtn'),
+    checkUpdatesStatus: document.getElementById('checkUpdatesStatus'),
+    checkUpdatesTimestamp: document.getElementById('checkUpdatesTimestamp'),
     usageAlertsToggle: document.getElementById('usageAlertsToggle'),
     compactModeToggle: document.getElementById('compactModeToggle'),
     compactModeToggleCompact: document.getElementById('compactModeToggleCompact'),
@@ -215,6 +218,11 @@ async function init() {
     setTimeout(checkForUpdate, 2000);
     // Also check once every 24 hours for users who never close the app
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+
+    try {
+        const persisted = parseInt(localStorage.getItem('claude-usage-widget.lastUpdateCheckMs') || '', 10);
+        if (Number.isFinite(persisted)) renderLastUpdateCheckTimestamp(persisted);
+    } catch {}
 
     // Startup restore complete — allow _saveViewState to persist changes
     appInitializing = false;
@@ -572,6 +580,41 @@ function setupEventListeners() {
     });
     elements.settingsUpdateLink.addEventListener('click', () => {
         window.electronAPI.openExternal(`https://github.com/GTRows/claude-usage-widget/releases/latest`);
+    });
+
+    elements.checkUpdatesBtn.addEventListener('click', async () => {
+        if (!elements.checkUpdatesBtn || !elements.checkUpdatesStatus) return;
+        if (elements.checkUpdatesBtn.disabled) return;
+
+        elements.checkUpdatesBtn.disabled = true;
+        const previousLabel = elements.checkUpdatesBtn.textContent;
+        elements.checkUpdatesBtn.textContent = 'Checking…';
+        elements.checkUpdatesStatus.classList.remove('update-check-status--ok', 'update-check-status--available', 'update-check-status--error');
+        elements.checkUpdatesStatus.textContent = 'Checking GitHub releases…';
+
+        try {
+            const result = await checkForUpdate();
+            const checkedAt = Date.now();
+
+            if (!result.ok) {
+                elements.checkUpdatesStatus.textContent = 'Check failed — try again.';
+                elements.checkUpdatesStatus.classList.add('update-check-status--error');
+            } else if (result.hasUpdate && result.version) {
+                elements.checkUpdatesStatus.textContent = `Version ${result.version} available — click the banner to download.`;
+                elements.checkUpdatesStatus.classList.add('update-check-status--available');
+            } else {
+                elements.checkUpdatesStatus.textContent = 'Up to date.';
+                elements.checkUpdatesStatus.classList.add('update-check-status--ok');
+            }
+
+            if (result.ok) {
+                try { localStorage.setItem('claude-usage-widget.lastUpdateCheckMs', String(checkedAt)); } catch {}
+                renderLastUpdateCheckTimestamp(checkedAt);
+            }
+        } finally {
+            elements.checkUpdatesBtn.disabled = false;
+            elements.checkUpdatesBtn.textContent = previousLabel || 'Check now';
+        }
     });
 
     // Compact mode — collapse chevron (normal → compact)
@@ -2475,28 +2518,47 @@ function applyThemeStyle(style) {
     document.body.setAttribute('data-theme-style', value);
 }
 
+function renderLastUpdateCheckTimestamp(ms) {
+    if (!elements.checkUpdatesTimestamp) return;
+    if (!ms || !Number.isFinite(ms)) {
+        elements.checkUpdatesTimestamp.textContent = '';
+        return;
+    }
+    const d = new Date(ms);
+    // Reuse the user's chosen time format setting if available.
+    const use24 = (typeof currentSettings !== 'undefined' && currentSettings && currentSettings.timeFormat === '24h');
+    const time = use24
+        ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+        : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+    const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    elements.checkUpdatesTimestamp.textContent = `Last checked: ${date} ${time}`;
+}
+
 // Update check
 async function checkForUpdate() {
     try {
         const result = await window.electronAPI.checkForUpdate();
-        if (!result.hasUpdate) return;
+        // After Task 3, main.js returns { ok: false } on network/parse error,
+        // and { ok: true, hasUpdate, version } on success. Default ok to true
+        // for backward shape (older main.js builds during dev hot-reload).
+        const ok = result && result.ok !== false;
+        const hasUpdate = !!(result && result.hasUpdate);
+        const version = (result && result.version) || null;
 
-        const version = result.version;
-
-        // Show banner and expand window to compensate
-        elements.updateBannerText.textContent = `▲  Version ${version} available — click to download`;
-        elements.updateBanner.style.display = 'flex';
-        resizeWidget(true);
-
-        // Populate settings panel link if already visible
-        if (elements.settingsUpdateLink) {
-            elements.settingsUpdateLink.textContent = `→ v${version} available`;
-            elements.settingsUpdateLink.style.display = 'inline';
+        if (ok && hasUpdate && version) {
+            elements.updateBannerText.textContent = `▲  Version ${version} available — click to download`;
+            elements.updateBanner.style.display = 'flex';
+            resizeWidget(true);
+            if (elements.settingsUpdateLink) {
+                elements.settingsUpdateLink.textContent = `→ v${version} available`;
+                elements.settingsUpdateLink.style.display = 'inline';
+            }
+            debugLog(`Update available: v${version}`);
         }
-
-        debugLog(`Update available: v${version}`);
+        return { ok, hasUpdate, version };
     } catch (e) {
         debugLog('Update check failed silently', e);
+        return { ok: false, hasUpdate: false, version: null };
     }
 }
 
