@@ -34,3 +34,17 @@ describe('normalizeSettings', () => {
     expect(normalizeSettings({ activeProfile: 123 }).activeProfile).toBe('123');
   });
 });
+
+describe('language setting', () => {
+  it('defaults to tr when no language is provided', () => {
+    expect(normalizeSettings({}).language).toBe('tr');
+  });
+
+  it('falls back to tr when an unknown language is provided', () => {
+    expect(normalizeSettings({ language: 'fr' }).language).toBe('tr');
+  });
+
+  it('preserves an explicit en value', () => {
+    expect(normalizeSettings({ language: 'en' }).language).toBe('en');
+  });
+});

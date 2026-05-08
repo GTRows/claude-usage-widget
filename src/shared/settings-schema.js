@@ -22,6 +22,7 @@ const SETTINGS_DEFAULTS = {
   hideFromTaskbar: false,
   headlessMode: false,
   activeProfile: 'default',
+  language: 'tr',
 };
 
 const ENUM_VALUES = {
@@ -30,6 +31,7 @@ const ENUM_VALUES = {
   trayStyle: ['bigNumber', 'ring', 'bar', 'dot'],
   timeFormat: ['12h', '24h'],
   weeklyDateFormat: ['date', 'date-day', 'date-day-time'],
+  language: ['tr', 'en'],
 };
 
 function clampInt(value, min, max, fallback) {
