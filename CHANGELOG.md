@@ -5,6 +5,36 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ---
 
+## [Unreleased]
+
+### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+## [1.15.0-gtrows.1] - 2026-05-08
+
+GTRows fork. Drops the no-op auto-fire feature, adds full tr/en localization,
+a manual update-check button, and fixes the settings drawer drag regression.
+
+### Added
+- Settings drawer Language selector (tr / en) with hot-swap, persisted via electron-store
+- Settings drawer "Check for updates" button under a new `07 Updates` group, with inline status (idle / checking / up-to-date / available / failed) and last-checked timestamp
+- Shared `src/shared/i18n.js` home-grown `t()` seam plus `tr` / `en` locale catalogs (~247 keys per locale, covering renderer, tray menu, dialogs, and CLI surfaces)
+- `get-language` / `set-language` IPC and `language-changed` broadcast; preload exposes `getLanguage`, `setLanguage`, `onLanguageChanged`
+
+### Changed
+- Tray menu, tooltip, dialog titles, renderer DOM, notifications, and the full `bin/cli.js` help/output now resolve through `t()`; default UI language is `tr` per `CLAUDE.md`
+- `check-for-update` IPC handler resolves with an `ok` boolean so the renderer can distinguish transport failure from a clean "up to date" result
+
+### Removed
+- Auto-fire 5-hour-window-renewal feature (modules, IPC handlers, schema keys, tests, settings UI). The v1.14 implementation shipped a placeholder payload that did not actually start a real 5h window; rather than research the billable claude.ai endpoint we have dropped the feature. `apiKey` / `apiKey_encrypted` store entries are silently cleaned up at boot
+
+### Fixed
+- Settings drawer drag regression: `.settings-overlay` no longer occludes the title-bar `-webkit-app-region: drag` while the drawer is open
+
 ## [1.14.0-gtrows.1] — 2026-05-07
 
 GTRows fork. Auto-renew the active 5-hour usage window the moment it expires,
