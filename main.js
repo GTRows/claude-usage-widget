@@ -5,10 +5,6 @@ const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
-const { createAutoFireScheduler } = require('./src/main/auto-fire/scheduler');
-const { fireViaWebSession } = require('./src/main/auto-fire/web-channel');
-const { fireViaApiKey } = require('./src/main/auto-fire/api-channel');
-const { createAutoFireDispatcher } = require('./src/main/auto-fire/dispatcher');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 
 const GITHUB_OWNER = 'GTRows';
@@ -50,6 +46,11 @@ try {
 // Non-sensitive settings storage (no encryption needed)
 const store = new Store();
 
+// One-shot cleanup: drop the legacy Anthropic API key (removed in v1.15).
+// Safe no-op when the keys are absent.
+store.delete('apiKey');
+store.delete('apiKey_encrypted');
+
 // Debug mode: set DEBUG_LOG=1 env var or pass --debug flag to see verbose logs.
 // Regular users will only see critical errors in the console.
 const DEBUG = process.env.DEBUG_LOG === '1' || process.argv.includes('--debug');
@@ -65,83 +66,6 @@ let trayIconFrames = [];
 let trayIconIndex = 0;
 let trayIconTimer = null;
 let defaultTrayImage = null;
-
-const autoFireScheduler = createAutoFireScheduler();
-autoFireScheduler.on('expired', (payload) => {
-  debugLog('[AutoFire] window expired', payload.resetsAtIso, 'fired at', new Date(payload.firedAt).toISOString());
-});
-
-// Mirror the credential-decrypt logic used by `get-credentials` and
-// `fetch-usage-data`. Lifted here so the auto-fire dispatcher can resolve
-// credentials without crossing IPC. A future cleanup pass will share one
-// helper across all three handlers (see CONCERNS.md).
-async function getCredentialsForAutoFire() {
-  let sessionKey = null;
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = store.get('sessionKey_encrypted');
-    if (encrypted) {
-      try {
-        sessionKey = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
-      } catch (err) {
-        console.error('[Keychain] Failed to decrypt session key:', err.message);
-      }
-    }
-  } else {
-    sessionKey = store.get('sessionKey');
-  }
-  const organizationId = store.get('organizationId');
-  const apiKey = readStoredApiKey();
-  if (!sessionKey && !apiKey) return null;
-  return { sessionKey, organizationId, apiKey };
-}
-
-// Anthropic API key storage. Same policy as sessionKey: encrypt with the OS
-// keychain via safeStorage when available, fall back to plain electron-store
-// only when isEncryptionAvailable() is false (e.g. headless Linux without a
-// keyring service). Reads return null when no key is stored.
-function readStoredApiKey() {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = store.get('apiKey_encrypted');
-    if (!encrypted) return null;
-    try {
-      return safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
-    } catch (err) {
-      console.error('[Keychain] Failed to decrypt API key:', err.message);
-      return null;
-    }
-  }
-  return store.get('apiKey') || null;
-}
-
-function writeStoredApiKey(apiKey) {
-  if (typeof apiKey !== 'string' || apiKey.length === 0) {
-    store.delete('apiKey');
-    store.delete('apiKey_encrypted');
-    return;
-  }
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiKey);
-    store.set('apiKey_encrypted', encrypted.toString('base64'));
-    store.delete('apiKey');
-  } else {
-    store.set('apiKey', apiKey);
-    store.delete('apiKey_encrypted');
-  }
-}
-
-const autoFireDispatcher = createAutoFireDispatcher({
-  scheduler: autoFireScheduler,
-  getSettings: () => normalizeSettings(store.get('settings', {})),
-  getCredentials: getCredentialsForAutoFire,
-  channels: {
-    webSession: ({ sessionKey, organizationId }) =>
-      fireViaWebSession({ sessionKey, organizationId }),
-    apiKey: ({ apiKey }) => fireViaApiKey({ apiKey }),
-  },
-  now: Date.now,
-  debugLog,
-});
-autoFireDispatcher.start();
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_COMPACT_WIDTH = 320;
@@ -425,28 +349,12 @@ ipcMain.handle('save-credentials', async (event, { sessionKey, organizationId })
   return true;
 });
 
-ipcMain.handle('save-api-key', (event, apiKey) => {
-  if (typeof apiKey !== 'string' || apiKey.length === 0) {
-    return { ok: false, reason: 'empty' };
-  }
-  writeStoredApiKey(apiKey);
-  return { ok: true };
-});
-
-ipcMain.handle('clear-api-key', () => {
-  writeStoredApiKey('');
-  return { ok: true };
-});
-
-ipcMain.handle('has-api-key', () => {
-  return readStoredApiKey() !== null;
-});
-
 ipcMain.handle('delete-credentials', async () => {
   store.delete('sessionKey');
   store.delete('sessionKey_encrypted');
   store.delete('organizationId');
-  writeStoredApiKey('');
+  store.delete('apiKey');
+  store.delete('apiKey_encrypted');
   // Remove all Claude.ai cookies
   const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
   for (const cookie of cookies) {
@@ -1004,13 +912,6 @@ ipcMain.handle('fetch-usage-data', async () => {
 
   storeUsageHistory(data);
 
-  const fiveHourResetsAt = data?.five_hour?.resets_at;
-  if (fiveHourResetsAt) {
-    autoFireScheduler.arm(fiveHourResetsAt);
-  } else {
-    autoFireScheduler.disarm();
-  }
-
   // Re-assert always-on-top after hidden BrowserWindows from fetchViaWindow
   // are destroyed — creating/destroying BrowserWindows can temporarily disrupt
   // the main window's z-order on some OS/window manager combinations.
@@ -1128,11 +1029,6 @@ app.whenReady().then(async () => {
       }
     }
   }, 5000);
-});
-
-app.on('before-quit', () => {
-  autoFireDispatcher.stop();
-  autoFireScheduler.disarm();
 });
 
 app.on('window-all-closed', () => {
