@@ -5,44 +5,36 @@ const path = require('path');
 const { loadCredentials, writeConfig, getConfigPath, getConfigDir } = require('../src/cli/config');
 const { fetchUsage, fetchOrganizations } = require('../src/cli/api');
 const { summary, inlinePrompt, pickPercent } = require('../src/cli/render');
-const { readWidgetHistory, getWidgetStorePath } = require('../src/cli/widget-store');
+const { readWidgetHistory, getWidgetStorePath, getWidgetSettingsLanguage } = require('../src/cli/widget-store');
 const historyShared = require('../src/shared/history');
+const { t, setLanguage } = require('../src/shared/i18n');
 const pkg = require('../package.json');
 
-const HELP = `claude-usage ${pkg.version}
-GTRows fork — desktop widget companion CLI
-
-Usage:
-  claude-usage <command> [options]
-
-Commands:
-  status              Print current 5-hour and weekly usage (one shot)
-  json                Print the raw usage JSON
-  watch [--interval s]  Re-fetch every N seconds (default 60)
-  prompt [--segments 5h,7d,opus,sonnet,extra] [--cache N]
-                      Print a one-line summary for shell prompts; --cache
-                      reuses a stored response for N seconds (avoids
-                      hitting the API on every keystroke)
-  login --key K --org O   Save credentials to the CLI config file
-  organizations       List organizations the session can see
-  history [--since N] [--format csv|json] [--output FILE]
-                      Read the desktop widget's stored usage history
-  doctor              Diagnose credentials, widget store, and API reach
-  config              Print the config file path
-  version             Print the CLI version
-  help                Show this message
-
-Auth:
-  Credentials come from CLAUDE_SESSION_KEY + CLAUDE_ORGANIZATION_ID env
-  vars first, then from the file at \`claude-usage config\`. The desktop
-  widget stores its key encrypted with Electron's safeStorage and is
-  not readable from outside Electron, so the CLI keeps its own copy.
-
-Options:
-  --no-color          Disable ANSI color output
-  --warn N            Warn threshold percent (default 75)
-  --danger N          Danger threshold percent (default 90)
-`;
+function buildHelp() {
+  return [
+    t('cli.help.banner', { version: pkg.version }),
+    '',
+    t('cli.help.usage'),
+    '',
+    t('cli.help.commands'),
+    t('cli.help.cmdStatus'),
+    t('cli.help.cmdJson'),
+    t('cli.help.cmdWatch'),
+    t('cli.help.cmdPrompt'),
+    t('cli.help.cmdLogin'),
+    t('cli.help.cmdOrgs'),
+    t('cli.help.cmdHistory'),
+    t('cli.help.cmdDoctor'),
+    t('cli.help.cmdConfig'),
+    t('cli.help.cmdVersion'),
+    t('cli.help.cmdHelp'),
+    '',
+    t('cli.help.authBlock'),
+    '',
+    t('cli.help.optionsBlock'),
+    ''
+  ].join('\n');
+}
 
 function parseArgs(argv) {
   const args = { command: argv[0] || 'help', flags: {}, rest: [] };
@@ -144,7 +136,7 @@ async function cmdWatch(flags) {
       const ts = new Date().toLocaleTimeString();
       process.stdout.write(`\x1b[2J\x1b[H[${ts}]\n${summary(data, opts)}\n`);
     } catch (err) {
-      process.stderr.write(`error: ${err.message}\n`);
+      process.stderr.write(t('cli.error.prefix', { message: err.message }) + '\n');
     }
   };
   await tick();
@@ -154,7 +146,7 @@ async function cmdWatch(flags) {
 async function cmdLogin(flags) {
   const key = flags.key;
   const org = flags.org || flags.organization;
-  if (!key) throw new Error('--key required');
+  if (!key) throw new Error(t('cli.login.missingKey'));
   const patch = { sessionKey: key };
   if (org) patch.organizationId = org;
   if (!org) {
@@ -163,57 +155,57 @@ async function cmdLogin(flags) {
       if (Array.isArray(orgs) && orgs.length === 1) {
         patch.organizationId = orgs[0].uuid || orgs[0].id;
       } else if (Array.isArray(orgs)) {
-        process.stdout.write(`Multiple organizations available. Pass --org <uuid>:\n`);
+        process.stdout.write(t('cli.login.multipleOrgs') + '\n');
         for (const o of orgs) process.stdout.write(`  ${o.uuid || o.id}  ${o.name || ''}\n`);
         if (!org) return;
       }
     } catch (err) {
-      process.stderr.write(`warning: could not auto-detect organization (${err.message}); pass --org\n`);
+      process.stderr.write(t('cli.login.autoDetectFailed', { error: err.message }) + '\n');
     }
   }
   writeConfig(patch);
-  process.stdout.write(`Saved credentials to ${getConfigPath()}\n`);
+  process.stdout.write(t('cli.login.savedTo', { path: getConfigPath() }) + '\n');
 }
 
 async function cmdOrganizations(flags) {
   const creds = loadCredentials();
-  if (!creds.sessionKey) throw new Error('Missing session key');
+  if (!creds.sessionKey) throw new Error(t('cli.login.missingSession'));
   const orgs = await fetchOrganizations(creds.sessionKey);
   process.stdout.write(JSON.stringify(orgs, null, 2) + '\n');
 }
 
 async function cmdDoctor() {
   const lines = [];
-  const ok = (label, value) => lines.push(`  [ok]   ${label}${value ? ': ' + value : ''}`);
-  const warn = (label, value) => lines.push(`  [warn] ${label}${value ? ': ' + value : ''}`);
-  const fail = (label, value) => lines.push(`  [fail] ${label}${value ? ': ' + value : ''}`);
+  const ok = (label, value) => lines.push(`${t('cli.doctor.tagOk')}${label}${value ? ': ' + value : ''}`);
+  const warn = (label, value) => lines.push(`${t('cli.doctor.tagWarn')}${label}${value ? ': ' + value : ''}`);
+  const fail = (label, value) => lines.push(`${t('cli.doctor.tagFail')}${label}${value ? ': ' + value : ''}`);
 
-  lines.push(`claude-usage ${pkg.version} doctor`);
-  lines.push(`  node ${process.version}  platform ${process.platform}/${process.arch}`);
-  lines.push('Credentials');
+  lines.push(t('cli.doctor.banner', { version: pkg.version }));
+  lines.push(t('cli.doctor.platform', { node: process.version, platform: process.platform, arch: process.arch }));
+  lines.push(t('cli.doctor.credsHeader'));
   const fromEnv = !!(process.env.CLAUDE_SESSION_KEY && process.env.CLAUDE_ORGANIZATION_ID);
   const creds = loadCredentials();
-  if (fromEnv) ok('env vars set');
-  else if (creds.sessionKey && creds.organizationId) ok('config file', getConfigPath());
-  else fail('no credentials', 'run `claude-usage login --key K --org O`');
+  if (fromEnv) ok(t('cli.doctor.envVarsSet'));
+  else if (creds.sessionKey && creds.organizationId) ok(t('cli.doctor.configFile'), getConfigPath());
+  else fail(t('cli.doctor.noCreds'), t('cli.doctor.noCredsHint'));
 
-  lines.push('Widget store');
+  lines.push(t('cli.doctor.widgetStoreHeader'));
   const widgetPath = getWidgetStorePath();
   const widget = readWidgetHistory();
-  if (widget === null) warn('not present', widgetPath);
-  else ok(`history rows: ${widget.length}`, widgetPath);
+  if (widget === null) warn(t('cli.doctor.widgetNotPresent'), widgetPath);
+  else ok(t('cli.doctor.widgetHistoryRows', { n: widget.length }), widgetPath);
 
-  lines.push('API reachability');
+  lines.push(t('cli.doctor.apiHeader'));
   if (creds.sessionKey && creds.organizationId) {
     try {
       const t0 = Date.now();
       await fetchUsage(creds);
-      ok(`usage endpoint`, `${Date.now() - t0}ms`);
+      ok(t('cli.doctor.apiOk'), `${Date.now() - t0}ms`);
     } catch (err) {
-      fail('usage endpoint', `${err.code || 'ERR'} ${err.message}`);
+      fail(t('cli.doctor.apiOk'), `${err.code || 'ERR'} ${err.message}`);
     }
   } else {
-    warn('skipped', 'no credentials');
+    warn(t('cli.doctor.apiSkipped'), t('cli.doctor.skippedReason'));
   }
 
   process.stdout.write(lines.join('\n') + '\n');
@@ -222,7 +214,7 @@ async function cmdDoctor() {
 function cmdHistory(flags) {
   const history = readWidgetHistory();
   if (history === null) {
-    throw new Error(`No widget store found at ${getWidgetStorePath()}. Run the desktop widget at least once or set CLAUDE_USAGE_WIDGET_DIR.`);
+    throw new Error(t('cli.history.noStore', { path: getWidgetStorePath() }));
   }
   let rows = history;
   const sinceDays = flags.since != null && flags.since !== true ? Number(flags.since) : NaN;
@@ -237,11 +229,11 @@ function cmdHistory(flags) {
   } else if (format === 'json') {
     out = JSON.stringify(historyShared.toJSON(rows), null, flags.compact ? 0 : 2);
   } else {
-    throw new Error(`Unknown --format '${format}' (expected csv or json)`);
+    throw new Error(t('cli.history.unknownFormat', { fmt: format }));
   }
   if (flags.output && flags.output !== true) {
     fs.writeFileSync(flags.output, out);
-    process.stdout.write(`Wrote ${rows.length} rows to ${flags.output}\n`);
+    process.stdout.write(t('cli.history.wrote', { n: rows.length, path: flags.output }) + '\n');
   } else {
     process.stdout.write(out + '\n');
   }
@@ -256,6 +248,7 @@ function cmdVersion() {
 }
 
 async function main() {
+  setLanguage(getWidgetSettingsLanguage());
   const args = parseArgs(process.argv.slice(2));
   const cmd = args.command.toLowerCase();
   try {
@@ -277,13 +270,13 @@ async function main() {
       case '-h':
       case '--help':
       default:
-        process.stdout.write(HELP);
+        process.stdout.write(buildHelp());
         if (cmd !== 'help' && cmd !== '-h' && cmd !== '--help') process.exit(1);
     }
   } catch (err) {
-    process.stderr.write(`error: ${err.message}\n`);
+    process.stderr.write(t('cli.error.prefix', { message: err.message }) + '\n');
     if (err.code === 'CLOUDFLARE') {
-      process.stderr.write('Cloudflare blocked the request. The desktop widget bypasses this with a hidden browser window; the CLI cannot.\n');
+      process.stderr.write(t('cli.error.cloudflare') + '\n');
     }
     process.exit(1);
   }
