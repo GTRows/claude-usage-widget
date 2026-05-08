@@ -148,10 +148,98 @@ const elements = {
     closeCompactSettingsBtn: document.getElementById('closeCompactSettingsBtn')
 };
 
+// Render a translated string into an element. If the value contains a
+// whitelisted inline tag (em / strong / code / br), parse it via the DOM API
+// (no innerHTML, no script execution) and append the resulting nodes; otherwise
+// fall back to plain textContent. This is the only seam allowed to render
+// non-text content; everything else uses textContent.
+const I18N_INLINE_TAGS = new Set(['EM', 'STRONG', 'CODE', 'BR']);
+function renderTranslatedHtml(el, value) {
+    if (!/<(em|strong|code|br)\b/i.test(value)) {
+        el.textContent = value;
+        return;
+    }
+    // Parse via DOMParser so the browser handles entities, but only keep nodes
+    // whose tag is in the whitelist; everything else collapses to its text.
+    const doc = new DOMParser().parseFromString(`<div>${value}</div>`, 'text/html');
+    const wrapper = doc.body && doc.body.firstChild;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    if (!wrapper) {
+        el.textContent = value;
+        return;
+    }
+    const append = (src, dst) => {
+        for (const node of Array.from(src.childNodes)) {
+            if (node.nodeType === 3) {
+                dst.appendChild(document.createTextNode(node.nodeValue || ''));
+            } else if (node.nodeType === 1 && I18N_INLINE_TAGS.has(node.tagName)) {
+                const clone = document.createElement(node.tagName);
+                append(node, clone);
+                dst.appendChild(clone);
+            } else if (node.nodeType === 1) {
+                dst.appendChild(document.createTextNode(node.textContent || ''));
+            }
+        }
+    };
+    append(wrapper, el);
+}
+
+// Walk the DOM and apply translations to every element with [data-i18n] or
+// [data-i18n-attr]. Called on first paint and on every language-changed event.
+// Preserves event listeners and form state because it only writes textContent
+// and attribute values; it does not rebuild any node.
+function applyTranslations(root = document) {
+    if (!window.i18n) return;
+
+    root.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (!key) return;
+        renderTranslatedHtml(el, window.i18n.t(key));
+    });
+
+    root.querySelectorAll('[data-i18n-attr]').forEach(el => {
+        const spec = el.getAttribute('data-i18n-attr');
+        if (!spec) return;
+        spec.split(',').forEach(pair => {
+            const [attr, key] = pair.split(':').map(s => s.trim());
+            if (!attr || !key) return;
+            el.setAttribute(attr, window.i18n.t(key));
+        });
+    });
+}
+
 // Initialize
 async function init() {
     setupEventListeners();
     startContentObserver();
+
+    // Hydrate language BEFORE first paint so the first applyTranslations()
+    // pass renders the persisted locale rather than the default.
+    if (window.electronAPI && window.electronAPI.getLanguage && window.i18n) {
+        try {
+            const lang = await window.electronAPI.getLanguage();
+            if (lang) window.i18n.setLanguage(lang);
+        } catch {}
+    }
+    applyTranslations();
+
+    if (window.electronAPI && window.electronAPI.onLanguageChanged) {
+        window.electronAPI.onLanguageChanged((lang) => {
+            if (window.i18n) window.i18n.setLanguage(lang);
+            applyTranslations();
+            // Re-render dynamic surfaces — chart labels, tray frames, version label.
+            try {
+                if (latestUsageData) updateUsageData(latestUsageData);
+            } catch {}
+            try {
+                if (typeof loadHistoryTable === 'function' && historyVisible) loadHistoryTable();
+            } catch {}
+            try {
+                if (usageChart && typeof loadChart === 'function' && graphVisible) loadChart();
+            } catch {}
+        });
+    }
+
     credentials = await window.electronAPI.getCredentials();
 
     // Apply saved theme and load thresholds immediately
@@ -213,7 +301,7 @@ async function init() {
     // Populate version label then check for updates after a short delay
     const version = await window.electronAPI.getAppVersion();
     if (elements.settingsVersionLabel) {
-        elements.settingsVersionLabel.textContent = `Application Version: v${version}`;
+        elements.settingsVersionLabel.textContent = window.i18n.t('app.versionLabel', { version });
     }
     setTimeout(checkForUpdate, 2000);
     // Also check once every 24 hours for users who never close the app
@@ -425,7 +513,7 @@ function setupEventListeners() {
 
     if (elements.clearHistoryBtn && window.electronAPI.clearHistory) {
         elements.clearHistoryBtn.addEventListener('click', async () => {
-            if (!confirm('Delete all stored usage history? This cannot be undone.')) return;
+            if (!confirm(window.i18n.t('history.confirmClear'))) return;
             await window.electronAPI.clearHistory();
             await refreshStorageUsage();
             if (historyVisible) loadHistoryTable();
@@ -452,7 +540,7 @@ function setupEventListeners() {
                     : null;
                 const result = await window.electronAPI.exportHistory(format, range);
                 if (result && !result.canceled && result.filePath) {
-                    btn.textContent = `Saved`;
+                    btn.textContent = window.i18n.t('settings.savedBadge');
                     setTimeout(() => { btn.textContent = format.toUpperCase(); }, 1500);
                 }
             } catch (err) {
@@ -588,22 +676,22 @@ function setupEventListeners() {
 
         elements.checkUpdatesBtn.disabled = true;
         const previousLabel = elements.checkUpdatesBtn.textContent;
-        elements.checkUpdatesBtn.textContent = 'Checking…';
+        elements.checkUpdatesBtn.textContent = window.i18n.t('update.checking');
         elements.checkUpdatesStatus.classList.remove('update-check-status--ok', 'update-check-status--available', 'update-check-status--error');
-        elements.checkUpdatesStatus.textContent = 'Checking GitHub releases…';
+        elements.checkUpdatesStatus.textContent = window.i18n.t('update.checkingStatus');
 
         try {
             const result = await checkForUpdate();
             const checkedAt = Date.now();
 
             if (!result.ok) {
-                elements.checkUpdatesStatus.textContent = 'Check failed — try again.';
+                elements.checkUpdatesStatus.textContent = window.i18n.t('update.failed');
                 elements.checkUpdatesStatus.classList.add('update-check-status--error');
             } else if (result.hasUpdate && result.version) {
-                elements.checkUpdatesStatus.textContent = `Version ${result.version} available — click the banner to download.`;
+                elements.checkUpdatesStatus.textContent = window.i18n.t('update.available', { version: result.version });
                 elements.checkUpdatesStatus.classList.add('update-check-status--available');
             } else {
-                elements.checkUpdatesStatus.textContent = 'Up to date.';
+                elements.checkUpdatesStatus.textContent = window.i18n.t('update.upToDate');
                 elements.checkUpdatesStatus.classList.add('update-check-status--ok');
             }
 
@@ -724,7 +812,7 @@ function setupKeyboardShortcuts() {
 async function handleConnect() {
     const sessionKey = elements.sessionKeyInput.value.trim();
     if (!sessionKey) {
-        elements.sessionKeyError.textContent = 'Please paste your session key';
+        elements.sessionKeyError.textContent = window.i18n.t('login.errorEmpty');
         return;
     }
 
@@ -745,17 +833,17 @@ async function handleConnect() {
             elements.sessionKeyError.textContent = result.error || 'Invalid session key';
         }
     } catch (error) {
-        elements.sessionKeyError.textContent = 'Connection failed. Check your key.';
+        elements.sessionKeyError.textContent = window.i18n.t('login.errorFailed');
     } finally {
         elements.connectBtn.disabled = false;
-        elements.connectBtn.textContent = 'Connect';
+        elements.connectBtn.textContent = window.i18n.t('login.connectBtn');
     }
 }
 
 // Handle auto-detect from browser cookies
 async function handleAutoDetect() {
     elements.autoDetectBtn.disabled = true;
-    elements.autoDetectBtn.textContent = 'Waiting...';
+    elements.autoDetectBtn.textContent = window.i18n.t('login.waiting');
     elements.autoDetectError.textContent = '';
 
     try {
@@ -766,7 +854,7 @@ async function handleAutoDetect() {
         }
 
         // Got sessionKey from login, now validate it
-        elements.autoDetectBtn.textContent = 'Validating...';
+        elements.autoDetectBtn.textContent = window.i18n.t('login.validating');
         const validation = await window.electronAPI.validateSessionKey(result.sessionKey);
 
         if (validation.success) {
@@ -786,7 +874,7 @@ async function handleAutoDetect() {
         elements.autoDetectError.textContent = error.message || 'Login failed';
     } finally {
         elements.autoDetectBtn.disabled = false;
-        elements.autoDetectBtn.textContent = 'Log in';
+        elements.autoDetectBtn.textContent = window.i18n.t('login.autoBtn');
     }
 }
 
@@ -838,11 +926,11 @@ function formatCurrency(amountCents, currencyCode) {
 
 // Extra row label mapping for API fields
 const EXTRA_ROW_CONFIG = {
-    seven_day_sonnet: { label: 'Sonnet (7d)', color: 'weekly' },
-    seven_day_opus: { label: 'Opus (7d)', color: 'opus' },
-    seven_day_cowork: { label: 'Cowork (7d)', color: 'weekly' },
-    seven_day_oauth_apps: { label: 'OAuth Apps (7d)', color: 'weekly' },
-    extra_usage: { label: 'Extra Usage', color: 'extra' },
+    seven_day_sonnet: { labelKey: 'metric.sevenDaySonnet', color: 'weekly' },
+    seven_day_opus: { labelKey: 'metric.sevenDayOpus', color: 'opus' },
+    seven_day_cowork: { labelKey: 'metric.sevenDayCowork', color: 'weekly' },
+    seven_day_oauth_apps: { labelKey: 'metric.sevenDayOauthApps', color: 'weekly' },
+    extra_usage: { labelKey: 'metric.extraUsage', color: 'extra' },
 };
 
 function buildExtraRows(data) {
@@ -880,9 +968,9 @@ function buildExtraRows(data) {
                 statusTag.textContent = 'OFF';
                 label.appendChild(statusTag);
             }
-            label.appendChild(document.createTextNode(' Extra Usage'));
+            label.appendChild(document.createTextNode(' ' + window.i18n.t('metric.extraUsage')));
         } else {
-            label.textContent = config.label;
+            label.textContent = window.i18n.t(config.labelKey);
         }
         row.appendChild(label);
 
@@ -923,7 +1011,7 @@ function buildExtraRows(data) {
 
             const timerText = document.createElement('span');
             timerText.className = 'timer-text extra-balance-label';
-            timerText.textContent = 'Account Credits:';
+            timerText.textContent = window.i18n.t('metric.accountCredits');
             row.appendChild(timerText);
 
             const resetsText = document.createElement('span');
@@ -1118,15 +1206,15 @@ function checkUsageAlerts(data) {
         alertFired.session_danger = true;
         alertFired.session_warn = true; // suppress warn if we jumped straight to danger
         window.electronAPI.showNotification(
-            'Claude Widget (GTRows)',
-            `Current Session usage is at ${Math.round(sessionPct)}% — running low`
+            window.i18n.t('app.productName'),
+            window.i18n.t('notify.sessionDanger', { pct: Math.round(sessionPct) })
         );
     // Current Session — warn threshold
     } else if (sessionPct >= warnThreshold && !alertFired.session_warn) {
         alertFired.session_warn = true;
         window.electronAPI.showNotification(
-            'Claude Widget (GTRows)',
-            `Current Session usage has reached ${Math.round(sessionPct)}%`
+            window.i18n.t('app.productName'),
+            window.i18n.t('notify.sessionWarn', { pct: Math.round(sessionPct) })
         );
     }
 
@@ -1135,15 +1223,15 @@ function checkUsageAlerts(data) {
         alertFired.weekly_danger = true;
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
-            'Claude Widget (GTRows)',
-            `Weekly Limit usage is at ${Math.round(weeklyPct)}% — running low`
+            window.i18n.t('app.productName'),
+            window.i18n.t('notify.weeklyDanger', { pct: Math.round(weeklyPct) })
         );
     // Weekly Limit — warn threshold
     } else if (weeklyPct >= warnThreshold && !alertFired.weekly_warn) {
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
-            'Claude Widget (GTRows)',
-            `Weekly Limit usage has reached ${Math.round(weeklyPct)}%`
+            window.i18n.t('app.productName'),
+            window.i18n.t('notify.weeklyWarn', { pct: Math.round(weeklyPct) })
         );
     }
 }
@@ -1736,7 +1824,7 @@ function updateTrayIcon(data) {
 
         if (animateMascot) {
             const restFrame = typeof session === 'number'
-                ? buildTrayFrame('Session', session)
+                ? buildTrayFrame(window.i18n.t('metric.session'), session)
                 : null;
             const mascotFrames = buildMascotAnimation(status, restFrame);
             const label = rounded != null ? `Claude Usage — ${rounded}%` : 'Claude Usage';
@@ -1746,7 +1834,7 @@ function updateTrayIcon(data) {
         } else if (status === 'dead' || status === 'zero') {
             frames.push(...buildMascotAnimation(status));
         } else if (typeof session === 'number') {
-            frames.push(buildTrayFrame('Session', session));
+            frames.push(buildTrayFrame(window.i18n.t('metric.session'), session));
         }
 
         if (window.electronAPI.setTrayFrames) {
@@ -1809,7 +1897,7 @@ function formatResetsAt(resetsAt, isWeekly, timeFormat, weeklyDateFormat) {
 // Update circular timer
 function updateTimer(timerElement, textElement, resetsAt, totalMinutes) {
     if (!resetsAt) {
-        textElement.textContent = 'Not started';
+        textElement.textContent = window.i18n.t('metric.notStarted');
         textElement.style.opacity = '0.4';
         textElement.style.fontSize = '10px';
         textElement.title = 'Starts when a message is sent';
@@ -1827,7 +1915,7 @@ function updateTimer(timerElement, textElement, resetsAt, totalMinutes) {
     const diff = resetDate - now;
 
     if (diff <= 0) {
-        textElement.textContent = 'Resetting...';
+        textElement.textContent = window.i18n.t('metric.resetting');
         timerElement.style.strokeDashoffset = 0;
         return;
     }
@@ -1987,10 +2075,11 @@ function renderHistoryPage() {
     if (historyPage < 1) historyPage = 1;
 
     if (elements.historyCount) {
-        elements.historyCount.textContent = `${total} sample${total === 1 ? '' : 's'}`;
+        const sampleKey = total === 1 ? 'history.samplesOne' : 'history.samplesOther';
+        elements.historyCount.textContent = window.i18n.t(sampleKey, { n: total });
     }
     if (elements.historyPageIndicator) {
-        elements.historyPageIndicator.textContent = `Page ${historyPage} of ${totalPages}`;
+        elements.historyPageIndicator.textContent = window.i18n.t('history.pageOfLong', { page: historyPage, total: totalPages });
     }
     if (elements.historyPageJump) {
         elements.historyPageJump.max = totalPages;
@@ -2152,7 +2241,7 @@ function renderChart(history) {
 
     const datasets = [
         {
-            label: 'Session',
+            label: window.i18n.t('metric.session'),
             data: history.map((entry) => entry.session),
             borderColor: sessionColor,
             backgroundColor: 'transparent',
@@ -2163,7 +2252,7 @@ function renderChart(history) {
             pointHitRadius: 10
         },
         {
-            label: 'Weekly',
+            label: window.i18n.t('metric.weekly'),
             data: history.map((entry) => entry.weekly),
             borderColor: weeklyColor,
             backgroundColor: 'transparent',
@@ -2179,7 +2268,7 @@ function renderChart(history) {
         const sonnetData = history.map((entry) => entry.sonnet || 0);
         if (sonnetData.some((value) => value > 0)) {
             datasets.push({
-            label: 'Sonnet',
+            label: window.i18n.t('metric.sonnet'),
             data: sonnetData,
             borderColor: sonnetColor,
             backgroundColor: 'transparent',
@@ -2196,7 +2285,7 @@ function renderChart(history) {
         const extraUsageData = history.map((entry) => entry.extraUsage || 0);
         if (extraUsageData.some((value) => value > 0)) {
             datasets.push({
-            label: 'Extra Usage',
+            label: window.i18n.t('metric.extraUsage'),
             data: extraUsageData,
             borderColor: extraColor,
             backgroundColor: 'transparent',
@@ -2437,7 +2526,8 @@ async function refreshStorageUsage() {
         };
         const total = (info.storeBytes || 0);
         const samples = info.historyCount || 0;
-        elements.storageUsageHint.textContent = `${fmt(total)} on disk — ${samples.toLocaleString()} history ${samples === 1 ? 'sample' : 'samples'}`;
+        const summaryKey = samples === 1 ? 'settings.storage.summaryOne' : 'settings.storage.summaryOther';
+        elements.storageUsageHint.textContent = window.i18n.t(summaryKey, { size: fmt(total), n: samples.toLocaleString() });
     } catch {}
 }
 
@@ -2531,7 +2621,7 @@ function renderLastUpdateCheckTimestamp(ms) {
         ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
         : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
     const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    elements.checkUpdatesTimestamp.textContent = `Last checked: ${date} ${time}`;
+    elements.checkUpdatesTimestamp.textContent = window.i18n.t('update.lastChecked', { date, time });
 }
 
 // Update check
@@ -2546,11 +2636,11 @@ async function checkForUpdate() {
         const version = (result && result.version) || null;
 
         if (ok && hasUpdate && version) {
-            elements.updateBannerText.textContent = `▲  Version ${version} available — click to download`;
+            elements.updateBannerText.textContent = window.i18n.t('update.bannerVersion', { version });
             elements.updateBanner.style.display = 'flex';
             resizeWidget(true);
             if (elements.settingsUpdateLink) {
-                elements.settingsUpdateLink.textContent = `→ v${version} available`;
+                elements.settingsUpdateLink.textContent = window.i18n.t('update.shortlink', { version });
                 elements.settingsUpdateLink.style.display = 'inline';
             }
             debugLog(`Update available: v${version}`);
