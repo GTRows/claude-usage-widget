@@ -124,6 +124,7 @@ const elements = {
     trayMascotGapRow: document.getElementById('trayMascotGapRow'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
+    languageSelect: document.getElementById('languageSelect'),
     refreshInterval: document.getElementById('refreshInterval'),
 
     updateBanner: document.getElementById('updateBanner'),
@@ -614,6 +615,15 @@ function setupEventListeners() {
         });
         elements.settingsOverlay.addEventListener('input', (e) => {
             if (e.target.matches('input[type="number"], input[type="text"]')) scheduleLiveSave();
+        });
+    }
+
+    if (elements.languageSelect) {
+        elements.languageSelect.addEventListener('change', () => {
+            const value = elements.languageSelect.value || 'tr';
+            if (window.electronAPI && window.electronAPI.setLanguage) {
+                window.electronAPI.setLanguage(value);
+            }
         });
     }
 
@@ -2472,6 +2482,7 @@ async function loadSettings() {
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
     elements.weeklyDateFormat.value = settings.weeklyDateFormat || 'date';
+    if (elements.languageSelect) elements.languageSelect.value = settings.language || 'tr';
     if (elements.refreshInterval) {
         const raw = parseInt(settings.refreshInterval);
         elements.refreshInterval.value = Number.isFinite(raw) && raw >= 15 ? String(raw) : '300';
@@ -2555,6 +2566,7 @@ async function saveSettings() {
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
         weeklyDateFormat: elements.weeklyDateFormat.value || 'date',
+        language: elements.languageSelect ? elements.languageSelect.value : 'tr',
         refreshInterval: elements.refreshInterval ? String(Math.max(15, parseInt(elements.refreshInterval.value) || 300)) : '300',
         usageAlerts: elements.usageAlertsToggle.checked,
         compactMode: isCompactMode,
