@@ -64,11 +64,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
 
-  // Anthropic API key (auto-fire channel)
-  saveApiKey: (apiKey) => ipcRenderer.invoke('save-api-key', apiKey),
-  clearApiKey: () => ipcRenderer.invoke('clear-api-key'),
-  hasApiKey: () => ipcRenderer.invoke('has-api-key'),
-
   // Updates
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
