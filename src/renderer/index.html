@@ -366,38 +366,6 @@
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </div>
-                                <div class="settings-item" data-i18n-row="autoFire">
-                                    <div class="settings-item-text">
-                                        <span class="settings-item-label" data-i18n="settings.autoFire.label">Auto-renew 5-hour window</span>
-                                        <span class="settings-item-hint" data-i18n="settings.autoFire.hint">When the active window resets, send a tiny request so the next window starts immediately.</span>
-                                    </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="autoFireToggle">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                <div class="settings-item" data-i18n-row="autoFireChannel">
-                                    <div class="settings-item-text">
-                                        <span class="settings-item-label" data-i18n="settings.autoFire.channelLabel">Auto-renew channel</span>
-                                        <span class="settings-item-hint" data-i18n="settings.autoFire.channelHint">Pick how the renewal request is sent.</span>
-                                    </div>
-                                    <select id="autoFireChannelSelect" class="settings-select">
-                                        <option value="webSession" data-i18n="settings.autoFire.channel.webSession">Web session (claude.ai login)</option>
-                                        <option value="apiKey" data-i18n="settings.autoFire.channel.apiKey">Anthropic API key</option>
-                                    </select>
-                                </div>
-                                <div class="settings-item settings-item-stack" data-i18n-row="autoFireApiKey" id="autoFireApiKeyRow">
-                                    <div class="settings-item-text">
-                                        <span class="settings-item-label" data-i18n="settings.autoFire.apiKeyLabel">Anthropic API key</span>
-                                        <span class="settings-item-hint" data-i18n="settings.autoFire.apiKeyHint">Used only when "Anthropic API key" is selected. Stored encrypted in your OS keychain when available.</span>
-                                    </div>
-                                    <div class="auto-fire-api-key-row">
-                                        <input type="password" id="autoFireApiKeyInput" class="threshold-input auto-fire-api-key-input" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.autoFire.apiKeyPlaceholder" placeholder="sk-ant-..." />
-                                        <button type="button" class="storage-path-btn" id="autoFireApiKeySaveBtn" data-i18n="settings.autoFire.apiKeySaveBtn">Save key</button>
-                                        <button type="button" class="storage-path-btn" id="autoFireApiKeyClearBtn" data-i18n="settings.autoFire.apiKeyClearBtn">Clear</button>
-                                        <span class="settings-item-hint auto-fire-api-key-status" id="autoFireApiKeyStatus" data-i18n="settings.autoFire.apiKeyMissing">No key stored.</span>
-                                    </div>
-                                </div>
                                 <div class="settings-item">
                                     <div class="settings-item-text">
                                         <span class="settings-item-label">Usage alerts</span>

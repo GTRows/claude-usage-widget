@@ -1,74 +1,3 @@
-// Temporary inline strings until the i18n library decision is taken (see CONCERNS.md).
-// Replace by the project `t(key)` helper when it lands.
-const _AUTO_FIRE_STRINGS = {
-  en: {
-    'settings.autoFire.label': 'Auto-renew 5-hour window',
-    'settings.autoFire.hint': 'When the active window resets, send a tiny request so the next window starts immediately.',
-    'settings.autoFire.channelLabel': 'Auto-renew channel',
-    'settings.autoFire.channelHint': 'Pick how the renewal request is sent.',
-    'settings.autoFire.channel.webSession': 'Web session (claude.ai login)',
-    'settings.autoFire.channel.apiKey': 'Anthropic API key',
-    'settings.autoFire.apiKeyLabel': 'Anthropic API key',
-    'settings.autoFire.apiKeyHint': 'Used only when "Anthropic API key" is selected. Stored encrypted in your OS keychain when available.',
-    'settings.autoFire.apiKeyPlaceholder': 'sk-ant-...',
-    'settings.autoFire.apiKeySaved': 'Key saved.',
-    'settings.autoFire.apiKeyCleared': 'Key cleared.',
-    'settings.autoFire.apiKeyMissing': 'No key stored.',
-    'settings.autoFire.apiKeySaveBtn': 'Save key',
-    'settings.autoFire.apiKeyClearBtn': 'Clear'
-  },
-  tr: {
-    'settings.autoFire.label': '5 saatlik pencereyi otomatik yenile',
-    'settings.autoFire.hint': 'Aktif pencere sıfırlandığında küçük bir istek göndererek bir sonraki pencerenin hemen başlamasını sağlar.',
-    'settings.autoFire.channelLabel': 'Otomatik yenileme kanalı',
-    'settings.autoFire.channelHint': 'Yenileme isteğinin nasıl gönderileceğini seçin.',
-    'settings.autoFire.channel.webSession': 'Web oturumu (claude.ai girişi)',
-    'settings.autoFire.channel.apiKey': 'Anthropic API anahtarı',
-    'settings.autoFire.apiKeyLabel': 'Anthropic API anahtarı',
-    'settings.autoFire.apiKeyHint': 'Yalnızca "Anthropic API anahtarı" seçildiğinde kullanılır. Mümkün olduğunda işletim sisteminin anahtarlığında şifrelenerek saklanır.',
-    'settings.autoFire.apiKeyPlaceholder': 'sk-ant-...',
-    'settings.autoFire.apiKeySaved': 'Anahtar kaydedildi.',
-    'settings.autoFire.apiKeyCleared': 'Anahtar silindi.',
-    'settings.autoFire.apiKeyMissing': 'Kayıtlı anahtar yok.',
-    'settings.autoFire.apiKeySaveBtn': 'Anahtarı kaydet',
-    'settings.autoFire.apiKeyClearBtn': 'Sil'
-  }
-};
-function _autoFireT(key) {
-  const lang = (navigator.language || 'en').toLowerCase().startsWith('tr') ? 'tr' : 'en';
-  return _AUTO_FIRE_STRINGS[lang][key] || _AUTO_FIRE_STRINGS.en[key] || key;
-}
-function _applyAutoFireStrings() {
-  const keys = [
-    'settings.autoFire.label',
-    'settings.autoFire.hint',
-    'settings.autoFire.channelLabel',
-    'settings.autoFire.channelHint',
-    'settings.autoFire.channel.webSession',
-    'settings.autoFire.channel.apiKey',
-    'settings.autoFire.apiKeyLabel',
-    'settings.autoFire.apiKeyHint',
-    'settings.autoFire.apiKeySaveBtn',
-    'settings.autoFire.apiKeyClearBtn'
-  ];
-  for (const key of keys) {
-    const nodes = document.querySelectorAll(`[data-i18n="${key}"]`);
-    nodes.forEach((el) => { el.textContent = _autoFireT(key); });
-  }
-  const placeholderNodes = document.querySelectorAll('[data-i18n-placeholder]');
-  placeholderNodes.forEach((el) => {
-    const k = el.getAttribute('data-i18n-placeholder');
-    if (k && _AUTO_FIRE_STRINGS.en[k]) {
-      el.placeholder = _autoFireT(k);
-    }
-  });
-}
-function _applyAutoFireRowVisibility(channel) {
-  const row = document.getElementById('autoFireApiKeyRow');
-  if (!row) return;
-  row.style.display = channel === 'apiKey' ? '' : 'none';
-}
-
 // Application state
 let credentials = null;
 let updateInterval = null;
@@ -183,13 +112,6 @@ const elements = {
     logoutBtn: document.getElementById('logoutBtn'),
     autoStartToggle: document.getElementById('autoStartToggle'),
     alwaysOnTopToggle: document.getElementById('alwaysOnTopToggle'),
-    autoFireToggle: document.getElementById('autoFireToggle'),
-    autoFireChannelSelect: document.getElementById('autoFireChannelSelect'),
-    autoFireApiKeyRow: document.getElementById('autoFireApiKeyRow'),
-    autoFireApiKeyInput: document.getElementById('autoFireApiKeyInput'),
-    autoFireApiKeySaveBtn: document.getElementById('autoFireApiKeySaveBtn'),
-    autoFireApiKeyClearBtn: document.getElementById('autoFireApiKeyClearBtn'),
-    autoFireApiKeyStatus: document.getElementById('autoFireApiKeyStatus'),
     warnThreshold: document.getElementById('warnThreshold'),
     dangerThreshold: document.getElementById('dangerThreshold'),
     themeBtns: document.querySelectorAll('.theme-btn'),
@@ -225,7 +147,6 @@ const elements = {
 
 // Initialize
 async function init() {
-    _applyAutoFireStrings();
     setupEventListeners();
     startContentObserver();
     credentials = await window.electronAPI.getCredentials();
@@ -508,43 +429,6 @@ function setupEventListeners() {
         elements.autoPruneToggle.addEventListener('change', () => {
             if (elements.autoPruneDaysRow) {
                 elements.autoPruneDaysRow.style.display = elements.autoPruneToggle.checked ? 'flex' : 'none';
-            }
-        });
-    }
-
-    if (elements.autoFireChannelSelect) {
-        elements.autoFireChannelSelect.addEventListener('change', async () => {
-            const next = elements.autoFireChannelSelect.value === 'apiKey' ? 'apiKey' : 'webSession';
-            _applyAutoFireRowVisibility(next);
-            await window.electronAPI.saveSettings({ autoFireChannel: next });
-            if (window._cachedSettings && typeof window._cachedSettings === 'object') {
-                window._cachedSettings.autoFireChannel = next;
-            }
-            if (next === 'apiKey' && elements.autoFireApiKeyStatus && window.electronAPI.hasApiKey) {
-                const stored = await window.electronAPI.hasApiKey();
-                elements.autoFireApiKeyStatus.textContent = _autoFireT(
-                    stored ? 'settings.autoFire.apiKeySaved' : 'settings.autoFire.apiKeyMissing'
-                );
-            }
-        });
-    }
-    if (elements.autoFireApiKeySaveBtn) {
-        elements.autoFireApiKeySaveBtn.addEventListener('click', async () => {
-            const value = (elements.autoFireApiKeyInput && elements.autoFireApiKeyInput.value) || '';
-            if (!value) return;
-            await window.electronAPI.saveApiKey(value);
-            if (elements.autoFireApiKeyInput) elements.autoFireApiKeyInput.value = '';
-            if (elements.autoFireApiKeyStatus) {
-                elements.autoFireApiKeyStatus.textContent = _autoFireT('settings.autoFire.apiKeySaved');
-            }
-        });
-    }
-    if (elements.autoFireApiKeyClearBtn) {
-        elements.autoFireApiKeyClearBtn.addEventListener('click', async () => {
-            await window.electronAPI.clearApiKey();
-            if (elements.autoFireApiKeyInput) elements.autoFireApiKeyInput.value = '';
-            if (elements.autoFireApiKeyStatus) {
-                elements.autoFireApiKeyStatus.textContent = _autoFireT('settings.autoFire.apiKeyCleared');
             }
         });
     }
@@ -2452,18 +2336,6 @@ async function loadSettings() {
 
     elements.autoStartToggle.checked = settings.autoStart;
     elements.alwaysOnTopToggle.checked = settings.alwaysOnTop;
-    if (elements.autoFireToggle) elements.autoFireToggle.checked = !!settings.autoFireEnabled;
-    if (elements.autoFireChannelSelect) {
-        const channel = settings.autoFireChannel === 'apiKey' ? 'apiKey' : 'webSession';
-        elements.autoFireChannelSelect.value = channel;
-        _applyAutoFireRowVisibility(channel);
-    }
-    if (elements.autoFireApiKeyStatus && window.electronAPI.hasApiKey) {
-        const stored = await window.electronAPI.hasApiKey();
-        elements.autoFireApiKeyStatus.textContent = _autoFireT(
-            stored ? 'settings.autoFire.apiKeySaved' : 'settings.autoFire.apiKeyMissing'
-        );
-    }
     elements.warnThreshold.value = settings.warnThreshold;
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
@@ -2563,9 +2435,7 @@ async function saveSettings() {
         autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,
         hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false,
-        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false,
-        autoFireEnabled: elements.autoFireToggle ? !!elements.autoFireToggle.checked : false,
-        autoFireChannel: elements.autoFireChannelSelect && elements.autoFireChannelSelect.value === 'apiKey' ? 'apiKey' : 'webSession'
+        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false
     };
     if (elements.autoPruneDaysRow) {
         elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';
