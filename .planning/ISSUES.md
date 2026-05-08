@@ -6,27 +6,17 @@ unblocks it, owner.
 
 ## Open
 
-### Replace placeholder auto-fire endpoint and payload
-
-- **What:** `src/main/auto-fire/web-channel.js` posts a placeholder
-  `{ name: '', uuid: null }` body to
-  `https://claude.ai/api/organizations/{orgId}/chat_conversations`. This is
-  almost certainly not a billable interaction, so flipping
-  `autoFireEnabled = true` will not actually start the next 5-hour window.
-  This means v1.14.0-gtrows.1 ships an auto-fire feature that is a no-op
-  in practice.
-- **Why deferred:** The exact Claude.ai endpoint and JSON shape that count
-  as a billable interaction (and therefore start the next 5-hour bucket)
-  are listed as a research item in `.planning/ROADMAP.md` Phase 1. The
-  dispatcher, single-flight, debounce, and channel scaffolding can be
-  built and tested without that knowledge; locking in the wrong payload
-  now would force a rewrite later.
-- **Trigger:** v1.15 Phase 4 absorbs this. Research the billable endpoint,
-  update `web-channel.js`, add an integration-shaped test, manual UAT
-  against a real 5-hour expiry.
-- **Owner:** Phase 4 (v1.15).
+(none)
 
 ## Closed
+
+### Replace placeholder auto-fire endpoint and payload — OBVIATED 2026-05-08
+
+- Resolved by decision to hard-remove the auto-fire feature instead of
+  researching the billable claude.ai endpoint. v1.15 Phase 4 deletes
+  every auto-fire surface (modules, tests, IPC, schema, UI, i18n
+  strings); the placeholder payload becomes a non-issue because the
+  code that uses it ceases to exist.
 
 ### Add v1.x CHANGELOG entry for auto-fire MVP — RESOLVED 2026-05-07
 
