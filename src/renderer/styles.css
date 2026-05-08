@@ -2054,6 +2054,31 @@ body.theme-light .settings-item:hover { background: rgba(179, 100, 18, 0.04); }
     padding-right: 8px;
 }
 
+.update-check-status {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+}
+
+.update-check-status--ok {
+    color: var(--ink-soft);
+}
+
+.update-check-status--available {
+    color: var(--accent);
+}
+
+.update-check-status--error {
+    color: var(--coral);
+}
+
+.update-check-timestamp {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+}
+
 /* Keyboard shortcuts (settings section 06) */
 .shortcuts-list .settings-item { min-height: 40px; padding-top: 9px; padding-bottom: 9px; }
 .shortcut-keys {
