@@ -38,9 +38,18 @@ function readWidgetHistory(productName) {
   return history;
 }
 
+function getWidgetSettingsLanguage(productName) {
+  const data = readWidgetStore(productName);
+  if (data && data.settings && typeof data.settings.language === 'string') {
+    return data.settings.language;
+  }
+  return 'tr';
+}
+
 module.exports = {
   getWidgetUserDataDir,
   getWidgetStorePath,
   readWidgetStore,
   readWidgetHistory,
+  getWidgetSettingsLanguage,
 };
