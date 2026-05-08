@@ -6,7 +6,7 @@ const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
-const { setLanguage } = require('./src/shared/i18n');
+const { t, setLanguage } = require('./src/shared/i18n');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -167,63 +167,67 @@ function createMainWindow() {
   }
 }
 
+function buildTrayMenuTemplate() {
+  return [
+    {
+      label: t('tray.showWidget'),
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createMainWindow();
+        }
+      }
+    },
+    {
+      label: t('tray.refresh'),
+      click: () => {
+        if (mainWindow) {
+          mainWindow.webContents.send('refresh-usage');
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: t('tray.logOut'),
+      click: async () => {
+        store.delete('sessionKey');
+        store.delete('organizationId');
+        // Clear all Claude.ai cookies and session storage
+        const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
+        for (const cookie of cookies) {
+          await session.defaultSession.cookies.remove('https://claude.ai', cookie.name);
+        }
+        await session.defaultSession.clearStorageData({
+          storages: ['localstorage', 'sessionstorage', 'cachestorage'],
+          origin: 'https://claude.ai'
+        });
+        if (mainWindow) {
+          mainWindow.webContents.send('session-expired');
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: t('tray.exit'),
+      click: () => {
+        app.quit();
+      }
+    }
+  ];
+}
+
 function createTray() {
   try {
     const trayIconPath = path.join(__dirname, process.platform === 'darwin' ? 'assets/tray-icon-mac.png' : process.platform === 'linux' ? 'assets/tray-icon-linux.png' : 'assets/tray-icon.png');
     defaultTrayImage = nativeImage.createFromPath(trayIconPath);
     tray = new Tray(defaultTrayImage);
 
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Show Widget',
-        click: () => {
-          if (mainWindow) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.show();
-            mainWindow.focus();
-          } else {
-            createMainWindow();
-          }
-        }
-      },
-      {
-        label: 'Refresh',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.webContents.send('refresh-usage');
-          }
-        }
-      },
-      { type: 'separator' },
-      {
-        label: 'Log Out',
-        click: async () => {
-          store.delete('sessionKey');
-          store.delete('organizationId');
-          // Clear all Claude.ai cookies and session storage
-          const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
-          for (const cookie of cookies) {
-            await session.defaultSession.cookies.remove('https://claude.ai', cookie.name);
-          }
-          await session.defaultSession.clearStorageData({
-            storages: ['localstorage', 'sessionstorage', 'cachestorage'],
-            origin: 'https://claude.ai'
-          });
-          if (mainWindow) {
-            mainWindow.webContents.send('session-expired');
-          }
-        }
-      },
-      { type: 'separator' },
-      {
-        label: 'Exit',
-        click: () => {
-          app.quit();
-        }
-      }
-    ]);
+    const contextMenu = Menu.buildFromTemplate(buildTrayMenuTemplate());
 
-    tray.setToolTip('Claude Widget (GTRows)');
+    tray.setToolTip(t('tray.tooltip'));
     tray.setContextMenu(contextMenu);
 
     tray.on('click', (event, bounds) => {
@@ -550,7 +554,7 @@ ipcMain.handle('export-history', async (event, options = {}) => {
   const rangeTag = (fromMs != null || toMs != null) ? '-range' : '';
   const defaultName = `claude-usage-history-${new Date().toISOString().slice(0, 10)}${rangeTag}.${format}`;
   const result = await dialog.showSaveDialog(mainWindow || undefined, {
-    title: 'Export usage history',
+    title: t('dialog.exportTitle'),
     defaultPath: defaultName,
     filters: format === 'json'
       ? [{ name: 'JSON', extensions: ['json'] }]
@@ -720,6 +724,14 @@ ipcMain.handle('set-language', (event, lang) => {
   for (const w of BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send('language-changed', lang);
   }
+  try {
+    if (tray && !tray.isDestroyed?.()) {
+      tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate()));
+      tray.setToolTip(t('tray.tooltip'));
+    }
+  } catch (err) {
+    console.warn('[i18n] tray rebuild failed:', err.message);
+  }
   return { ok: true };
 });
 
@@ -741,7 +753,7 @@ ipcMain.handle('detect-session-key', async () => {
     const loginWin = new BrowserWindow({
       width: 1000,
       height: 700,
-      title: 'Log in to Claude',
+      title: t('dialog.loginTitle'),
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true
@@ -948,7 +960,7 @@ function applyTrayFrame(index) {
   if (!tray || tray.isDestroyed?.()) return;
   if (!trayIconFrames.length) {
     if (defaultTrayImage) tray.setImage(defaultTrayImage);
-    tray.setToolTip('Claude Widget (GTRows)');
+    tray.setToolTip(t('tray.tooltip'));
     if (process.platform === 'darwin') tray.setTitle('');
     return;
   }
