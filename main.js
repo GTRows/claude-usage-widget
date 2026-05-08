@@ -785,7 +785,7 @@ ipcMain.handle('check-for-update', () => {
         try {
           const data = JSON.parse(body);
           if (!Array.isArray(data)) {
-            resolve({ hasUpdate: false, version: null });
+            resolve({ ok: false, hasUpdate: false, version: null });
             return;
           }
           const current = app.getVersion();
@@ -797,18 +797,18 @@ ipcMain.handle('check-for-update', () => {
             if (!best || compareVersions(tag, best) > 0) best = tag;
           }
           if (best && isNewerVersion(best, current)) {
-            resolve({ hasUpdate: true, version: best });
+            resolve({ ok: true, hasUpdate: true, version: best });
           } else {
-            resolve({ hasUpdate: false, version: null });
+            resolve({ ok: true, hasUpdate: false, version: null });
           }
         } catch {
-          resolve({ hasUpdate: false, version: null });
+          resolve({ ok: false, hasUpdate: false, version: null });
         }
       });
     });
 
-    req.on('error', () => resolve({ hasUpdate: false, version: null }));
-    req.on('timeout', () => { req.destroy(); resolve({ hasUpdate: false, version: null }); });
+    req.on('error', () => resolve({ ok: false, hasUpdate: false, version: null }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, hasUpdate: false, version: null }); });
     req.end();
   });
 });
