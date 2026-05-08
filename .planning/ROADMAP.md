@@ -74,7 +74,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: New `check-for-updates` IPC + preload bridge, drawer button + status line, last-checked timestamp, localized strings via Phase 7's t() once available (or temporary inline seam if Phase 7 lands later)
+- [x] 06-01: Drawer button + inline status line + last-checked timestamp; reused existing `check-for-update` IPC and `checkForUpdate` preload bridge (no new IPC/preload); inline English literals to be migrated by Phase 7
 
 #### Phase 7: Localization (tr + en, user-selectable)
 **Goal**: Resolve the deferred i18n library decision, migrate every hardcoded UI string to a `t()` seam, ship tr + en source files (default tr per `CLAUDE.md`), add a Language selector to the settings drawer, persist the choice.
@@ -100,5 +100,5 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 3. Peak-throttle soft-deprecate | v1.0 | 1/1 | Complete | 2026-05-07 |
 | 4. Remove auto-fire feature | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 5. Settings drawer drag fix | v1.15 | 1/1 | Complete | 2026-05-08 |
-| 6. Manual update-check button | v1.15 | 0/1 | Not started | - |
+| 6. Manual update-check button | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 7. Localization (tr + en) | v1.15 | 0/3 | Not started | - |

@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 ## Current Position
 
-Phase: 6 of 7 (Manual update-check button)
+Phase: 7 of 7 (Localization tr+en)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-05-08 - Phase 5 (drawer drag fix) closed via single CSS-only commit, verifier pass; manual UAT pending
+Last activity: 2026-05-08 - Phase 6 (manual update-check button) shipped via 4 atomic commits, verifier pass
 
-Progress: [#######...] 71% (5 of 7 phases complete; v1.15 in progress)
+Progress: [########..] 86% (6 of 7 phases complete; v1.15 in progress)
 
 ## Performance Metrics
 
