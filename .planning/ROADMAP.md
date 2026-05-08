@@ -56,7 +56,7 @@ Removal targets:
 - `src/renderer/app.js`: `_AUTO_FIRE_STRINGS`, `_autoFireT`, `_applyAutoFireStrings`, hydration in `loadSettings`, `autoFireChannel` save path, change/click listeners, status helpers
 
 Plans:
-- [ ] 04-01: Delete every auto-fire surface (modules, tests, IPC, schema, UI, i18n strings); ensure `npm test` is green after removal
+- [x] 04-01: Delete every auto-fire surface (modules, tests, IPC, schema, UI, i18n strings); ensure `npm test` is green after removal
 
 #### Phase 5: Settings drawer drag fix
 **Goal**: When the settings drawer is open and compact mode is off, the widget window must remain draggable from the existing drag region. Currently it isn't — the drawer either covers the drag region or the drag CSS rule drops out when the drawer opens.
@@ -98,7 +98,7 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 1. Auto-fire MVP (web session) | v1.0 | 3/3 | Complete | 2026-05-07 |
 | 2. Anthropic API channel + selector | v1.0 | 2/2 | Complete | 2026-05-07 |
 | 3. Peak-throttle soft-deprecate | v1.0 | 1/1 | Complete | 2026-05-07 |
-| 4. Remove auto-fire feature | v1.15 | 0/1 | Not started | - |
+| 4. Remove auto-fire feature | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 5. Settings drawer drag fix | v1.15 | 0/1 | Not started | - |
 | 6. Manual update-check button | v1.15 | 0/1 | Not started | - |
 | 7. Localization (tr + en) | v1.15 | 0/3 | Not started | - |

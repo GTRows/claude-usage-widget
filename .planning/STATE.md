@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-05-07)
 
 ## Current Position
 
-Phase: 4 of 7 (Remove auto-fire feature)
+Phase: 5 of 7 (Settings drawer drag fix)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-05-08 - Phase 4 pivoted from "fix payload" to "hard removal" of auto-fire
+Last activity: 2026-05-08 - Phase 4 (auto-fire hard removal) shipped via 5 atomic commits, verifier pass
 
-Progress: [#####.....] 50% (3 of 7 phases complete; v1.15 not yet started)
+Progress: [######....] 57% (4 of 7 phases complete; v1.15 in progress)
 
 ## Performance Metrics
 
