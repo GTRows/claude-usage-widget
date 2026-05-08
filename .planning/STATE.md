@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Make sure the user's 5-hour Claude usage window never starts late: when the previous window expires, the new one starts immediately so the user gets the full runway every cycle.
-**Current focus:** Phase 4 - Remove auto-fire feature (v1.15 milestone)
+**Current focus:** v1.15 milestone closeout - all phases (4-7) shipped, awaiting release decision
 
 ## Current Position
 
 Phase: 7 of 7 (Localization tr+en)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-08 - Phase 6 (manual update-check button) shipped via 4 atomic commits, verifier pass
+Plan: 07-01, 07-02, 07-03 all complete
+Status: Milestone v1.15 closeout - awaiting release decision
+Last activity: 2026-05-08 - Phase 7 (i18n) shipped: 07-01 skeleton (5 commits), 07-02 string migration (8 commits, 243 keys/locale), 07-03 Language selector + UAT (4 commits); all verifier pass
 
-Progress: [########..] 86% (6 of 7 phases complete; v1.15 in progress)
+Progress: [##########] 100% (7 of 7 phases complete; v1.15 ready to release)
 
 ## Performance Metrics
 

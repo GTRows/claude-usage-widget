@@ -84,9 +84,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 07-01: i18n library decision + skeleton + persistence (electron-store key, default tr)
-- [ ] 07-02: String migration across renderer, main, tray, CLI
-- [ ] 07-03: Settings drawer Language selector + UAT in tr and en
+- [x] 07-01: i18n library decision + skeleton + persistence (electron-store key, default tr)
+- [x] 07-02: String migration across renderer, main, tray, CLI
+- [x] 07-03: Settings drawer Language selector + UAT in tr and en
 
 ## Progress
 
@@ -101,4 +101,4 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 4. Remove auto-fire feature | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 5. Settings drawer drag fix | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 6. Manual update-check button | v1.15 | 1/1 | Complete | 2026-05-08 |
-| 7. Localization (tr + en) | v1.15 | 0/3 | Not started | - |
+| 7. Localization (tr + en) | v1.15 | 3/3 | Complete | 2026-05-08 |
