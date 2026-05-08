@@ -6,6 +6,7 @@ const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
+const { setLanguage } = require('./src/shared/i18n');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -646,7 +647,8 @@ ipcMain.handle('get-settings', () => {
     autoPrune: store.get('settings.autoPrune', false),
     autoPruneDays: store.get('settings.autoPruneDays', 30),
     hideFromTaskbar: store.get('settings.hideFromTaskbar', false),
-    headlessMode: store.get('settings.headlessMode', false)
+    headlessMode: store.get('settings.headlessMode', false),
+    language: store.get('settings.language', 'tr')
   };
 });
 
@@ -681,6 +683,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   }
   store.set('settings.hideFromTaskbar', !!settings.hideFromTaskbar);
   store.set('settings.headlessMode', !!settings.headlessMode);
+  if (settings.language) store.set('settings.language', settings.language);
   applyTaskbarVisibility();
 
   if (settings.autoPrune && settings.autoPruneDays >= 1) {
@@ -704,6 +707,20 @@ ipcMain.handle('save-settings', (event, settings) => {
   }
 
   return true;
+});
+
+ipcMain.handle('get-language', () => {
+  return store.get('settings.language', 'tr');
+});
+
+ipcMain.handle('set-language', (event, lang) => {
+  const accepted = setLanguage(lang);
+  if (!accepted) return { ok: false };
+  store.set('settings.language', lang);
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('language-changed', lang);
+  }
+  return { ok: true };
 });
 
 // Open a visible BrowserWindow for the user to log in to Claude.ai.
@@ -970,6 +987,8 @@ ipcMain.on('set-tray-frames', (event, frames) => {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  setLanguage(store.get('settings.language', 'tr'));
+
   // Disable default application menu so its accelerators (Ctrl+R reload,
   // Ctrl+Shift+I devtools, etc.) don't collide with widget shortcuts.
   Menu.setApplicationMenu(null);
