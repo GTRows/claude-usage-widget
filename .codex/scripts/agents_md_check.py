@@ -85,6 +85,16 @@ def is_placeholder(body: str) -> bool:
     return True
 
 
+def matching_section_name(expected: str, sections: dict[str, str]) -> str | None:
+    if expected in sections:
+        return expected
+    prefix = f"{expected} ("
+    for actual in sections:
+        if actual.startswith(prefix):
+            return actual
+    return None
+
+
 def check(path: Path) -> dict:
     if not path.is_file():
         return {
@@ -95,9 +105,18 @@ def check(path: Path) -> dict:
         }
     sections = parse_sections(path.read_text(encoding="utf-8"))
     expected_names = [name for name, _ in EXPECTED_SECTIONS]
-    missing = [name for name in expected_names if name not in sections]
-    placeholders = [name for name in expected_names if name in sections and is_placeholder(sections[name])]
-    extras = [name for name in sections if name not in expected_names]
+    matches = {
+        name: matching_section_name(name, sections)
+        for name in expected_names
+    }
+    missing = [name for name, actual in matches.items() if actual is None]
+    placeholders = [
+        name
+        for name, actual in matches.items()
+        if actual is not None and is_placeholder(sections[actual])
+    ]
+    matched_actual = {actual for actual in matches.values() if actual is not None}
+    extras = [name for name in sections if name not in matched_actual]
     return {
         "found": True,
         "missing": missing,

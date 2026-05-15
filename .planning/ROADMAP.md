@@ -2,13 +2,14 @@
 
 ## Milestones
 
-- **v1.0 auto-window-renewal** [shipped 2026-05-07 as v1.14.0-gtrows.1] — Phases 1-3
-- **v1.15 polish + localization** [in progress] — Phases 4-7
+- **v1.0 auto-window-renewal** [shipped 2026-05-07 as v1.14.0-gtrows.1] - Phases 1-3
+- **v1.15 polish + localization** [shipped 2026-05-08] - Phases 4-7
+- **v1.16 multi-account + Codex support** [shipped 2026-05-15 as v1.16.0-gtrows.1] - multiple Claude/Codex accounts, Codex-native automation, release docs
 
 ## Phases
 
 <details>
-<summary>v1.0 auto-window-renewal (Phases 1-3) — SHIPPED 2026-05-07 as v1.14.0-gtrows.1</summary>
+<summary>v1.0 auto-window-renewal (Phases 1-3) - SHIPPED 2026-05-07 as v1.14.0-gtrows.1</summary>
 
 ### Phase 1: Auto-fire MVP (web session)
 **Goal**: Detect window expiry, fire minimal request via existing claude.ai session, single on/off toggle.
@@ -36,51 +37,34 @@ Plans:
 
 </details>
 
-### v1.15 polish + localization (In Progress)
+<details>
+<summary>v1.15 polish + localization - SHIPPED 2026-05-08</summary>
 
 **Milestone Goal:** Drop the auto-fire feature shipped no-op in v1.14, fix the settings-drawer drag regression, expose a manual update check, and ship full tr/en localization.
 
-#### Phase 4: Remove auto-fire feature (hard removal)
-**Goal**: Remove the auto-fire 5-hour-window-renewal feature shipped in v1.14.0-gtrows.1. The feature is functionally a no-op (placeholder payload that never starts a real 5h window) and we have decided to drop it rather than research the billable claude.ai endpoint. After this phase the codebase contains zero auto-fire references; any user who toggled the setting on simply has the now-orphan key silently dropped on next save.
-**Depends on**: Nothing
-**Research**: Unlikely (deletion-only — touches files added in phases 1-2)
-**Plans**: TBD (likely 1-2 plans, planner decides)
-
-Removal targets:
-- `src/main/auto-fire/{scheduler,dispatcher,web-channel,api-channel}.js`
-- `tests/auto-fire-{scheduler,dispatcher,web-channel,api-channel}.test.js`
-- `main.js`: require + scheduler arm/disarm wiring + before-quit + dispatcher start/stop + `save-api-key` / `clear-api-key` / `has-api-key` IPC handlers + apiKey wipe in `delete-credentials`
-- `preload.js`: `saveApiKey` / `clearApiKey` / `hasApiKey` bridges
-- `src/shared/settings-schema.js`: `autoFireEnabled`, `autoFireChannel` keys + their tests
-- `src/renderer/index.html`: auto-renew toggle row, channel selector row, api-key input row
-- `src/renderer/app.js`: `_AUTO_FIRE_STRINGS`, `_autoFireT`, `_applyAutoFireStrings`, hydration in `loadSettings`, `autoFireChannel` save path, change/click listeners, status helpers
+### Phase 4: Remove auto-fire feature (hard removal)
+**Goal**: Remove the auto-fire 5-hour-window-renewal feature shipped in v1.14.0-gtrows.1. The feature was functionally a no-op, so the final implementation removed every auto-fire surface instead of keeping placeholder behavior.
+**Plans**: 1 plan
 
 Plans:
 - [x] 04-01: Delete every auto-fire surface (modules, tests, IPC, schema, UI, i18n strings); ensure `npm test` is green after removal
 
-#### Phase 5: Settings drawer drag fix
-**Goal**: When the settings drawer is open and compact mode is off, the widget window must remain draggable from the existing drag region. Currently it isn't — the drawer either covers the drag region or the drag CSS rule drops out when the drawer opens.
-**Depends on**: Nothing (independent UI fix)
-**Research**: Unlikely (CSS / markup change in renderer)
+### Phase 5: Settings drawer drag fix
+**Goal**: When the settings drawer is open and compact mode is off, the widget window remains draggable from the existing drag region.
 **Plans**: 1 plan
 
 Plans:
 - [x] 05-01: Diagnose root cause in `src/renderer/index.html` + `styles.css` + `app.js`, restore `-webkit-app-region: drag` while drawer is open, manual UAT
 
-#### Phase 6: Manual update-check button
+### Phase 6: Manual update-check button
 **Goal**: Add a "Check for updates" button to the settings drawer that triggers the existing update-check flow on demand and surfaces the result inline.
-**Depends on**: Phase 5 (drawer markup unblocked) — soft dependency, can also run independently
-**Research**: Unlikely (existing update-check helper is in shared code)
 **Plans**: 1 plan
 
 Plans:
-- [x] 06-01: Drawer button + inline status line + last-checked timestamp; reused existing `check-for-update` IPC and `checkForUpdate` preload bridge (no new IPC/preload); inline English literals to be migrated by Phase 7
+- [x] 06-01: Drawer button + inline status line + last-checked timestamp; reuse existing `check-for-update` IPC and `checkForUpdate` preload bridge
 
-#### Phase 7: Localization (tr + en, user-selectable)
-**Goal**: Resolve the deferred i18n library decision, migrate every hardcoded UI string to a `t()` seam, ship tr + en source files (default tr per `CLAUDE.md`), add a Language selector to the settings drawer, persist the choice.
-**Depends on**: Phase 4 (auto-fire UI is gone before string migration so the migration sweep isn't fighting code that's about to be deleted)
-**Research**: Likely (library / format decision)
-**Research topics**: i18next vs format-js vs minimal home-grown `t()`; JSON vs ICU vs gettext source format; renderer-only vs main+renderer reach; placeholder/plural handling
+### Phase 7: Localization (tr + en, user-selectable)
+**Goal**: Migrate user-facing strings to the project translation layer, ship tr + en source files, default to tr, and persist the user's language choice.
 **Plans**: 3 plans
 
 Plans:
@@ -88,10 +72,21 @@ Plans:
 - [x] 07-02: String migration across renderer, main, tray, CLI
 - [x] 07-03: Settings drawer Language selector + UAT in tr and en
 
-## Progress
+</details>
 
-**Execution Order:**
-Phases execute in numeric order: 4 -> 5 -> 6 -> 7
+<details open>
+<summary>v1.16 multi-account + Codex support - SHIPPED 2026-05-15 as v1.16.0-gtrows.1</summary>
+
+### Phase 8: Multi-account and Codex support
+**Goal**: Convert the app from a single Claude account widget into a multi-account usage monitor that supports Claude and Codex/OpenAI, while migrating the repository automation from Claude Code files to Codex-native files.
+**Plans**: 1 plan
+
+Plans:
+- [x] 08-01: Add provider/account model, Codex/OpenAI usage fetch, renderer account controls, CLI provider flags, Codex automation migration, README/changelog release updates
+
+</details>
+
+## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -102,3 +97,4 @@ Phases execute in numeric order: 4 -> 5 -> 6 -> 7
 | 5. Settings drawer drag fix | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 6. Manual update-check button | v1.15 | 1/1 | Complete | 2026-05-08 |
 | 7. Localization (tr + en) | v1.15 | 3/3 | Complete | 2026-05-08 |
+| 8. Multi-account + Codex support | v1.16 | 1/1 | Complete | 2026-05-15 |
