@@ -56,6 +56,17 @@ __pycache__/
 .claude/usage-log.jsonl
 .claude/hook-audit.log
 
+# Local tooling / Codex workspace state (template tracks .codex/, only local state is ignored)
+.codex/settings.local.json
+.codex/.setup-complete
+.Codex/.setup-complete
+.codex/setup-followups.md
+.codex/scheduled_tasks.lock
+.codex/commands.pre-*/
+.codex/migration-log.md
+.codex/usage-log.jsonl
+.codex/hook-audit.log
+
 # OMC (oh-my-claudecode) local session state
 .omc/
 

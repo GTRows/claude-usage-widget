@@ -51,13 +51,47 @@ describe('loadCredentials', () => {
     process.env.CLAUDE_SESSION_KEY = 'env-sk';
     process.env.CLAUDE_ORGANIZATION_ID = 'env-org';
     configMod.writeConfig({ sessionKey: 'file-sk', organizationId: 'file-org' });
-    expect(configMod.loadCredentials()).toEqual({ sessionKey: 'env-sk', organizationId: 'env-org' });
+    expect(configMod.loadCredentials()).toMatchObject({
+      provider: 'claude',
+      sessionKey: 'env-sk',
+      organizationId: 'env-org',
+    });
   });
   it('falls back to the file when env is missing', () => {
     configMod.writeConfig({ sessionKey: 'file-sk', organizationId: 'file-org' });
-    expect(configMod.loadCredentials()).toEqual({ sessionKey: 'file-sk', organizationId: 'file-org' });
+    expect(configMod.loadCredentials()).toMatchObject({
+      provider: 'claude',
+      sessionKey: 'file-sk',
+      organizationId: 'file-org',
+    });
   });
   it('returns null fields when nothing is configured', () => {
-    expect(configMod.loadCredentials()).toEqual({ sessionKey: null, organizationId: null });
+    expect(configMod.loadCredentials()).toMatchObject({
+      provider: 'claude',
+      sessionKey: null,
+      organizationId: null,
+    });
+  });
+  it('loads the active account from the account list', () => {
+    configMod.writeConfig({
+      activeAccountId: 'codex-main',
+      accounts: [
+        { id: 'claude-main', provider: 'claude', sessionKey: 'sk', organizationId: 'org' },
+        { id: 'codex-main', provider: 'codex', apiKey: 'openai-key' },
+      ],
+    });
+    expect(configMod.loadCredentials()).toMatchObject({
+      id: 'codex-main',
+      provider: 'codex',
+      apiKey: 'openai-key',
+    });
+  });
+  it('uses an OpenAI admin key as a Codex account when no provider is specified', () => {
+    process.env.OPENAI_ADMIN_KEY = 'admin-key';
+    expect(configMod.loadCredentials()).toMatchObject({
+      provider: 'codex',
+      apiKey: 'admin-key',
+    });
+    delete process.env.OPENAI_ADMIN_KEY;
   });
 });

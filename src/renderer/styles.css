@@ -517,6 +517,24 @@ body.theme-light .pin-btn.active {
     border-color: var(--accent);
 }
 
+.login-provider-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1fr);
+    gap: 8px;
+    width: min(360px, 100%);
+}
+
+.login-account-label {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 9px 10px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 12px;
+}
+
 .session-key-form {
     display: flex;
     flex-direction: column;

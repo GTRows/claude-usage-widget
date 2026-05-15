@@ -41,6 +41,8 @@ const elements = {
     loginStep2: document.getElementById('loginStep2'),
     autoDetectBtn: document.getElementById('autoDetectBtn'),
     autoDetectError: document.getElementById('autoDetectError'),
+    providerSelect: document.getElementById('providerSelect'),
+    accountLabelInput: document.getElementById('accountLabelInput'),
     openBrowserLink: document.getElementById('openBrowserLink'),
     nextStepBtn: document.getElementById('nextStepBtn'),
     backStepBtn: document.getElementById('backStepBtn'),
@@ -110,6 +112,7 @@ const elements = {
     settingsOverlay: document.getElementById('settingsOverlay'),
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
+    activeAccountSelect: document.getElementById('activeAccountSelect'),
     autoStartToggle: document.getElementById('autoStartToggle'),
     alwaysOnTopToggle: document.getElementById('alwaysOnTopToggle'),
     warnThreshold: document.getElementById('warnThreshold'),
@@ -209,6 +212,41 @@ function applyTranslations(root = document) {
     });
 }
 
+function hasActiveCredentials(creds) {
+    if (!creds) return false;
+    if (creds.provider === 'codex') return Boolean(creds.apiKey);
+    return Boolean(creds.sessionKey && creds.organizationId);
+}
+
+function selectedProvider() {
+    return elements.providerSelect?.value === 'codex' ? 'codex' : 'claude';
+}
+
+function applyLoginProvider() {
+    const provider = selectedProvider();
+    const isCodex = provider === 'codex';
+    if (elements.autoDetectBtn) elements.autoDetectBtn.disabled = isCodex;
+    if (elements.sessionKeyInput) {
+        elements.sessionKeyInput.placeholder = isCodex ? 'sk-admin-...' : 'sk-ant-sid01-...';
+    }
+    if (elements.openBrowserLink) {
+        elements.openBrowserLink.textContent = isCodex ? 'platform.openai.com' : window.i18n.t('login.openClaudeAi');
+    }
+}
+
+async function refreshAccountSelector() {
+    if (!elements.activeAccountSelect || !window.electronAPI.getAccounts) return;
+    const data = await window.electronAPI.getAccounts();
+    elements.activeAccountSelect.replaceChildren();
+    for (const account of data.accounts || []) {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = `${account.label || account.id} (${account.provider || 'claude'})`;
+        elements.activeAccountSelect.appendChild(option);
+    }
+    elements.activeAccountSelect.value = data.activeAccountId || '';
+}
+
 // Initialize
 async function init() {
     setupEventListeners();
@@ -223,14 +261,16 @@ async function init() {
         } catch {}
     }
     applyTranslations();
+    applyLoginProvider();
 
     if (window.electronAPI && window.electronAPI.onLanguageChanged) {
         window.electronAPI.onLanguageChanged((lang) => {
             if (window.i18n) window.i18n.setLanguage(lang);
             applyTranslations();
+            applyLoginProvider();
             // Re-render dynamic surfaces — chart labels, tray frames, version label.
             try {
-                if (latestUsageData) updateUsageData(latestUsageData);
+                if (latestUsageData) updateUI(latestUsageData);
             } catch {}
             try {
                 if (typeof loadHistoryTable === 'function' && historyVisible) loadHistoryTable();
@@ -291,7 +331,9 @@ async function init() {
         elements.historySection.style.display = 'block';
     }
 
-    if (credentials.sessionKey && credentials.organizationId) {
+    await refreshAccountSelector();
+
+    if (hasActiveCredentials(credentials)) {
         showMainContent();
         await fetchUsageData();
         startAutoUpdate();
@@ -319,6 +361,11 @@ async function init() {
 
 // Event Listeners
 function setupEventListeners() {
+    if (elements.providerSelect) {
+        elements.providerSelect.addEventListener('change', applyLoginProvider);
+        applyLoginProvider();
+    }
+
     // Step 1: Login via BrowserWindow
     elements.autoDetectBtn.addEventListener('click', handleAutoDetect);
 
@@ -338,7 +385,9 @@ function setupEventListeners() {
     // Open browser link in step 2
     elements.openBrowserLink.addEventListener('click', (e) => {
         e.preventDefault();
-        window.electronAPI.openExternal('https://claude.ai');
+        window.electronAPI.openExternal(selectedProvider() === 'codex'
+            ? 'https://platform.openai.com/settings/organization/admin-keys'
+            : 'https://claude.ai');
     });
 
     // Step 2: Manual sessionKey connect
@@ -347,6 +396,21 @@ function setupEventListeners() {
         if (e.key === 'Enter') handleConnect();
         elements.sessionKeyError.textContent = '';
     });
+
+    if (elements.activeAccountSelect) {
+        elements.activeAccountSelect.addEventListener('change', async () => {
+            const accountId = elements.activeAccountSelect.value;
+            if (!accountId) return;
+            await window.electronAPI.setActiveAccount(accountId);
+            credentials = await window.electronAPI.getCredentials();
+            if (hasActiveCredentials(credentials)) {
+                await fetchUsageData();
+                startAutoUpdate();
+            } else {
+                showLoginRequired();
+            }
+        });
+    }
 
     elements.refreshBtn.addEventListener('click', async () => {
         debugLog('Refresh button clicked');
@@ -628,12 +692,17 @@ function setupEventListeners() {
     }
 
     elements.logoutBtn.addEventListener('click', async () => {
-        await window.electronAPI.deleteCredentials();
-        credentials = { sessionKey: null, organizationId: null };
+        await window.electronAPI.deleteCredentials(credentials?.id);
+        credentials = await window.electronAPI.getCredentials();
+        await refreshAccountSelector();
         elements.settingsOverlay.style.display = 'none';
         _settingsOpen = false;
         _lastResizeHeight = 0;
-        showLoginRequired();
+        if (hasActiveCredentials(credentials)) {
+            await fetchUsageData();
+        } else {
+            showLoginRequired();
+        }
     });
 
     // Theme buttons
@@ -662,9 +731,10 @@ function setupEventListeners() {
     });
 
     // Listen for session expiration events (403 errors)
-    window.electronAPI.onSessionExpired(() => {
+    window.electronAPI.onSessionExpired(async () => {
         debugLog('Session expired event received');
-        credentials = { sessionKey: null, organizationId: null };
+        credentials = await window.electronAPI.getCredentials();
+        await refreshAccountSelector();
         showLoginRequired();
     });
 
@@ -820,8 +890,9 @@ function setupKeyboardShortcuts() {
 
 // Handle manual sessionKey connect
 async function handleConnect() {
-    const sessionKey = elements.sessionKeyInput.value.trim();
-    if (!sessionKey) {
+    const provider = selectedProvider();
+    const secret = elements.sessionKeyInput.value.trim();
+    if (!secret) {
         elements.sessionKeyError.textContent = window.i18n.t('login.errorEmpty');
         return;
     }
@@ -831,10 +902,33 @@ async function handleConnect() {
     elements.sessionKeyError.textContent = '';
 
     try {
-        const result = await window.electronAPI.validateSessionKey(sessionKey);
-        if (result.success) {
-            credentials = { sessionKey, organizationId: result.organizationId };
+        if (provider === 'codex') {
+            credentials = {
+                id: `codex-${Date.now()}`,
+                provider,
+                label: elements.accountLabelInput.value.trim() || 'Codex Account',
+                apiKey: secret
+            };
             await window.electronAPI.saveCredentials(credentials);
+            await refreshAccountSelector();
+            elements.sessionKeyInput.value = '';
+            showMainContent();
+            await fetchUsageData();
+            startAutoUpdate();
+            return;
+        }
+
+        const result = await window.electronAPI.validateSessionKey(secret);
+        if (result.success) {
+            credentials = {
+                id: `claude-${Date.now()}`,
+                provider,
+                label: elements.accountLabelInput.value.trim() || 'Claude Account',
+                sessionKey: secret,
+                organizationId: result.organizationId
+            };
+            await window.electronAPI.saveCredentials(credentials);
+            await refreshAccountSelector();
             elements.sessionKeyInput.value = '';
             showMainContent();
             await fetchUsageData();
@@ -869,10 +963,14 @@ async function handleAutoDetect() {
 
         if (validation.success) {
             credentials = {
+                id: `claude-${Date.now()}`,
+                provider: 'claude',
+                label: elements.accountLabelInput.value.trim() || 'Claude Account',
                 sessionKey: result.sessionKey,
                 organizationId: validation.organizationId
             };
             await window.electronAPI.saveCredentials(credentials);
+            await refreshAccountSelector();
             showMainContent();
             await fetchUsageData();
             startAutoUpdate();
@@ -888,7 +986,7 @@ async function handleAutoDetect() {
     }
 }
 
-// Fetch usage data from Claude API
+// Fetch usage data from the active provider account
 async function fetchUsageData() {
     debugLog('fetchUsageData called');
 
@@ -897,7 +995,7 @@ async function fetchUsageData() {
         return;
     }
 
-    if (!credentials.sessionKey || !credentials.organizationId) {
+    if (!hasActiveCredentials(credentials)) {
         debugLog('Missing credentials, showing login');
         showLoginRequired();
         return;
@@ -912,7 +1010,8 @@ async function fetchUsageData() {
     } catch (error) {
         console.error('Error fetching usage data:', error);
         if (error.message.includes('SessionExpired') || error.message.includes('Unauthorized')) {
-            credentials = { sessionKey: null, organizationId: null };
+            credentials = null;
+            await refreshAccountSelector();
             showLoginRequired();
         } else {
             debugLog('Failed to fetch usage data');
@@ -2580,7 +2679,8 @@ async function saveSettings() {
         autoPrune: elements.autoPruneToggle ? !!elements.autoPruneToggle.checked : false,
         autoPruneDays: elements.autoPruneDays ? Math.max(1, parseInt(elements.autoPruneDays.value, 10) || 30) : 30,
         hideFromTaskbar: elements.hideFromTaskbarToggle ? !!elements.hideFromTaskbarToggle.checked : false,
-        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false
+        headlessMode: elements.headlessModeToggle ? !!elements.headlessModeToggle.checked : false,
+        activeProfile: elements.activeAccountSelect ? elements.activeAccountSelect.value || 'default' : 'default'
     };
     if (elements.autoPruneDaysRow) {
         elements.autoPruneDaysRow.style.display = settings.autoPrune ? 'flex' : 'none';

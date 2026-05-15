@@ -7,6 +7,16 @@ const historyShared = require('./src/shared/history');
 const { isNewerVersion, compareVersions } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 const { t, setLanguage } = require('./src/shared/i18n');
+const { fetchCodexUsage } = require('./src/cli/api');
+const {
+  DEFAULT_ACCOUNT_ID,
+  getActiveAccount,
+  hasUsableCredentials,
+  legacyClaudeAccount,
+  normalizeAccount,
+  normalizeAccounts,
+  normalizeProvider,
+} = require('./src/shared/accounts');
 
 const GITHUB_OWNER = 'GTRows';
 const GITHUB_REPO = 'claude-usage-widget';
@@ -57,6 +67,130 @@ store.delete('apiKey_encrypted');
 const DEBUG = process.env.DEBUG_LOG === '1' || process.argv.includes('--debug');
 function debugLog(...args) {
   if (DEBUG) console.log('[Debug]', ...args);
+}
+
+function encryptSecret(value) {
+  if (!value) return null;
+  if (safeStorage.isEncryptionAvailable()) {
+    return {
+      encrypted: safeStorage.encryptString(value).toString('base64'),
+    };
+  }
+  return { plain: value };
+}
+
+function decryptSecret(secret) {
+  if (!secret) return null;
+  if (secret.encrypted && safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(secret.encrypted, 'base64'));
+    } catch (err) {
+      console.error('[Keychain] Failed to decrypt account secret:', err.message);
+      return null;
+    }
+  }
+  return secret.plain || null;
+}
+
+function getLegacySessionKey() {
+  if (safeStorage.isEncryptionAvailable()) {
+    const encrypted = store.get('sessionKey_encrypted');
+    if (encrypted) {
+      try {
+        return safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
+      } catch (err) {
+        console.error('[Keychain] Failed to decrypt session key:', err.message);
+      }
+    }
+  }
+  return store.get('sessionKey') || null;
+}
+
+function publicAccount(account) {
+  if (!account) return null;
+  const { sessionKey, apiKey, ...safe } = account;
+  return {
+    ...safe,
+    hasSessionKey: Boolean(sessionKey),
+    hasApiKey: Boolean(apiKey),
+  };
+}
+
+function loadAccounts() {
+  const accounts = normalizeAccounts(store.get('accounts', []));
+  const secrets = store.get('accountSecrets', {});
+  for (const account of accounts) {
+    const accountSecret = secrets[account.id] || {};
+    if (account.provider === 'claude') {
+      account.sessionKey = decryptSecret(accountSecret.sessionKey) || account.sessionKey;
+    } else if (account.provider === 'codex') {
+      account.apiKey = decryptSecret(accountSecret.apiKey) || account.apiKey;
+    }
+  }
+
+  if (!accounts.length) {
+    const legacy = legacyClaudeAccount({
+      sessionKey: getLegacySessionKey(),
+      organizationId: store.get('organizationId'),
+    });
+    if (legacy) accounts.push(legacy);
+  }
+
+  return accounts;
+}
+
+function saveAccount(accountInput) {
+  const account = normalizeAccount(accountInput);
+  const accounts = normalizeAccounts(store.get('accounts', []));
+  const existing = accounts.findIndex((item) => item.id === account.id);
+  const metadata = { ...account };
+  delete metadata.sessionKey;
+  delete metadata.apiKey;
+  if (existing >= 0) accounts[existing] = metadata;
+  else accounts.push(metadata);
+
+  const secrets = store.get('accountSecrets', {});
+  secrets[account.id] = secrets[account.id] || {};
+  if (account.sessionKey) secrets[account.id].sessionKey = encryptSecret(account.sessionKey);
+  if (account.apiKey) secrets[account.id].apiKey = encryptSecret(account.apiKey);
+
+  store.set('accounts', accounts);
+  store.set('accountSecrets', secrets);
+  store.set('settings.activeProfile', account.id);
+
+  if (account.id === DEFAULT_ACCOUNT_ID && account.provider === 'claude') {
+    if (account.sessionKey) {
+      if (safeStorage.isEncryptionAvailable()) {
+        store.set('sessionKey_encrypted', safeStorage.encryptString(account.sessionKey).toString('base64'));
+        store.delete('sessionKey');
+      } else {
+        store.set('sessionKey', account.sessionKey);
+      }
+    }
+    if (account.organizationId) store.set('organizationId', account.organizationId);
+  }
+
+  return account;
+}
+
+function deleteAccount(accountId) {
+  const targetId = accountId || store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID);
+  const accounts = normalizeAccounts(store.get('accounts', []));
+  store.set('accounts', accounts.filter((account) => account.id !== targetId));
+  const secrets = store.get('accountSecrets', {});
+  delete secrets[targetId];
+  store.set('accountSecrets', secrets);
+  if (targetId === DEFAULT_ACCOUNT_ID) {
+    store.delete('sessionKey');
+    store.delete('sessionKey_encrypted');
+    store.delete('organizationId');
+  }
+  const remaining = normalizeAccounts(store.get('accounts', []));
+  store.set('settings.activeProfile', remaining[0]?.id || DEFAULT_ACCOUNT_ID);
+}
+
+function getActiveStoredAccount() {
+  return getActiveAccount(loadAccounts(), store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID));
 }
 
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -193,8 +327,7 @@ function buildTrayMenuTemplate() {
     {
       label: t('tray.logOut'),
       click: async () => {
-        store.delete('sessionKey');
-        store.delete('organizationId');
+        deleteAccount();
         // Clear all Claude.ai cookies and session storage
         const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
         for (const cookie of cookies) {
@@ -315,51 +448,35 @@ function applyCompactWindowMode(compact) {
 
 // IPC Handlers
 ipcMain.handle('get-credentials', () => {
-  let sessionKey = null;
-  // Try safeStorage first (OS keychain)
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = store.get('sessionKey_encrypted');
-    if (encrypted) {
-      try {
-        sessionKey = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
-      } catch (err) {
-        console.error('[Keychain] Failed to decrypt session key:', err.message);
-      }
-    }
-  } else {
-    // Fallback: plain storage (legacy or safeStorage unavailable)
-    sessionKey = store.get('sessionKey');
-  }
+  const accounts = loadAccounts();
+  const active = getActiveAccount(accounts, store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID));
   return {
-    sessionKey,
-    organizationId: store.get('organizationId')
+    ...publicAccount(active),
+    sessionKey: active?.sessionKey || null,
+    apiKey: active?.apiKey || null,
+    accounts: accounts.map(publicAccount),
   };
 });
 
-ipcMain.handle('save-credentials', async (event, { sessionKey, organizationId }) => {
-  // Store session key in OS keychain if available
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(sessionKey);
-    store.set('sessionKey_encrypted', encrypted.toString('base64'));
-    store.delete('sessionKey'); // Remove legacy plain storage
-  } else {
-    // Fallback: plain storage
-    store.set('sessionKey', sessionKey);
+ipcMain.handle('save-credentials', async (event, credentials) => {
+  const account = saveAccount({
+    id: credentials.id || credentials.accountId || store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID),
+    provider: normalizeProvider(credentials.provider),
+    label: credentials.label,
+    sessionKey: credentials.sessionKey,
+    organizationId: credentials.organizationId,
+    apiKey: credentials.apiKey,
+    organizationHeader: credentials.organizationHeader,
+    projectId: credentials.projectId,
+  });
+  if (account.provider === 'claude' && account.sessionKey) {
+    await setSessionCookie(account.sessionKey);
   }
-  if (organizationId) {
-    store.set('organizationId', organizationId);
-  }
-  // Also set cookie in Electron session for window-based fetching
-  await setSessionCookie(sessionKey);
   return true;
 });
 
-ipcMain.handle('delete-credentials', async () => {
-  store.delete('sessionKey');
-  store.delete('sessionKey_encrypted');
-  store.delete('organizationId');
-  store.delete('apiKey');
-  store.delete('apiKey_encrypted');
+ipcMain.handle('delete-credentials', async (event, accountId) => {
+  deleteAccount(accountId);
   // Remove all Claude.ai cookies
   const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
   for (const cookie of cookies) {
@@ -371,6 +488,26 @@ ipcMain.handle('delete-credentials', async () => {
     storages: ['localstorage', 'sessionstorage', 'cachestorage'],
     origin: 'https://claude.ai'
   });
+  return true;
+});
+
+ipcMain.handle('get-accounts', () => {
+  const accounts = loadAccounts();
+  const active = getActiveAccount(accounts, store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID));
+  return {
+    activeAccountId: active?.id || DEFAULT_ACCOUNT_ID,
+    accounts: accounts.map(publicAccount),
+  };
+});
+
+ipcMain.handle('set-active-account', async (event, accountId) => {
+  const accounts = loadAccounts();
+  const active = getActiveAccount(accounts, accountId);
+  if (!active) return false;
+  store.set('settings.activeProfile', active.id);
+  if (active.provider === 'claude' && active.sessionKey) {
+    await setSessionCookie(active.sessionKey);
+  }
   return true;
 });
 
@@ -843,26 +980,19 @@ ipcMain.handle('check-for-update', () => {
 });
 
 ipcMain.handle('fetch-usage-data', async () => {
-  // Use the same credential retrieval logic as get-credentials
-  let sessionKey = null;
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = store.get('sessionKey_encrypted');
-    if (encrypted) {
-      try {
-        sessionKey = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
-      } catch (err) {
-        console.error('[Keychain] Failed to decrypt session key:', err.message);
-      }
-    }
-  } else {
-    sessionKey = store.get('sessionKey');
-  }
+  const activeAccount = getActiveStoredAccount();
 
-  const organizationId = store.get('organizationId');
-
-  if (!sessionKey || !organizationId) {
+  if (!hasUsableCredentials(activeAccount)) {
     throw new Error('Missing credentials');
   }
+
+  if (activeAccount.provider === 'codex') {
+    const data = await fetchCodexUsage(activeAccount);
+    storeUsageHistory(data);
+    return data;
+  }
+
+  const { sessionKey, organizationId } = activeAccount;
 
   // Ensure cookie is set
   await setSessionCookie(sessionKey);
@@ -886,8 +1016,7 @@ ipcMain.handle('fetch-usage-data', async () => {
       || error.message.startsWith('CloudflareChallenge')
       || error.message.startsWith('UnexpectedHTML');
     if (isBlocked) {
-      store.delete('sessionKey');
-      store.delete('organizationId');
+      deleteAccount(activeAccount.id);
       if (mainWindow) {
         mainWindow.webContents.send('session-expired');
       }

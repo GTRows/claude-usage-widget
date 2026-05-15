@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Allowed domains for openExternal — prevents renderer from opening arbitrary URLs
 const ALLOWED_EXTERNAL_DOMAINS = [
   'claude.ai',
+  'chatgpt.com',
+  'platform.openai.com',
   'github.com'
 ];
 
@@ -22,7 +24,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Credentials management
   getCredentials: () => ipcRenderer.invoke('get-credentials'),
   saveCredentials: (credentials) => ipcRenderer.invoke('save-credentials', credentials),
-  deleteCredentials: () => ipcRenderer.invoke('delete-credentials'),
+  deleteCredentials: (accountId) => ipcRenderer.invoke('delete-credentials', accountId),
+  getAccounts: () => ipcRenderer.invoke('get-accounts'),
+  setActiveAccount: (accountId) => ipcRenderer.invoke('set-active-account', accountId),
   validateSessionKey: (sessionKey) => ipcRenderer.invoke('validate-session-key', sessionKey),
   detectSessionKey: () => ipcRenderer.invoke('detect-session-key'),
 

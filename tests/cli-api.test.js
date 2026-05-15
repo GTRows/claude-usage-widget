@@ -79,4 +79,23 @@ describe('fetchUsage', () => {
     expect(data.five_hour.utilization).toBe(5);
     expect(data.extra_usage).toBeUndefined();
   });
+  it('normalizes OpenAI organization usage for codex accounts', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(okJson({
+        data: [{
+          results: [{ input_tokens: 100, output_tokens: 50, num_model_requests: 2 }],
+        }],
+      }))
+      .mockResolvedValueOnce(okJson({
+        data: [{
+          results: [{ amount: { value: 1.25, currency: 'usd' } }],
+        }],
+      }));
+    const data = await api.fetchUsage({ provider: 'codex', apiKey: 'sk-admin' });
+    expect(data.provider).toBe('codex');
+    expect(data.codex_usage.input_tokens).toBe(100);
+    expect(data.codex_usage.output_tokens).toBe(50);
+    expect(data.codex_usage.cost).toBe(1.25);
+    expect(data.extra_usage.used_cents).toBe(125);
+  });
 });
