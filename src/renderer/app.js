@@ -38,6 +38,8 @@ const elements = {
     loadingContainer: document.getElementById('loadingContainer'),
     loginContainer: document.getElementById('loginContainer'),
     noUsageContainer: document.getElementById('noUsageContainer'),
+    noUsageTitle: document.getElementById('noUsageTitle'),
+    noUsageBody: document.getElementById('noUsageBody'),
     mainContent: document.getElementById('mainContent'),
     loginStep1: document.getElementById('loginStep1'),
     loginStep2: document.getElementById('loginStep2'),
@@ -77,11 +79,15 @@ const elements = {
     sessionProgress: document.getElementById('sessionProgress'),
     sessionTimer: document.getElementById('sessionTimer'),
     sessionTimeText: document.getElementById('sessionTimeText'),
+    sessionMetricLabel: document.getElementById('sessionMetricLabel'),
+    sessionMetricFootLabel: document.getElementById('sessionMetricFootLabel'),
 
     weeklyPercentage: document.getElementById('weeklyPercentage'),
     weeklyProgress: document.getElementById('weeklyProgress'),
     weeklyTimer: document.getElementById('weeklyTimer'),
     weeklyTimeText: document.getElementById('weeklyTimeText'),
+    weeklyMetricLabel: document.getElementById('weeklyMetricLabel'),
+    weeklyMetricFootLabel: document.getElementById('weeklyMetricFootLabel'),
     weeklyResetsAt: document.getElementById('weeklyResetsAt'),
 
     sessionResetsAt: document.getElementById('sessionResetsAt'),
@@ -223,6 +229,34 @@ function hasActiveCredentials(creds) {
     if (!creds) return false;
     if (creds.provider === 'codex') return Boolean(creds.apiKey);
     return Boolean(creds.sessionKey && creds.organizationId);
+}
+
+function activeProvider() {
+    return credentials?.provider === 'codex' ? 'codex' : 'claude';
+}
+
+function displayFetchError(error) {
+    const message = error?.message || String(error || '');
+    const provider = activeProvider();
+    const detail = message.replace(/^Error invoking remote method 'fetch-usage-data':\s*/i, '').trim();
+
+    elements.loadingContainer.style.display = 'none';
+    elements.loginContainer.style.display = 'none';
+    elements.mainContent.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    elements.noUsageContainer.style.display = 'flex';
+    elements.settingsBtn.style.display = 'flex';
+    elements.refreshBtn.style.display = 'flex';
+    elements.graphBtn.style.display = 'none';
+    if (elements.noUsageTitle) {
+        elements.noUsageTitle.textContent = window.i18n.t(provider === 'codex' ? 'noUsage.codexErrorTitle' : 'noUsage.errorTitle');
+    }
+    if (elements.noUsageBody) {
+        elements.noUsageBody.textContent = provider === 'codex'
+            ? window.i18n.t('noUsage.codexErrorBody', { error: detail || 'Unknown error' })
+            : window.i18n.t('noUsage.errorBody', { error: detail || 'Unknown error' });
+    }
+    resizeWidget();
 }
 
 function selectedProvider() {
@@ -1069,6 +1103,7 @@ async function fetchUsageData() {
             showLoginRequired();
         } else {
             debugLog('Failed to fetch usage data');
+            displayFetchError(error);
         }
     } finally {
         isFetching = false;
@@ -1085,6 +1120,40 @@ function formatCurrency(amountCents, currencyCode) {
   const symbols = { USD: '$', EUR: '€', GBP: '£' };
   const sym = symbols[currencyCode];
   return sym ? `${sym}${amount}` : `${amount} ${currencyCode || 'USD'}`;
+}
+
+function formatCount(value) {
+    return new Intl.NumberFormat().format(Number(value || 0));
+}
+
+function applyProviderMetricPresentation(data) {
+    if (data?.provider !== 'codex') {
+        if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.session');
+        if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.weekly');
+        if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
+        if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
+        return;
+    }
+
+    const usage = data.codex_usage || {};
+    const currency = usage.currency || data.extra_usage?.currency || 'USD';
+
+    if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.codexRequests');
+    if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.codexCost');
+    if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
+    if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
+    if (elements.sessionPercentage) elements.sessionPercentage.textContent = formatCount(usage.num_model_requests);
+    if (elements.weeklyPercentage) elements.weeklyPercentage.textContent = formatCurrency(Math.round(Number(usage.cost || 0) * 100), currency);
+    if (elements.sessionTimeText) elements.sessionTimeText.textContent = window.i18n.t('metric.last7d');
+    if (elements.weeklyTimeText) elements.weeklyTimeText.textContent = window.i18n.t('metric.last7d');
+    if (elements.sessionResetsAt) {
+        elements.sessionResetsAt.textContent = window.i18n.t('metric.apiUsage');
+        elements.sessionResetsAt.style.opacity = '1';
+    }
+    if (elements.weeklyResetsAt) {
+        elements.weeklyResetsAt.textContent = window.i18n.t('metric.apiUsage');
+        elements.weeklyResetsAt.style.opacity = '1';
+    }
 }
 
 // Extra row label mapping for API fields
@@ -1322,6 +1391,7 @@ function updateUI(data) {
     updateTrayIcon(data);
     buildExtraRows(data);
     refreshTimers();
+    applyProviderMetricPresentation(data);
     if (isExpanded) refreshExtraTimers();
     if (!isCompactMode) resizeWidget();
     startCountdown();
@@ -2129,6 +2199,8 @@ function showLoginRequired() {
     elements.loginStep2.style.display = 'none';
     elements.sessionKeyError.textContent = '';
     elements.sessionKeyInput.value = '';
+    if (elements.noUsageTitle) elements.noUsageTitle.textContent = window.i18n.t('noUsage.title');
+    if (elements.noUsageBody) elements.noUsageBody.textContent = window.i18n.t('noUsage.body');
     // Close any open overlays
     elements.settingsOverlay.style.display = 'none';
     elements.compactSettingsOverlay.style.display = 'none';
@@ -2155,6 +2227,8 @@ function showMainContent() {
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'none';
     elements.noUsageContainer.style.display = 'none';
+    if (elements.noUsageTitle) elements.noUsageTitle.textContent = window.i18n.t('noUsage.title');
+    if (elements.noUsageBody) elements.noUsageBody.textContent = window.i18n.t('noUsage.body');
     // Respect compact mode — don't force mainContent visible if we're in compact
     if (!isCompactMode) {
         elements.mainContent.style.display = 'block';

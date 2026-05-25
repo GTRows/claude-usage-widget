@@ -92,6 +92,10 @@ describe('fetchUsage', () => {
         }],
       }));
     const data = await api.fetchUsage({ provider: 'codex', apiKey: 'sk-admin' });
+    expect(fetch).toHaveBeenNthCalledWith(1, expect.stringContaining('bucket_width=1d'), expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(1, expect.stringContaining('limit=7'), expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(2, expect.stringContaining('bucket_width=1d'), expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(2, expect.stringContaining('limit=7'), expect.any(Object));
     expect(data.provider).toBe('codex');
     expect(data.codex_usage.input_tokens).toBe(100);
     expect(data.codex_usage.output_tokens).toBe(50);

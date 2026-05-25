@@ -132,7 +132,12 @@ async function fetchCodexUsage(credentials) {
 
   const end = Math.floor(Date.now() / 1000);
   const start = end - (7 * 24 * 60 * 60);
-  const baseParams = new URLSearchParams({ start_time: String(start), end_time: String(end), limit: '180' });
+  const baseParams = new URLSearchParams({
+    start_time: String(start),
+    end_time: String(end),
+    bucket_width: '1d',
+    limit: '7',
+  });
   const usageUrl = `${OPENAI_BASE}/organization/usage/completions?${baseParams.toString()}`;
   const costsUrl = `${OPENAI_BASE}/organization/costs?${baseParams.toString()}`;
 

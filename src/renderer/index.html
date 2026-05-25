@@ -136,8 +136,8 @@
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
                     <div class="no-usage-text-group">
-                        <h3 data-i18n="noUsage.title">No Usage Yet</h3>
-                        <p data-i18n="noUsage.body">Start chatting with Claude to see your usage stats</p>
+                        <h3 id="noUsageTitle" data-i18n="noUsage.title">No Usage Yet</h3>
+                        <p id="noUsageBody" data-i18n="noUsage.body">Start chatting with Claude to see your usage stats</p>
                     </div>
                 </div>
             </div>
@@ -154,7 +154,7 @@
                 <div class="metric-grid">
                     <div class="metric-card metric-card--session">
                         <div class="metric-card-head">
-                            <span class="metric-label" data-i18n="metric.session">Current Session</span>
+                            <span class="metric-label" id="sessionMetricLabel" data-i18n="metric.session">Current Session</span>
                             <span class="metric-dateline" id="sessionResetsAt">--</span>
                         </div>
                         <div class="metric-card-body">
@@ -173,14 +173,14 @@
                             </div>
                         </div>
                         <div class="metric-card-foot">
-                            <span class="metric-foot-label" data-i18n="metric.resetsIn">Resets in</span>
+                            <span class="metric-foot-label" id="sessionMetricFootLabel" data-i18n="metric.resetsIn">Resets in</span>
                             <span class="timer-text" id="sessionTimeText">--:--</span>
                         </div>
                     </div>
 
                     <div class="metric-card metric-card--weekly">
                         <div class="metric-card-head">
-                            <span class="metric-label" data-i18n="metric.weekly">Weekly Limit</span>
+                            <span class="metric-label" id="weeklyMetricLabel" data-i18n="metric.weekly">Weekly Limit</span>
                             <span class="metric-dateline" id="weeklyResetsAt">--</span>
                         </div>
                         <div class="metric-card-body">
@@ -199,7 +199,7 @@
                             </div>
                         </div>
                         <div class="metric-card-foot">
-                            <span class="metric-foot-label" data-i18n="metric.resetsIn">Resets in</span>
+                            <span class="metric-foot-label" id="weeklyMetricFootLabel" data-i18n="metric.resetsIn">Resets in</span>
                             <span class="timer-text" id="weeklyTimeText">--:--</span>
                         </div>
                     </div>
