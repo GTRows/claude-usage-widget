@@ -14,6 +14,15 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.16.4-gtrows.1] - 2026-05-25
+
+GTRows fork. Emergency fix for Codex usage refresh and visible fetch errors.
+
+### Fixed
+- Codex usage requests now use valid OpenAI daily bucket limits for the 7-day window
+- Codex fetch errors now appear in the widget instead of only disappearing into DevTools
+- Codex main cards now show 7-day request count and cost instead of Claude quota percentages
+
 ## [1.16.3-gtrows.1] - 2026-05-25
 
 GTRows fork. Emergency fix for the Codex login flow.
