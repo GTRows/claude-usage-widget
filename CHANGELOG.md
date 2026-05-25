@@ -14,6 +14,14 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.16.1-gtrows.1] - 2026-05-25
+
+GTRows fork. Patch release for stable GitHub release publishing and update-link handling.
+
+### Fixed
+- GitHub build workflows now publish fork builds as stable releases instead of prereleases
+- Update notifications now open the actual latest release URL instead of GitHub's stable-only `/releases/latest` redirect
+
 ## [1.16.0-gtrows.1] - 2026-05-15
 
 GTRows fork. Adds multi-account support, introduces Codex/OpenAI usage support,
