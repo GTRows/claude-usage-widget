@@ -32,4 +32,25 @@ function isNewerVersion(remote, local) {
   return compareVersions(remote, local) > 0;
 }
 
-module.exports = { parseVersion, compareVersions, isNewerVersion };
+function pickLatestRelease(releases) {
+  if (!Array.isArray(releases)) return null;
+
+  let best = null;
+  for (const release of releases) {
+    if (!release || release.draft) continue;
+
+    const version = (release.tag_name || '').replace(/^v/i, '');
+    if (!parseVersion(version)) continue;
+
+    if (!best || compareVersions(version, best.version) > 0) {
+      best = {
+        version,
+        releaseUrl: release.html_url || null,
+      };
+    }
+  }
+
+  return best;
+}
+
+module.exports = { parseVersion, compareVersions, isNewerVersion, pickLatestRelease };

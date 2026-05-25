@@ -1,6 +1,8 @@
 // Application state
 let credentials = null;
 let updateInterval = null;
+const RELEASES_PAGE_URL = 'https://github.com/GTRows/claude-usage-widget/releases';
+let latestReleaseUrl = RELEASES_PAGE_URL;
 let countdownInterval = null;
 let latestUsageData = null;
 let isExpanded = false;
@@ -744,10 +746,10 @@ function setupEventListeners() {
         resizeWidget();
     });
     elements.updateBannerText.addEventListener('click', () => {
-        window.electronAPI.openExternal(`https://github.com/GTRows/claude-usage-widget/releases/latest`);
+        window.electronAPI.openExternal(latestReleaseUrl);
     });
     elements.settingsUpdateLink.addEventListener('click', () => {
-        window.electronAPI.openExternal(`https://github.com/GTRows/claude-usage-widget/releases/latest`);
+        window.electronAPI.openExternal(latestReleaseUrl);
     });
 
     elements.checkUpdatesBtn.addEventListener('click', async () => {
@@ -2741,13 +2743,15 @@ async function checkForUpdate() {
     try {
         const result = await window.electronAPI.checkForUpdate();
         // After Task 3, main.js returns { ok: false } on network/parse error,
-        // and { ok: true, hasUpdate, version } on success. Default ok to true
+        // and { ok: true, hasUpdate, version, releaseUrl } on success. Default ok to true
         // for backward shape (older main.js builds during dev hot-reload).
         const ok = result && result.ok !== false;
         const hasUpdate = !!(result && result.hasUpdate);
         const version = (result && result.version) || null;
+        const releaseUrl = (result && result.releaseUrl) || RELEASES_PAGE_URL;
 
         if (ok && hasUpdate && version) {
+            latestReleaseUrl = releaseUrl;
             elements.updateBannerText.textContent = window.i18n.t('update.bannerVersion', { version });
             elements.updateBanner.style.display = 'flex';
             resizeWidget(true);
@@ -2757,10 +2761,10 @@ async function checkForUpdate() {
             }
             debugLog(`Update available: v${version}`);
         }
-        return { ok, hasUpdate, version };
+        return { ok, hasUpdate, version, releaseUrl };
     } catch (e) {
         debugLog('Update check failed silently', e);
-        return { ok: false, hasUpdate: false, version: null };
+        return { ok: false, hasUpdate: false, version: null, releaseUrl: null };
     }
 }
 

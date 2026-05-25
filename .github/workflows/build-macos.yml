@@ -83,7 +83,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
-          prerelease: true
+          prerelease: false
           files: |
             dist/*arm64*.dmg
             dist/*arm64*.dmg.blockmap

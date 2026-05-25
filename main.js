@@ -4,7 +4,7 @@ const https = require('https');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
-const { isNewerVersion, compareVersions } = require('./src/shared/version');
+const { isNewerVersion, pickLatestRelease } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 const { t, setLanguage } = require('./src/shared/i18n');
 const { fetchCodexUsage } = require('./src/cli/api');
@@ -951,30 +951,29 @@ ipcMain.handle('check-for-update', () => {
         try {
           const data = JSON.parse(body);
           if (!Array.isArray(data)) {
-            resolve({ ok: false, hasUpdate: false, version: null });
+            resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null });
             return;
           }
           const current = app.getVersion();
-          let best = null;
-          for (const rel of data) {
-            if (rel.draft) continue;
-            const tag = (rel.tag_name || '').replace(/^v/, '');
-            if (!tag) continue;
-            if (!best || compareVersions(tag, best) > 0) best = tag;
-          }
-          if (best && isNewerVersion(best, current)) {
-            resolve({ ok: true, hasUpdate: true, version: best });
+          const latestRelease = pickLatestRelease(data);
+          if (latestRelease && isNewerVersion(latestRelease.version, current)) {
+            resolve({
+              ok: true,
+              hasUpdate: true,
+              version: latestRelease.version,
+              releaseUrl: latestRelease.releaseUrl
+            });
           } else {
-            resolve({ ok: true, hasUpdate: false, version: null });
+            resolve({ ok: true, hasUpdate: false, version: null, releaseUrl: null });
           }
         } catch {
-          resolve({ ok: false, hasUpdate: false, version: null });
+          resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null });
         }
       });
     });
 
-    req.on('error', () => resolve({ ok: false, hasUpdate: false, version: null }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, hasUpdate: false, version: null }); });
+    req.on('error', () => resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null }); });
     req.end();
   });
 });
