@@ -14,6 +14,14 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.16.2-gtrows.1] - 2026-05-25
+
+GTRows fork. Emergency login fix for account naming.
+
+### Fixed
+- Login account name input is editable in Electron and starts with a provider-specific default value
+- Manual and browser login save a default account label when the field is left unchanged or empty
+
 ## [1.16.1-gtrows.1] - 2026-05-25
 
 GTRows fork. Patch release for stable GitHub release publishing and update-link handling.

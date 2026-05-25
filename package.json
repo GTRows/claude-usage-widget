@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-widget",
-  "version": "1.16.1-gtrows.1",
+  "version": "1.16.2-gtrows.1",
   "description": "Desktop widget for Claude.ai and Codex/OpenAI usage monitoring — GTRows fork",
   "main": "main.js",
   "bin": {
