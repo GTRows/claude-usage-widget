@@ -10,12 +10,12 @@
 identity:
   name: claude-usage-widget
   display_name: Claude-Usage-Widget
-  description: Desktop widget for Claude.ai usage monitoring - GTRows fork.
+  description: Desktop widget for Claude.ai and Codex/OpenAI usage monitoring - GTRows fork.
   homepage: "https://github.com/GTRows/claude-usage-widget"
-  icon: assets/icon.png
+  icon: assets/logo.png
   license: MIT
 
-version: 1.15.0-gtrows.1
+version: 1.16.0-gtrows.1
 
 release:
   platforms:

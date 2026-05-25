@@ -1,8 +1,10 @@
-# Claude Widget (GTRows fork)
+# Claude Usage Widget (GTRows fork)
 
-Desktop widget for Claude.ai usage monitoring — a personal fork of the original [claude-usage-widget](https://github.com/SlavomirDurej/claude-usage-widget) by Slavomir Durej, with additional features and UI changes.
+Desktop widget for Claude.ai usage monitoring, now with multi-account support and Codex/OpenAI usage visibility.
 
-Runs on **Windows, macOS, and Linux**.
+This fork is based on the original [claude-usage-widget](https://github.com/SlavomirDurej/claude-usage-widget) by Slavomir Durej and adds a GTRows-focused desktop workflow, Turkish/English UI, CLI tools, history, tray controls, and provider-aware account handling.
+
+Runs on Windows, macOS, and Linux.
 
 ![Claude Usage Widget - Main](assets/screenshot-main.png)
 
@@ -10,69 +12,53 @@ Runs on **Windows, macOS, and Linux**.
 
 ## Features
 
-🎯 **Real-time Usage Tracking** — Monitor both session and weekly usage limits
-📊 **Visual Progress Bars** — Clean, gradient progress indicators with configurable warning thresholds
-⏱️ **Countdown Timers** — Circular timers showing time elapsed in the current session window
-🔄 **Auto-refresh** — Updates every 5 minutes automatically, with animated refresh indicator
-📈 **Usage History Graph** — Toggleable 7-day chart showing session and weekly trends over time
-🌍 **Currency Support** — Extra usage displays your account's billing currency (€, £, $)
-🎨 **Modern UI** — Sleek, draggable widget with dark and light themes
-🔒 **Secure** — Encrypted credential storage
-📍 **Always on Top** — User-controlled, stays visible across all workspaces
-💾 **System Tray** — Minimizes to tray for easy access
-⚙️ **Settings Panel** — Persistent preferences for startup, theme, tray, thresholds, and date/time formats
-🔔 **Usage Alerts** — Desktop notifications when usage crosses configurable warn/danger thresholds
-🔔 **Update Notifications** — Automatic check for new releases on startup
-🕐 **Configurable Date & Time Formats** — 12h/24h time, and flexible weekly reset date display
-📐 **Compact Mode** — Minimal view for when you just need a quick glance
+- Real-time usage tracking for Claude session and weekly limits.
+- Codex/OpenAI organization usage and cost snapshot support via the official OpenAI Usage and Costs APIs.
+- Multiple saved accounts with an active-account selector.
+- Secure local credential storage using Electron `safeStorage` when available.
+- Visual progress bars, countdown timers, usage alerts, and configurable thresholds.
+- Usage history graph and history table with export support.
+- Compact mode, tray icon rendering options, always-on-top mode, and keyboard shortcuts.
+- Turkish and English UI with instant language switching.
+- CLI companion for status, JSON output, shell prompt segments, history export, doctor checks, and login.
+- Codex-ready project automation files under `.codex/` plus `AGENTS.md` guidance.
 
 ---
 
-## What's New in v1.13.0-gtrows.1
+## What's New in v1.16.0-gtrows.1
 
-### Keyboard shortcuts
+### Multi-account and provider support
 
-Window-focused, no global accelerators. Shortcuts skip editable
-targets so typing in inputs still works.
+- Added a shared account model for `claude` and `codex` providers.
+- Existing single-account Claude credentials are migrated at runtime into the default Claude account.
+- The settings drawer now includes an active account selector.
+- The login screen can save separate Claude and Codex/OpenAI accounts.
 
-| Shortcut          | Action                    |
-| ----------------- | ------------------------- |
-| `Ctrl/Cmd + R`    | Refresh usage             |
-| `Ctrl/Cmd + G`    | Toggle usage graph        |
-| `Ctrl/Cmd + H`    | Toggle history table      |
-| `Ctrl/Cmd + M`    | Toggle compact mode       |
-| `Ctrl/Cmd + P`    | Pin on top                |
-| `Ctrl/Cmd + ,`    | Open / close settings     |
-| `Ctrl/Cmd + Q`    | Quit the widget           |
+### Codex/OpenAI usage
 
-- Settings now has a `06 Shortcuts` section listing every mapping
-  with mono keycaps. The mod key renders as `⌘` on macOS, `Ctrl`
-  elsewhere.
-- The default Electron menu is disabled, so `Ctrl+R` no longer
-  reloads the renderer mid-session.
+- Codex accounts use an OpenAI admin/API key and fetch organization completions usage plus costs.
+- `OPENAI_ADMIN_KEY` or `OPENAI_API_KEY` can be used by the CLI without extra provider flags.
+- CLI login supports `--provider codex --key K`.
 
-> For full release history, see [CHANGELOG.md](./CHANGELOG.md) and the
-> [Releases](../../releases) page.
+### Codex project tooling
+
+- Legacy Claude Code template hooks/scripts/docs were copied into `.codex/`.
+- Active setup, manifest, audit, usage-log, and AGENTS checks now target Codex paths.
+- Hook tests now run from `.codex/hooks/tests`.
+
+For full release history, see [CHANGELOG.md](./CHANGELOG.md) and the [Releases](../../releases) page.
 
 ---
 
 ## Screenshots
 
+### Main Widget
+
+![Claude Usage Widget - Main](assets/screenshot-main.png)
+
 ### Settings Panel
 
 ![Claude Usage Widget - Settings](assets/screenshot-settings.png)
-
-
-### Settings Options
-
-- ⚙️ **Launch at startup** — Auto-start with Windows or macOS login
-- 📌 **Hide from taskbar** — Tray-only mode
-- 🎨 **Theme selector** — Dark / Light / System
-- ⚠️ **Warning thresholds** — Configurable amber and red levels for usage bars
-- 🔔 **Usage alerts** — Desktop notifications at warn/danger thresholds
-- 🕐 **Time format** — 12h or 24h
-- 📅 **Date format** — Controls how the weekly reset date is displayed
-- 📐 **Compact mode** — Minimal two-bar view
 
 ---
 
@@ -80,39 +66,53 @@ targets so typing in inputs still works.
 
 ### Download Pre-built Release
 
-**Windows:**
-1. Download the latest `Claude-Usage-Widget-{version}-win-Setup.exe` (installer) or `Claude-Usage-Widget-{version}-win-portable.exe` (no install needed) from [Releases](../../releases)
-2. Run the installer or portable exe
-3. Launch "Claude Usage Widget" from the Start Menu (installer) or directly (portable)
+Windows:
 
-**macOS:**
-1. Download the latest `Claude-Usage-Widget-{version}-macOS-arm64.dmg` (Apple Silicon) or `Claude-Usage-Widget-{version}-macOS-x64.dmg` (Intel) from [Releases](../../releases)
-2. Open the DMG and drag the app to your Applications folder
-3. Launch "Claude Usage Widget" from Applications
+1. Download the latest `Claude-Usage-Widget-{version}-win-Setup.exe` installer or `Claude-Usage-Widget-{version}-win-portable.exe` from [Releases](../../releases).
+2. Run the installer or portable executable.
+3. Launch "Claude Usage Widget" from the Start Menu or directly from the portable executable.
 
-> **⚠️ macOS Security Notice:** Because this app is not yet notarized with Apple, macOS Gatekeeper may show a "damaged or can't be opened" warning. To fix this, run the following command in Terminal after installing:
-> ```
-> xattr -cr /Applications/Claude\ Usage\ Widget.app
-> ```
-> Then try launching the app again.
+macOS:
 
-**Linux:**
-1. Download the latest `Claude-Usage-Widget-{version}-linux-x86_64.AppImage` (Intel/AMD) or `Claude-Usage-Widget-{version}-linux-arm64.AppImage` (ARM) from [Releases](../../releases)
-2. Make it executable: `chmod +x Claude-Usage-Widget-*.AppImage`
-3. Run it: `./Claude-Usage-Widget-*.AppImage`
+1. Download the latest `Claude-Usage-Widget-{version}-macOS-arm64.dmg` for Apple Silicon or `Claude-Usage-Widget-{version}-macOS-x64.dmg` for Intel from [Releases](../../releases).
+2. Open the DMG and drag the app to Applications.
+3. Launch "Claude Usage Widget" from Applications.
 
-> **Note:** AppImage runs without installation on most Linux distributions. On Ubuntu 22.04+, you may need to install a dependency first:
-> ```bash
-> sudo apt install libfuse2
-> ```
+If macOS Gatekeeper reports that the app is damaged or cannot be opened, run:
+
+```bash
+xattr -cr /Applications/Claude\ Usage\ Widget.app
+```
+
+Linux:
+
+1. Download the latest AppImage, DEB, RPM, Pacman package, or tar.gz archive from [Releases](../../releases).
+2. For AppImage, make it executable:
+
+```bash
+chmod +x Claude-Usage-Widget-*.AppImage
+```
+
+3. Run it:
+
+```bash
+./Claude-Usage-Widget-*.AppImage
+```
+
+On Ubuntu 22.04+, AppImage may require:
+
+```bash
+sudo apt install libfuse2
+```
 
 ---
 
-### Build from Source
+## Build from Source
 
-**Prerequisites:**
-- Node.js 18+ ([Download](https://nodejs.org))
-- npm (comes with Node.js)
+Prerequisites:
+
+- Node.js 18+
+- npm 9+
 
 ```bash
 git clone https://github.com/GTRows/claude-usage-widget.git
@@ -121,6 +121,14 @@ npm install
 npm start
 ```
 
+Development commands:
+
+```bash
+npm run dev
+npm test
+npm run build
+npm run cli
+```
 
 ---
 
@@ -128,62 +136,101 @@ npm start
 
 ### First Launch
 
-1. Launch the widget
-2. Click "Login to Claude" when prompted
-3. A browser window will open — log in to your Claude.ai account
-4. The widget will automatically capture your session
-5. Usage data will start displaying immediately
+1. Launch the widget.
+2. Pick a provider on the login screen.
+3. For Claude, sign in through the browser flow or paste a `sessionKey`.
+4. For Codex/OpenAI, paste an OpenAI admin/API key with access to organization usage endpoints.
+5. Name the account and connect.
+6. Usage data starts displaying for the active account.
 
-### Widget Controls
+### Multiple Accounts
 
-- **Drag** — Click and drag the title bar to move the widget
-- **Refresh** — Click the refresh icon to update data immediately
-- **Graph** — Click the graph icon to toggle usage history
-- **Minimize** — Click the minus icon to hide to system tray / dock
-- **Close** — Click the X to minimize to tray (doesn't exit)
+- Add separate Claude and Codex accounts from the login screen.
+- Use Settings -> Accounts -> Active account to switch which account is polled.
+- Logging out removes the selected account and switches to the next saved account when available.
 
-### System Tray
+### CLI
 
-Right-click the tray icon for: Show/Hide, Refresh, Re-login, Settings, Exit.
+Claude login:
+
+```bash
+claude-usage login --provider claude --key sk-ant-sid01-... --org <organization-id>
+```
+
+Codex/OpenAI login:
+
+```bash
+claude-usage login --provider codex --key <openai-admin-key>
+```
+
+Environment variables:
+
+```bash
+CLAUDE_SESSION_KEY=...
+CLAUDE_ORGANIZATION_ID=...
+OPENAI_ADMIN_KEY=...
+OPENAI_API_KEY=...
+OPENAI_ORGANIZATION_ID=...
+OPENAI_PROJECT_ID=...
+```
+
+Useful commands:
+
+```bash
+claude-usage status
+claude-usage json
+claude-usage prompt --segments 5h,7d,extra --cache 60
+claude-usage history --since 7 --format csv
+claude-usage doctor
+```
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd + R` | Refresh usage |
+| `Ctrl/Cmd + G` | Toggle usage graph |
+| `Ctrl/Cmd + H` | Toggle history table |
+| `Ctrl/Cmd + M` | Toggle compact mode |
+| `Ctrl/Cmd + P` | Pin on top |
+| `Ctrl/Cmd + ,` | Open or close settings |
+| `Ctrl/Cmd + Q` | Quit the widget |
 
 ---
 
-## Understanding the Display
+## Privacy and Security
 
-### Current Session & Weekly Limit
-
-| Column | Description |
-|--------|-------------|
-| Session Used | Progress bar showing usage from 0–100% |
-| Elapsed | Circular timer showing how far through the window you are |
-| Resets In | Countdown until the window resets |
-| Resets At | Actual local clock time / date when the window resets |
-
-**Color Coding:**
-- 🟣 Purple: Normal usage (below warning threshold, default 75%)
-- 🟠 Orange: High usage (above warning threshold)
-- 🔴 Red: Critical usage (above danger threshold, default 90%)
-
----
-
-## Privacy & Security
-
-- Credentials stored **locally only** using encrypted storage
-- No data sent to any third-party servers
-- Only communicates with the official Claude.ai API
-- Logout clears all session data, cookies, and Electron session storage
+- Credentials are stored locally only.
+- Electron `safeStorage` is used for encrypted credential storage when available.
+- The app does not send telemetry.
+- Claude accounts communicate with Claude.ai endpoints.
+- Codex/OpenAI accounts communicate with official OpenAI organization usage and costs endpoints.
+- Logout clears the selected account and Claude browser cookies/session storage when applicable.
 
 ---
 
 ## Troubleshooting
 
-**"Login Required" keeps appearing** — Session may have expired. Click "Login to Claude" to re-authenticate.
+Login Required keeps appearing:
 
-**Widget not updating** — Check internet connection, click refresh manually, or try re-logging in from the tray menu.
+- The active account credential may have expired or been removed.
+- Reconnect the account from the login screen.
 
-**Build errors** — Clean reinstall resolves most issues:
+Codex usage shows zero percentages:
+
+- OpenAI organization usage endpoints return token/request/cost aggregates, not Claude-style quota percentages. The widget stores the cost and aggregate metrics under the account credits/extra usage surface.
+
+Widget not updating:
+
+- Check internet access.
+- Click refresh.
+- Switch active accounts in Settings.
+- Reconnect the account.
+
+Build errors:
+
 ```bash
-rm -rf node_modules package-lock.json
+rm -rf node_modules
 npm install
 ```
 
@@ -198,22 +245,23 @@ If issues persist, open a [Support discussion](../../discussions/categories/supp
 - [x] Settings panel
 - [x] Remember window position
 - [x] Custom warning thresholds
-- [x] Configurable date & time formats
+- [x] Configurable date and time formats
 - [x] Update notifications
 - [x] Usage alerts at thresholds
 - [x] Compact mode
-- [x] Usage history graph
+- [x] Usage history graph and table
 - [x] Currency support
-- [x] CLI companion (`claude-usage`) with history, doctor, prompt
-- [x] Animated tray mascot with configurable timing
+- [x] CLI companion
 - [x] Export history with date-range filter
-- [ ] Fresh GTRows visual assets (icons, installer art, screenshots)
+- [x] Keyboard shortcuts
+- [x] Multiple account support
+- [x] Codex/OpenAI usage support
+- [x] Codex-ready `.codex/` automation files
+- [ ] Fresh GTRows visual assets
 - [ ] Verified macOS build with GTRows notarization
-- [ ] Multiple account support
-- [x] Keyboard shortcuts (Ctrl/Cmd + R / G / H / M / P / , / Q)
-- [ ] Desktop notifications when the peak-throttle window starts / ends
-- [ ] Keep the window draggable while the settings panel is open
+- [ ] Provider-specific UI polish for Codex token/request metrics
+- [ ] Desktop notifications when the peak-throttle window starts or ends
 
 ---
 
-*Built with Electron · [Releases](../../releases) · [Discussions](../../discussions)*
+Built with Electron. See [Releases](../../releases), [Changelog](./CHANGELOG.md), and [Discussions](../../discussions).

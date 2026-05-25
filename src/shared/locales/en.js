@@ -42,6 +42,9 @@ const en = {
   'login.backBtn': 'Back',
   'login.errorEmpty': 'Please paste your session key',
   'login.errorFailed': 'Connection failed. Check your key.',
+  'login.accountLabelPlaceholder': 'Account name',
+  'provider.claude': 'Claude',
+  'provider.codex': 'Codex',
 
   // metric.* and header.*
   'metric.session': 'Current Session',
@@ -117,7 +120,8 @@ const en = {
   // settings.*
   'settings.title': 'Settings',
   'settings.done': 'Done',
-  'settings.disclaimer': 'Unofficial tool — not affiliated with Anthropic.',
+  'settings.disclaimer': 'Unofficial tool; not affiliated with Anthropic or OpenAI.',
+  'settings.group.accounts': 'Accounts',
   'settings.group.behaviour': 'Behaviour',
   'settings.group.appearance': 'Appearance',
   'settings.group.tray': 'Tray',
@@ -125,6 +129,8 @@ const en = {
   'settings.group.data': 'Data',
   'settings.group.shortcuts': 'Shortcuts',
   'settings.group.updates': 'Updates',
+  'settings.accounts.active.label': 'Active account',
+  'settings.accounts.active.hint': 'Choose which saved account the widget polls.',
   'settings.autoStart.label': 'Launch at startup',
   'settings.autoStart.hint': 'Open the widget on login.',
   'settings.alwaysOnTop.label': 'Always on top',

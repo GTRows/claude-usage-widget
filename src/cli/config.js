@@ -1,6 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const {
+  DEFAULT_ACCOUNT_ID,
+  getActiveAccount,
+  legacyClaudeAccount,
+  normalizeAccounts,
+  normalizeProvider,
+} = require('../shared/accounts');
 
 function getConfigDir() {
   if (process.env.CLAUDE_USAGE_CONFIG_DIR) {
@@ -42,15 +49,32 @@ function writeConfig(patch) {
 }
 
 function loadCredentials() {
+  const requestedProvider = process.env.CLAUDE_USAGE_PROVIDER || process.env.USAGE_PROVIDER;
+  const provider = normalizeProvider(requestedProvider || ((process.env.OPENAI_ADMIN_KEY || process.env.OPENAI_API_KEY) ? 'codex' : 'claude'));
   const fromEnv = {
+    id: process.env.CLAUDE_USAGE_ACCOUNT || DEFAULT_ACCOUNT_ID,
+    provider,
     sessionKey: process.env.CLAUDE_SESSION_KEY || null,
     organizationId: process.env.CLAUDE_ORGANIZATION_ID || null,
+    apiKey: process.env.OPENAI_ADMIN_KEY || process.env.OPENAI_API_KEY || null,
+    organizationHeader: process.env.OPENAI_ORGANIZATION_ID || null,
+    projectId: process.env.OPENAI_PROJECT_ID || null,
   };
-  if (fromEnv.sessionKey && fromEnv.organizationId) return fromEnv;
+  if (provider === 'claude' && fromEnv.sessionKey && fromEnv.organizationId) return fromEnv;
+  if (provider === 'codex' && fromEnv.apiKey) return fromEnv;
+
   const cfg = readConfig();
+  const activeAccountId = cfg.activeAccountId || cfg.activeProfile || DEFAULT_ACCOUNT_ID;
+  const accounts = normalizeAccounts(cfg.accounts);
+  const legacy = legacyClaudeAccount(cfg);
+  const active = getActiveAccount(accounts, activeAccountId) || legacy;
+  if (active) return active;
+
   return {
-    sessionKey: fromEnv.sessionKey || cfg.sessionKey || null,
-    organizationId: fromEnv.organizationId || cfg.organizationId || null,
+    id: DEFAULT_ACCOUNT_ID,
+    provider: 'claude',
+    sessionKey: null,
+    organizationId: null,
   };
 }
 

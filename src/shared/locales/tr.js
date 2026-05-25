@@ -42,6 +42,9 @@ const tr = {
   'login.backBtn': 'Geri',
   'login.errorEmpty': 'Lütfen oturum anahtarınızı yapıştırın',
   'login.errorFailed': 'Bağlantı başarısız. Anahtarınızı kontrol edin.',
+  'login.accountLabelPlaceholder': 'Hesap adı',
+  'provider.claude': 'Claude',
+  'provider.codex': 'Codex',
 
   // metric.* and header.*
   'metric.session': 'Mevcut Oturum',
@@ -117,7 +120,8 @@ const tr = {
   // settings.*
   'settings.title': 'Ayarlar',
   'settings.done': 'Tamam',
-  'settings.disclaimer': 'Resmi olmayan araç — Anthropic ile bağlantısı yoktur.',
+  'settings.disclaimer': 'Resmi olmayan araç; Anthropic veya OpenAI ile bağlantısı yoktur.',
+  'settings.group.accounts': 'Hesaplar',
   'settings.group.behaviour': 'Davranış',
   'settings.group.appearance': 'Görünüm',
   'settings.group.tray': 'Tepsi',
@@ -125,6 +129,8 @@ const tr = {
   'settings.group.data': 'Veri',
   'settings.group.shortcuts': 'Kısayollar',
   'settings.group.updates': 'Güncellemeler',
+  'settings.accounts.active.label': 'Etkin hesap',
+  'settings.accounts.active.hint': 'Widgetin sorgulayacağı kayıtlı hesabı seçin.',
   'settings.autoStart.label': 'Başlangıçta aç',
   'settings.autoStart.hint': 'Açılışta widgeti aç.',
   'settings.alwaysOnTop.label': 'Her zaman üstte',

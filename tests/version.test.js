@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseVersion, compareVersions, isNewerVersion } from '../src/shared/version.js';
+import { parseVersion, compareVersions, isNewerVersion, pickLatestRelease } from '../src/shared/version.js';
 
 describe('parseVersion', () => {
   it('parses a plain semver', () => {
@@ -39,5 +39,35 @@ describe('isNewerVersion', () => {
     expect(isNewerVersion('1.9.1', '1.9.0')).toBe(true);
     expect(isNewerVersion('1.9.0', '1.9.0')).toBe(false);
     expect(isNewerVersion('1.8.0', '1.9.0')).toBe(false);
+  });
+});
+
+describe('pickLatestRelease', () => {
+  it('picks the highest published release even when it is a GitHub prerelease', () => {
+    expect(pickLatestRelease([
+      {
+        tag_name: 'v1.12.0-gtrows.1',
+        draft: false,
+        prerelease: false,
+        html_url: 'https://github.com/GTRows/claude-usage-widget/releases/tag/v1.12.0-gtrows.1',
+      },
+      {
+        tag_name: 'v1.16.0-gtrows.1',
+        draft: false,
+        prerelease: true,
+        html_url: 'https://github.com/GTRows/claude-usage-widget/releases/tag/v1.16.0-gtrows.1',
+      },
+    ])).toEqual({
+      version: '1.16.0-gtrows.1',
+      releaseUrl: 'https://github.com/GTRows/claude-usage-widget/releases/tag/v1.16.0-gtrows.1',
+    });
+  });
+
+  it('ignores drafts and malformed release tags', () => {
+    expect(pickLatestRelease([
+      { tag_name: 'v2.0.0', draft: true, html_url: 'draft-url' },
+      { tag_name: 'not-a-version', draft: false, html_url: 'bad-url' },
+      { tag_name: 'v1.9.0', draft: false, html_url: 'stable-url' },
+    ])).toEqual({ version: '1.9.0', releaseUrl: 'stable-url' });
   });
 });

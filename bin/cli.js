@@ -7,6 +7,7 @@ const { fetchUsage, fetchOrganizations } = require('../src/cli/api');
 const { summary, inlinePrompt, pickPercent } = require('../src/cli/render');
 const { readWidgetHistory, getWidgetStorePath, getWidgetSettingsLanguage } = require('../src/cli/widget-store');
 const historyShared = require('../src/shared/history');
+const { DEFAULT_ACCOUNT_ID, normalizeAccount, normalizeAccounts } = require('../src/shared/accounts');
 const { t, setLanguage } = require('../src/shared/i18n');
 const pkg = require('../package.json');
 
@@ -144,16 +145,28 @@ async function cmdWatch(flags) {
 }
 
 async function cmdLogin(flags) {
+  const provider = flags.provider === 'codex' ? 'codex' : 'claude';
+  const id = flags.account || DEFAULT_ACCOUNT_ID;
+  const label = flags.label || (provider === 'codex' ? 'Codex Account' : 'Claude Account');
   const key = flags.key;
   const org = flags.org || flags.organization;
   if (!key) throw new Error(t('cli.login.missingKey'));
-  const patch = { sessionKey: key };
-  if (org) patch.organizationId = org;
-  if (!org) {
+  const account = provider === 'codex'
+    ? normalizeAccount({
+      id,
+      provider,
+      label,
+      apiKey: key,
+      organizationHeader: org || flags['openai-organization'],
+      projectId: flags.project || flags['openai-project'],
+    })
+    : normalizeAccount({ id, provider, label, sessionKey: key, organizationId: org });
+
+  if (provider === 'claude' && !org) {
     try {
       const orgs = await fetchOrganizations(key);
       if (Array.isArray(orgs) && orgs.length === 1) {
-        patch.organizationId = orgs[0].uuid || orgs[0].id;
+        account.organizationId = orgs[0].uuid || orgs[0].id;
       } else if (Array.isArray(orgs)) {
         process.stdout.write(t('cli.login.multipleOrgs') + '\n');
         for (const o of orgs) process.stdout.write(`  ${o.uuid || o.id}  ${o.name || ''}\n`);
@@ -163,12 +176,23 @@ async function cmdLogin(flags) {
       process.stderr.write(t('cli.login.autoDetectFailed', { error: err.message }) + '\n');
     }
   }
-  writeConfig(patch);
+  const current = require('../src/cli/config').readConfig();
+  const accounts = normalizeAccounts(current.accounts);
+  const existing = accounts.findIndex((item) => item.id === account.id);
+  if (existing >= 0) accounts[existing] = account;
+  else accounts.push(account);
+  writeConfig({
+    accounts,
+    activeAccountId: account.id,
+    sessionKey: provider === 'claude' && account.id === DEFAULT_ACCOUNT_ID ? account.sessionKey : current.sessionKey,
+    organizationId: provider === 'claude' && account.id === DEFAULT_ACCOUNT_ID ? account.organizationId : current.organizationId,
+  });
   process.stdout.write(t('cli.login.savedTo', { path: getConfigPath() }) + '\n');
 }
 
 async function cmdOrganizations(flags) {
   const creds = loadCredentials();
+  if (creds.provider === 'codex') throw new Error('organizations is only available for Claude accounts');
   if (!creds.sessionKey) throw new Error(t('cli.login.missingSession'));
   const orgs = await fetchOrganizations(creds.sessionKey);
   process.stdout.write(JSON.stringify(orgs, null, 2) + '\n');
@@ -185,8 +209,9 @@ async function cmdDoctor() {
   lines.push(t('cli.doctor.credsHeader'));
   const fromEnv = !!(process.env.CLAUDE_SESSION_KEY && process.env.CLAUDE_ORGANIZATION_ID);
   const creds = loadCredentials();
-  if (fromEnv) ok(t('cli.doctor.envVarsSet'));
-  else if (creds.sessionKey && creds.organizationId) ok(t('cli.doctor.configFile'), getConfigPath());
+  const codexEnv = !!(process.env.OPENAI_ADMIN_KEY || process.env.OPENAI_API_KEY);
+  if (fromEnv || codexEnv) ok(t('cli.doctor.envVarsSet'));
+  else if ((creds.sessionKey && creds.organizationId) || creds.apiKey) ok(t('cli.doctor.configFile'), getConfigPath());
   else fail(t('cli.doctor.noCreds'), t('cli.doctor.noCredsHint'));
 
   lines.push(t('cli.doctor.widgetStoreHeader'));
@@ -196,7 +221,7 @@ async function cmdDoctor() {
   else ok(t('cli.doctor.widgetHistoryRows', { n: widget.length }), widgetPath);
 
   lines.push(t('cli.doctor.apiHeader'));
-  if (creds.sessionKey && creds.organizationId) {
+  if ((creds.sessionKey && creds.organizationId) || creds.apiKey) {
     try {
       const t0 = Date.now();
       await fetchUsage(creds);

@@ -14,6 +14,32 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.16.0-gtrows.1] - 2026-05-15
+
+GTRows fork. Adds multi-account support, introduces Codex/OpenAI usage support,
+and ports the project automation files from Claude Code conventions to Codex.
+
+### Added
+- Shared provider/account model for Claude and Codex accounts
+- Multiple saved accounts with an active-account selector in the settings drawer
+- Provider picker and account label input on the login screen
+- Codex/OpenAI organization usage and costs fetching through the OpenAI Usage and Costs APIs
+- CLI support for `claude-usage login --provider codex --key K`
+- CLI support for `OPENAI_ADMIN_KEY` / `OPENAI_API_KEY` as Codex credentials
+- Codex-ready `.codex/` hooks, scripts, docs, command files, and hook tests
+- `AGENTS.md` project guidance and AGENTS drift checker for Codex workflows
+
+### Changed
+- Legacy single-account Claude credentials are read as the default Claude account
+- Credential storage now separates account metadata from encrypted per-account secrets
+- `fetch-usage-data` dispatches by active provider instead of assuming one Claude session
+- README now documents Claude + Codex usage, multi-account setup, and CLI provider flows
+- Template setup, audit, usage-log, manifest, and plugin-pin helpers now target Codex paths
+
+### Fixed
+- Language-change re-render now calls the existing `updateUI` path instead of a missing renderer function
+- Hook test suite now runs from `.codex/hooks/tests`
+
 ## [1.15.0-gtrows.1] - 2026-05-08
 
 GTRows fork. Drops the no-op auto-fire feature, adds full tr/en localization,
