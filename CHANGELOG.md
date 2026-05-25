@@ -14,6 +14,15 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.16.3-gtrows.1] - 2026-05-25
+
+GTRows fork. Emergency fix for the Codex login flow.
+
+### Fixed
+- Codex login now opens the OpenAI admin key page instead of doing nothing
+- OpenAI admin key URLs are allowed by the external-link security allowlist
+- Codex manual entry now labels the credential as an OpenAI admin key and shows provider-specific guidance and errors
+
 ## [1.16.2-gtrows.1] - 2026-05-25
 
 GTRows fork. Emergency login fix for account naming.
