@@ -224,10 +224,25 @@ function selectedProvider() {
     return elements.providerSelect?.value === 'codex' ? 'codex' : 'claude';
 }
 
+function defaultAccountLabel(provider) {
+    return provider === 'codex' ? 'Codex Account' : 'Claude Account';
+}
+
+function accountLabelValue(provider = selectedProvider()) {
+    const value = elements.accountLabelInput?.value.trim();
+    return value || defaultAccountLabel(provider);
+}
+
 function applyLoginProvider() {
     const provider = selectedProvider();
     const isCodex = provider === 'codex';
     if (elements.autoDetectBtn) elements.autoDetectBtn.disabled = isCodex;
+    if (elements.accountLabelInput) {
+        const otherDefault = defaultAccountLabel(isCodex ? 'claude' : 'codex');
+        if (!elements.accountLabelInput.value.trim() || elements.accountLabelInput.value.trim() === otherDefault) {
+            elements.accountLabelInput.value = defaultAccountLabel(provider);
+        }
+    }
     if (elements.sessionKeyInput) {
         elements.sessionKeyInput.placeholder = isCodex ? 'sk-admin-...' : 'sk-ant-sid01-...';
     }
@@ -908,7 +923,7 @@ async function handleConnect() {
             credentials = {
                 id: `codex-${Date.now()}`,
                 provider,
-                label: elements.accountLabelInput.value.trim() || 'Codex Account',
+                label: accountLabelValue(provider),
                 apiKey: secret
             };
             await window.electronAPI.saveCredentials(credentials);
@@ -925,7 +940,7 @@ async function handleConnect() {
             credentials = {
                 id: `claude-${Date.now()}`,
                 provider,
-                label: elements.accountLabelInput.value.trim() || 'Claude Account',
+                label: accountLabelValue(provider),
                 sessionKey: secret,
                 organizationId: result.organizationId
             };
@@ -967,7 +982,7 @@ async function handleAutoDetect() {
             credentials = {
                 id: `claude-${Date.now()}`,
                 provider: 'claude',
-                label: elements.accountLabelInput.value.trim() || 'Claude Account',
+                label: accountLabelValue('claude'),
                 sessionKey: result.sessionKey,
                 organizationId: validation.organizationId
             };

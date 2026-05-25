@@ -525,6 +525,9 @@ body.theme-light .pin-btn.active {
 }
 
 .login-account-label {
+    -webkit-app-region: no-drag;
+    user-select: text;
+    -webkit-user-select: text;
     width: 100%;
     min-width: 0;
     border: 1px solid var(--hairline-strong);
