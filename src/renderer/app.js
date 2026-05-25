@@ -41,10 +41,15 @@ const elements = {
     mainContent: document.getElementById('mainContent'),
     loginStep1: document.getElementById('loginStep1'),
     loginStep2: document.getElementById('loginStep2'),
+    loginTitle: document.getElementById('loginTitle'),
+    loginSubtitle: document.getElementById('loginSubtitle'),
+    loginHint: document.getElementById('loginHint'),
     autoDetectBtn: document.getElementById('autoDetectBtn'),
     autoDetectError: document.getElementById('autoDetectError'),
     providerSelect: document.getElementById('providerSelect'),
     accountLabelInput: document.getElementById('accountLabelInput'),
+    credentialTitle: document.getElementById('credentialTitle'),
+    credentialInstructions: document.getElementById('credentialInstructions'),
     openBrowserLink: document.getElementById('openBrowserLink'),
     nextStepBtn: document.getElementById('nextStepBtn'),
     backStepBtn: document.getElementById('backStepBtn'),
@@ -233,21 +238,50 @@ function accountLabelValue(provider = selectedProvider()) {
     return value || defaultAccountLabel(provider);
 }
 
+function codexKeyUrl() {
+    return 'https://platform.openai.com/settings/organization/admin-keys';
+}
+
+function showManualEntry() {
+    elements.loginStep1.style.display = 'none';
+    elements.loginStep2.style.display = 'block';
+    applyLoginProvider();
+    elements.sessionKeyInput.focus();
+}
+
 function applyLoginProvider() {
     const provider = selectedProvider();
     const isCodex = provider === 'codex';
-    if (elements.autoDetectBtn) elements.autoDetectBtn.disabled = isCodex;
+    if (elements.autoDetectBtn) {
+        elements.autoDetectBtn.disabled = false;
+        elements.autoDetectBtn.textContent = window.i18n.t(isCodex ? 'login.codexAutoBtn' : 'login.autoBtn');
+    }
+    if (elements.loginTitle) {
+        elements.loginTitle.textContent = window.i18n.t(isCodex ? 'login.codexTitle' : 'login.title');
+    }
+    if (elements.loginSubtitle) {
+        elements.loginSubtitle.textContent = window.i18n.t(isCodex ? 'login.codexSubtitle' : 'login.subtitle');
+    }
+    if (elements.loginHint) {
+        renderTranslatedHtml(elements.loginHint, window.i18n.t(isCodex ? 'login.codexHint' : 'login.hint'));
+    }
     if (elements.accountLabelInput) {
         const otherDefault = defaultAccountLabel(isCodex ? 'claude' : 'codex');
         if (!elements.accountLabelInput.value.trim() || elements.accountLabelInput.value.trim() === otherDefault) {
             elements.accountLabelInput.value = defaultAccountLabel(provider);
         }
     }
+    if (elements.credentialTitle) {
+        elements.credentialTitle.textContent = window.i18n.t(isCodex ? 'login.apiKeyTitle' : 'login.sessionKeyTitle');
+    }
+    if (elements.credentialInstructions) {
+        elements.credentialInstructions.textContent = window.i18n.t(isCodex ? 'login.codexManualHint' : 'login.claudeManualHint');
+    }
     if (elements.sessionKeyInput) {
         elements.sessionKeyInput.placeholder = isCodex ? 'sk-admin-...' : 'sk-ant-sid01-...';
     }
     if (elements.openBrowserLink) {
-        elements.openBrowserLink.textContent = isCodex ? 'platform.openai.com' : window.i18n.t('login.openClaudeAi');
+        elements.openBrowserLink.textContent = window.i18n.t(isCodex ? 'login.openOpenAI' : 'login.openClaudeAi');
     }
 }
 
@@ -388,9 +422,7 @@ function setupEventListeners() {
 
     // Step navigation
     elements.nextStepBtn.addEventListener('click', () => {
-        elements.loginStep1.style.display = 'none';
-        elements.loginStep2.style.display = 'block';
-        elements.sessionKeyInput.focus();
+        showManualEntry();
     });
 
     elements.backStepBtn.addEventListener('click', () => {
@@ -402,9 +434,7 @@ function setupEventListeners() {
     // Open browser link in step 2
     elements.openBrowserLink.addEventListener('click', (e) => {
         e.preventDefault();
-        window.electronAPI.openExternal(selectedProvider() === 'codex'
-            ? 'https://platform.openai.com/settings/organization/admin-keys'
-            : 'https://claude.ai');
+        window.electronAPI.openExternal(selectedProvider() === 'codex' ? codexKeyUrl() : 'https://claude.ai');
     });
 
     // Step 2: Manual sessionKey connect
@@ -910,7 +940,7 @@ async function handleConnect() {
     const provider = selectedProvider();
     const secret = elements.sessionKeyInput.value.trim();
     if (!secret) {
-        elements.sessionKeyError.textContent = window.i18n.t('login.errorEmpty');
+        elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorEmptyCodex' : 'login.errorEmpty');
         return;
     }
 
@@ -954,7 +984,7 @@ async function handleConnect() {
             elements.sessionKeyError.textContent = result.error || 'Invalid session key';
         }
     } catch (error) {
-        elements.sessionKeyError.textContent = window.i18n.t('login.errorFailed');
+        elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorFailedCodex' : 'login.errorFailed');
     } finally {
         elements.connectBtn.disabled = false;
         elements.connectBtn.textContent = window.i18n.t('login.connectBtn');
@@ -963,6 +993,13 @@ async function handleConnect() {
 
 // Handle auto-detect from browser cookies
 async function handleAutoDetect() {
+    if (selectedProvider() === 'codex') {
+        window.electronAPI.openExternal(codexKeyUrl());
+        elements.autoDetectError.textContent = window.i18n.t('login.codexAutoHint');
+        showManualEntry();
+        return;
+    }
+
     elements.autoDetectBtn.disabled = true;
     elements.autoDetectBtn.textContent = window.i18n.t('login.waiting');
     elements.autoDetectError.textContent = '';

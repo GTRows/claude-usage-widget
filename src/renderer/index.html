@@ -90,9 +90,9 @@
                                 <line x1="15" y1="12" x2="3" y2="12" />
                             </svg>
                         </div>
-                        <h3 class="login-title" data-i18n="login.title">Connect to Claude.ai</h3>
-                        <p class="login-subtitle" data-i18n="login.subtitle">Sign in to read your usage snapshot</p>
-                        <p class="login-hint" data-i18n="login.hint">If the embedded browser is blocked, use <em>Manual</em> and paste a session key instead.</p>
+                        <h3 class="login-title" id="loginTitle" data-i18n="login.title">Connect to Claude.ai</h3>
+                        <p class="login-subtitle" id="loginSubtitle" data-i18n="login.subtitle">Sign in to read your usage snapshot</p>
+                        <p class="login-hint" id="loginHint" data-i18n="login.hint">If the embedded browser is blocked, use <em>Manual</em> and paste a session key instead.</p>
                         <div class="login-provider-row">
                             <select id="providerSelect" class="settings-select">
                                 <option value="claude" data-i18n="provider.claude">Claude</option>
@@ -110,10 +110,10 @@
                     <div class="login-step2" id="loginStep2" style="display: none;">
                         <div class="session-key-form">
                             <div class="session-key-header">
-                                <h3 data-i18n="login.sessionKeyTitle">Session Key</h3>
+                                <h3 id="credentialTitle" data-i18n="login.sessionKeyTitle">Session Key</h3>
                                 <p>
                                     <a href="#" id="openBrowserLink" class="open-browser-link" data-i18n="login.openClaudeAi">Open claude.ai</a>
-                                    <span class="session-key-arrow">/</span> <code>F12</code> <span class="session-key-arrow">/</span> Application <span class="session-key-arrow">/</span> Cookies <span class="session-key-arrow">/</span> <code>sessionKey</code>
+                                    <span id="credentialInstructions"><span class="session-key-arrow">/</span> <code>F12</code> <span class="session-key-arrow">/</span> Application <span class="session-key-arrow">/</span> Cookies <span class="session-key-arrow">/</span> <code>sessionKey</code></span>
                                 </p>
                             </div>
                             <div class="session-key-input-row">

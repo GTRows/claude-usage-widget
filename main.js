@@ -627,7 +627,7 @@ ipcMain.handle('set-window-position', (event, { x, y }) => {
 
 ipcMain.on('open-external', (event, url) => {
   // Trust boundary enforcement: duplicate allowlist check in main process
-  const allowedDomains = ['claude.ai', 'github.com', 'paypal.me'];
+  const allowedDomains = ['claude.ai', 'github.com', 'paypal.me', 'platform.openai.com'];
   try {
     const parsedUrl = new URL(url);
     const isAllowed = allowedDomains.some(domain => 
