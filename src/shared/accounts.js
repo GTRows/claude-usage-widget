@@ -86,7 +86,7 @@ function getActiveAccount(accounts, activeAccountId = DEFAULT_ACCOUNT_ID) {
 function hasUsableCredentials(account) {
   if (!account) return false;
   if (account.provider === 'claude') return Boolean(account.sessionKey && account.organizationId);
-  if (account.provider === 'codex') return Boolean(account.apiKey);
+  if (account.provider === 'codex') return true;
   return false;
 }
 

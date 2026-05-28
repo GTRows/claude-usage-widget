@@ -15,6 +15,10 @@ beforeEach(() => {
   process.env.CLAUDE_USAGE_CONFIG_DIR = tmp;
   delete process.env.CLAUDE_SESSION_KEY;
   delete process.env.CLAUDE_ORGANIZATION_ID;
+  delete process.env.CLAUDE_USAGE_PROVIDER;
+  delete process.env.USAGE_PROVIDER;
+  delete process.env.OPENAI_ADMIN_KEY;
+  delete process.env.OPENAI_API_KEY;
   delete require.cache[require.resolve(configPath)];
   configMod = require(configPath);
 });
@@ -22,6 +26,10 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
   delete process.env.CLAUDE_USAGE_CONFIG_DIR;
+  delete process.env.CLAUDE_USAGE_PROVIDER;
+  delete process.env.USAGE_PROVIDER;
+  delete process.env.OPENAI_ADMIN_KEY;
+  delete process.env.OPENAI_API_KEY;
 });
 
 describe('config dir + path', () => {
@@ -93,5 +101,25 @@ describe('loadCredentials', () => {
       apiKey: 'admin-key',
     });
     delete process.env.OPENAI_ADMIN_KEY;
+  });
+  it('allows explicit Codex provider without an API key for local rate-limit logs', () => {
+    expect(configMod.loadCredentials('codex')).toMatchObject({
+      provider: 'codex',
+      apiKey: null,
+    });
+  });
+  it('uses a configured Codex account when the provider override asks for Codex', () => {
+    configMod.writeConfig({
+      activeAccountId: 'claude-main',
+      accounts: [
+        { id: 'claude-main', provider: 'claude', sessionKey: 'sk', organizationId: 'org' },
+        { id: 'codex-main', provider: 'codex', apiKey: 'openai-key' },
+      ],
+    });
+    expect(configMod.loadCredentials('codex')).toMatchObject({
+      id: 'codex-main',
+      provider: 'codex',
+      apiKey: 'openai-key',
+    });
   });
 });

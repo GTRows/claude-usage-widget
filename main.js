@@ -216,6 +216,8 @@ function storeUsageHistory(data) {
 
   history.push({
     timestamp,
+    provider: data.provider || 'claude',
+    quotaDisplay: data.quota_display || 'used',
     session: data.five_hour?.utilization || 0,
     weekly: data.seven_day?.utilization || 0,
     sonnet: data.seven_day_sonnet?.utilization || 0,
@@ -779,6 +781,7 @@ ipcMain.handle('get-settings', () => {
     dangerThreshold: store.get('settings.dangerThreshold', 90),
     timeFormat: store.get('settings.timeFormat', '12h'),
     weeklyDateFormat: store.get('settings.weeklyDateFormat', 'date'),
+    codexQuotaDisplay: store.get('settings.codexQuotaDisplay', 'used'),
     usageAlerts: store.get('settings.usageAlerts', true),
     compactMode: store.get('settings.compactMode', false),
     refreshInterval: store.get('settings.refreshInterval', '300'),
@@ -812,6 +815,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.dangerThreshold', settings.dangerThreshold);
   store.set('settings.timeFormat', settings.timeFormat);
   store.set('settings.weeklyDateFormat', settings.weeklyDateFormat);
+  store.set('settings.codexQuotaDisplay', settings.codexQuotaDisplay === 'remaining' ? 'remaining' : 'used');
   store.set('settings.usageAlerts', settings.usageAlerts);
   store.set('settings.compactMode', settings.compactMode);
   store.set('settings.refreshInterval', settings.refreshInterval);
@@ -986,7 +990,10 @@ ipcMain.handle('fetch-usage-data', async () => {
   }
 
   if (activeAccount.provider === 'codex') {
-    const data = await fetchCodexUsage(activeAccount);
+    const data = await fetchCodexUsage({
+      ...activeAccount,
+      codexQuotaDisplay: store.get('settings.codexQuotaDisplay', 'used'),
+    });
     storeUsageHistory(data);
     return data;
   }

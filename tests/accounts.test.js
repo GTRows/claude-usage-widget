@@ -19,7 +19,7 @@ describe('account normalization', () => {
 
   it('keeps distinct claude and codex account credential shapes', () => {
     const claude = normalizeAccount({ id: 'c1', provider: 'claude', sessionKey: 'sk', organizationId: 'org' });
-    const codex = normalizeAccount({ id: 'o1', provider: 'codex', apiKey: 'sk-admin' });
+    const codex = normalizeAccount({ id: 'o1', provider: 'codex' });
 
     expect(hasUsableCredentials(claude)).toBe(true);
     expect(hasUsableCredentials(codex)).toBe(true);

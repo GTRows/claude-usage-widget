@@ -140,6 +140,7 @@ const elements = {
     trayMascotGapRow: document.getElementById('trayMascotGapRow'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
+    codexQuotaDisplay: document.getElementById('codexQuotaDisplay'),
     languageSelect: document.getElementById('languageSelect'),
     refreshInterval: document.getElementById('refreshInterval'),
 
@@ -1135,25 +1136,19 @@ function applyProviderMetricPresentation(data) {
         return;
     }
 
-    const usage = data.codex_usage || {};
-    const currency = usage.currency || data.extra_usage?.currency || 'USD';
-
-    if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.codexRequests');
-    if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.codexCost');
-    if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
-    if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
-    if (elements.sessionPercentage) elements.sessionPercentage.textContent = formatCount(usage.num_model_requests);
-    if (elements.weeklyPercentage) elements.weeklyPercentage.textContent = formatCurrency(Math.round(Number(usage.cost || 0) * 100), currency);
-    if (elements.sessionTimeText) elements.sessionTimeText.textContent = window.i18n.t('metric.last7d');
-    if (elements.weeklyTimeText) elements.weeklyTimeText.textContent = window.i18n.t('metric.last7d');
-    if (elements.sessionResetsAt) {
-        elements.sessionResetsAt.textContent = window.i18n.t('metric.apiUsage');
-        elements.sessionResetsAt.style.opacity = '1';
+    const display = data.quota_display || activeCodexQuotaDisplay();
+    if (elements.sessionMetricLabel) {
+        elements.sessionMetricLabel.textContent = window.i18n.t(display === 'remaining'
+            ? 'metric.codexFiveHourRemaining'
+            : 'metric.codexFiveHourUsed');
     }
-    if (elements.weeklyResetsAt) {
-        elements.weeklyResetsAt.textContent = window.i18n.t('metric.apiUsage');
-        elements.weeklyResetsAt.style.opacity = '1';
+    if (elements.weeklyMetricLabel) {
+        elements.weeklyMetricLabel.textContent = window.i18n.t(display === 'remaining'
+            ? 'metric.codexWeeklyRemaining'
+            : 'metric.codexWeeklyUsed');
     }
+    if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
+    if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
 }
 
 // Extra row label mapping for API fields
@@ -1423,48 +1418,49 @@ function checkUsageAlerts(data) {
 
     const sessionPct = data.five_hour?.utilization || 0;
     const weeklyPct = data.seven_day?.utilization || 0;
+    const remainingMode = isRemainingQuotaData(data);
 
     // Reset alert flags when a session window resets (utilization drops back low)
-    if (sessionPct < warnThreshold) {
+    if (isBelowWarnReset(sessionPct, remainingMode)) {
         alertFired.session_warn = false;
         alertFired.session_danger = false;
     }
-    if (weeklyPct < warnThreshold) {
+    if (isBelowWarnReset(weeklyPct, remainingMode)) {
         alertFired.weekly_warn = false;
         alertFired.weekly_danger = false;
     }
 
     // Current Session — danger threshold (check first, higher priority)
-    if (sessionPct >= dangerThreshold && !alertFired.session_danger) {
+    if (isDangerPercent(sessionPct, remainingMode) && !alertFired.session_danger) {
         alertFired.session_danger = true;
         alertFired.session_warn = true; // suppress warn if we jumped straight to danger
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.sessionDanger', { pct: Math.round(sessionPct) })
+            window.i18n.t(remainingMode ? 'notify.sessionRemainingDanger' : 'notify.sessionDanger', { pct: Math.round(sessionPct) })
         );
     // Current Session — warn threshold
-    } else if (sessionPct >= warnThreshold && !alertFired.session_warn) {
+    } else if (isWarnPercent(sessionPct, remainingMode) && !alertFired.session_warn) {
         alertFired.session_warn = true;
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.sessionWarn', { pct: Math.round(sessionPct) })
+            window.i18n.t(remainingMode ? 'notify.sessionRemainingWarn' : 'notify.sessionWarn', { pct: Math.round(sessionPct) })
         );
     }
 
     // Weekly Limit — danger threshold
-    if (weeklyPct >= dangerThreshold && !alertFired.weekly_danger) {
+    if (isDangerPercent(weeklyPct, remainingMode) && !alertFired.weekly_danger) {
         alertFired.weekly_danger = true;
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.weeklyDanger', { pct: Math.round(weeklyPct) })
+            window.i18n.t(remainingMode ? 'notify.weeklyRemainingDanger' : 'notify.weeklyDanger', { pct: Math.round(weeklyPct) })
         );
     // Weekly Limit — warn threshold
-    } else if (weeklyPct >= warnThreshold && !alertFired.weekly_warn) {
+    } else if (isWarnPercent(weeklyPct, remainingMode) && !alertFired.weekly_warn) {
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.weeklyWarn', { pct: Math.round(weeklyPct) })
+            window.i18n.t(remainingMode ? 'notify.weeklyRemainingWarn' : 'notify.weeklyWarn', { pct: Math.round(weeklyPct) })
         );
     }
 }
@@ -1537,6 +1533,7 @@ function applyCompactMode(compact) {
 function updateCompactBars(data) {
     const sessionPct = Math.min(Math.max(data.five_hour?.utilization || 0, 0), 100);
     const weeklyPct = Math.min(Math.max(data.seven_day?.utilization || 0, 0), 100);
+    const remainingMode = isRemainingQuotaData(data);
 
     elements.compactSessionFill.style.width = `${sessionPct}%`;
     elements.compactSessionPct.textContent = `${Math.round(sessionPct)}%`;
@@ -1545,12 +1542,10 @@ function updateCompactBars(data) {
 
     // Apply warning/danger classes to compact bars
     elements.compactSessionFill.className = 'compact-bar-fill';
-    if (sessionPct >= dangerThreshold) elements.compactSessionFill.classList.add('danger');
-    else if (sessionPct >= warnThreshold) elements.compactSessionFill.classList.add('warning');
+    applyPercentStatus(elements.compactSessionFill, sessionPct, remainingMode);
 
     elements.compactWeeklyFill.className = 'compact-bar-fill weekly';
-    if (weeklyPct >= dangerThreshold) elements.compactWeeklyFill.classList.add('danger');
-    else if (weeklyPct >= warnThreshold) elements.compactWeeklyFill.classList.add('warning');
+    applyPercentStatus(elements.compactWeeklyFill, weeklyPct, remainingMode);
 }
 // Persist compact mode setting without touching the rest of settings — debounced
 let _saveCompactTimer = null;
@@ -1600,18 +1595,19 @@ const alertFired = {
 function seedAlertFlags(data) {
     const sessionPct = data.five_hour?.utilization || 0;
     const weeklyPct = data.seven_day?.utilization || 0;
+    const remainingMode = isRemainingQuotaData(data);
 
-    if (sessionPct >= dangerThreshold) {
+    if (isDangerPercent(sessionPct, remainingMode)) {
         alertFired.session_danger = true;
         alertFired.session_warn = true;
-    } else if (sessionPct >= warnThreshold) {
+    } else if (isWarnPercent(sessionPct, remainingMode)) {
         alertFired.session_warn = true;
     }
 
-    if (weeklyPct >= dangerThreshold) {
+    if (isDangerPercent(weeklyPct, remainingMode)) {
         alertFired.weekly_danger = true;
         alertFired.weekly_warn = true;
-    } else if (weeklyPct >= warnThreshold) {
+    } else if (isWarnPercent(weeklyPct, remainingMode)) {
         alertFired.weekly_warn = true;
     }
 }
@@ -1622,6 +1618,7 @@ function refreshTimers() {
     const settings = window._cachedSettings || {};
     const timeFormat = settings.timeFormat || '12h';
     const weeklyDateFormat = settings.weeklyDateFormat || 'date';
+    const remainingMode = isRemainingQuotaData(latestUsageData);
 
     // Session data
     const sessionUtilization = latestUsageData.five_hour?.utilization || 0;
@@ -1646,7 +1643,9 @@ function refreshTimers() {
     updateProgressBar(
         elements.sessionProgress,
         elements.sessionPercentage,
-        sessionUtilization
+        sessionUtilization,
+        false,
+        remainingMode
     );
 
     updateTimer(
@@ -1680,7 +1679,8 @@ function refreshTimers() {
         elements.weeklyProgress,
         elements.weeklyPercentage,
         weeklyUtilization,
-        true
+        true,
+        remainingMode
     );
 
     updateTimer(
@@ -2044,15 +2044,21 @@ function updateTrayIcon(data) {
         const session = data && data.five_hour ? data.five_hour.utilization : undefined;
         const settings = window._cachedSettings || {};
         const animateMascot = !!settings.trayShowLogo;
+        const remainingMode = isRemainingQuotaData(data);
 
         let status = 'low';
         let rounded = null;
         if (typeof session === 'number') {
             rounded = Math.round(Math.max(0, Math.min(100, session)));
-            if (rounded >= 100) status = 'dead';
-            else if (rounded === 0) status = 'zero';
-            else if (rounded >= dangerThreshold) status = 'danger';
-            else if (rounded >= warnThreshold) status = 'warn';
+            if (remainingMode) {
+                if (rounded <= (100 - dangerThreshold)) status = 'danger';
+                else if (rounded <= (100 - warnThreshold)) status = 'warn';
+            } else {
+                if (rounded >= 100) status = 'dead';
+                else if (rounded === 0) status = 'zero';
+                else if (rounded >= dangerThreshold) status = 'danger';
+                else if (rounded >= warnThreshold) status = 'warn';
+            }
         }
 
         if (animateMascot) {
@@ -2078,19 +2084,55 @@ function updateTrayIcon(data) {
     }
 }
 
+function isRemainingQuotaData(data) {
+    return data?.quota_display === 'remaining'
+        || data?.five_hour?.display_mode === 'remaining'
+        || data?.seven_day?.display_mode === 'remaining';
+}
+
+function activeCodexQuotaDisplay() {
+    const settings = window._cachedSettings || {};
+    return settings.codexQuotaDisplay === 'remaining' ? 'remaining' : 'used';
+}
+
+function applyPercentStatus(element, percentage, remainingMode = false) {
+    element.classList.remove('warning', 'danger');
+    if (remainingMode) {
+        if (percentage <= (100 - dangerThreshold)) {
+            element.classList.add('danger');
+        } else if (percentage <= (100 - warnThreshold)) {
+            element.classList.add('warning');
+        }
+        return;
+    }
+
+    if (percentage >= dangerThreshold) {
+        element.classList.add('danger');
+    } else if (percentage >= warnThreshold) {
+        element.classList.add('warning');
+    }
+}
+
+function isDangerPercent(percentage, remainingMode = false) {
+    return remainingMode ? percentage <= (100 - dangerThreshold) : percentage >= dangerThreshold;
+}
+
+function isWarnPercent(percentage, remainingMode = false) {
+    return remainingMode ? percentage <= (100 - warnThreshold) : percentage >= warnThreshold;
+}
+
+function isBelowWarnReset(percentage, remainingMode = false) {
+    return remainingMode ? percentage > (100 - warnThreshold) : percentage < warnThreshold;
+}
+
 // Update progress bar
-function updateProgressBar(progressElement, percentageElement, value, isWeekly = false) {
+function updateProgressBar(progressElement, percentageElement, value, isWeekly = false, remainingMode = false) {
     const percentage = Math.min(Math.max(value, 0), 100);
 
     progressElement.style.width = `${percentage}%`;
     percentageElement.textContent = `${Math.round(percentage)}%`;
 
-    progressElement.classList.remove('warning', 'danger');
-    if (percentage >= dangerThreshold) {
-        progressElement.classList.add('danger');
-    } else if (percentage >= warnThreshold) {
-        progressElement.classList.add('warning');
-    }
+    applyPercentStatus(progressElement, percentage, remainingMode);
 }
 
 // Format reset date for the "Resets At" column
@@ -2304,6 +2346,12 @@ async function loadHistoryTable() {
     renderHistoryPage();
 }
 
+function isHistoryRemainingEntry(entry) {
+    if (entry?.quotaDisplay === 'remaining') return true;
+    if (entry?.quotaDisplay === 'used') return false;
+    return latestUsageData?.provider === 'codex' && activeCodexQuotaDisplay() === 'remaining';
+}
+
 function renderHistoryPage() {
     if (!elements.historyTableBody) return;
     const total = historyLastEntries.length;
@@ -2347,6 +2395,7 @@ function renderHistoryPage() {
     for (let i = 0; i < pageEntries.length; i++) {
         const entry = pageEntries[i];
         const next = pageEntries[i + 1] || historyLastEntries[start + i + 1];
+        const remainingMode = isHistoryRemainingEntry(entry);
         const tr = document.createElement('tr');
 
         const timeCell = document.createElement('td');
@@ -2365,13 +2414,13 @@ function renderHistoryPage() {
         timeCell.title = date.toLocaleString();
         tr.appendChild(timeCell);
 
-        tr.appendChild(makePctCell(entry.session));
-        tr.appendChild(makePctCell(entry.weekly));
+        tr.appendChild(makePctCell(entry.session, remainingMode));
+        tr.appendChild(makePctCell(entry.weekly, remainingMode));
         tr.appendChild(makePctCell(entry.sonnet));
         tr.appendChild(makePctCell(entry.opus));
         tr.appendChild(makePctCell(entry.extraUsage));
-        tr.appendChild(makeDeltaCell(entry.session, next?.session));
-        tr.appendChild(makeDeltaCell(entry.weekly, next?.weekly));
+        tr.appendChild(makeDeltaCell(entry.session, next?.session, remainingMode));
+        tr.appendChild(makeDeltaCell(entry.weekly, next?.weekly, remainingMode));
 
         frag.appendChild(tr);
     }
@@ -2417,7 +2466,7 @@ function parseCustomInputs(fromEl, toEl) {
     return { from, to };
 }
 
-function makePctCell(value) {
+function makePctCell(value, remainingMode = false) {
     const td = document.createElement('td');
     td.className = 'col-pct';
     if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -2427,13 +2476,13 @@ function makePctCell(value) {
     }
     const pct = Math.max(0, value);
     td.textContent = `${Math.round(pct)}%`;
-    if (pct >= dangerThreshold) td.classList.add('col-danger');
-    else if (pct >= warnThreshold) td.classList.add('col-warning');
+    if (isDangerPercent(pct, remainingMode)) td.classList.add('col-danger');
+    else if (isWarnPercent(pct, remainingMode)) td.classList.add('col-warning');
     else if (pct === 0) td.classList.add('col-muted');
     return td;
 }
 
-function makeDeltaCell(current, previous) {
+function makeDeltaCell(current, previous, remainingMode = false) {
     const td = document.createElement('td');
     td.className = 'col-pct';
     if (typeof current !== 'number' || typeof previous !== 'number') {
@@ -2449,7 +2498,9 @@ function makeDeltaCell(current, previous) {
     }
     const rounded = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
     td.textContent = rounded;
+    const improved = remainingMode ? diff > 0 : diff < 0;
     td.classList.add(diff > 0 ? 'col-delta-up' : 'col-delta-down');
+    td.classList.add(improved ? 'col-delta-good' : 'col-delta-bad');
     return td;
 }
 
@@ -2709,6 +2760,7 @@ async function loadSettings() {
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
     elements.weeklyDateFormat.value = settings.weeklyDateFormat || 'date';
+    if (elements.codexQuotaDisplay) elements.codexQuotaDisplay.value = settings.codexQuotaDisplay || 'used';
     if (elements.languageSelect) elements.languageSelect.value = settings.language || 'tr';
     if (elements.refreshInterval) {
         const raw = parseInt(settings.refreshInterval);
@@ -2774,6 +2826,7 @@ async function saveSettings() {
     const activeThemeStyleBtn = document.querySelector('.theme-style-btn.active');
     const warn = parseInt(elements.warnThreshold.value) || 75;
     const danger = parseInt(elements.dangerThreshold.value) || 90;
+    const previousCodexQuotaDisplay = activeCodexQuotaDisplay();
 
     warnThreshold = warn;
     dangerThreshold = danger;
@@ -2793,6 +2846,7 @@ async function saveSettings() {
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
         weeklyDateFormat: elements.weeklyDateFormat.value || 'date',
+        codexQuotaDisplay: elements.codexQuotaDisplay ? elements.codexQuotaDisplay.value || 'used' : 'used',
         language: elements.languageSelect ? elements.languageSelect.value : 'tr',
         refreshInterval: elements.refreshInterval ? String(Math.max(15, parseInt(elements.refreshInterval.value) || 300)) : '300',
         usageAlerts: elements.usageAlertsToggle.checked,
@@ -2818,6 +2872,11 @@ async function saveSettings() {
     applyTheme(settings.theme);
     applyThemeStyle(settings.themeStyle);
     if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
+
+    if (latestUsageData?.provider === 'codex' && previousCodexQuotaDisplay !== settings.codexQuotaDisplay) {
+        await fetchUsageData();
+        return;
+    }
 
     // Re-render resets-at values immediately with new format
     if (latestUsageData) {
