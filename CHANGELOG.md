@@ -14,6 +14,19 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.16.4-gtrows.2] - 2026-05-29
+
+GTRows fork. Fixes Codex local quota display and adds user-selectable quota direction.
+
+### Added
+- Codex quota display setting for used percentage (`0` to `100`) or remaining percentage (`100` to `0`)
+- CLI support for `--quota-display used|remaining` and `CODEX_QUOTA_DISPLAY`
+
+### Fixed
+- Codex local rate-limit logs now drive 5-hour and weekly quota bars without requiring the OpenAI usage API
+- Recent Codex premium exhaustion is mapped to 5-hour quota exhaustion while preserving weekly usage
+- Codex history entries preserve provider and quota-display mode for consistent chart rendering
+
 ## [1.16.4-gtrows.1] - 2026-05-25
 
 GTRows fork. Emergency fix for Codex usage refresh and visible fetch errors.

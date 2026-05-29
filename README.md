@@ -25,26 +25,23 @@ Runs on Windows, macOS, and Linux.
 
 ---
 
-## What's New in v1.16.0-gtrows.1
+## What's New in v1.16.4-gtrows.2
 
-### Multi-account and provider support
+### Codex local quota display
 
-- Added a shared account model for `claude` and `codex` providers.
-- Existing single-account Claude credentials are migrated at runtime into the default Claude account.
-- The settings drawer now includes an active account selector.
-- The login screen can save separate Claude and Codex/OpenAI accounts.
+- Codex can now read local rate-limit data from the active Codex session logs.
+- Settings include a Codex quota display selector: used percentage (`0` to `100`) or remaining percentage (`100` to `0`).
+- CLI output supports the same mode with `--quota-display used|remaining` or `CODEX_QUOTA_DISPLAY`.
 
-### Codex/OpenAI usage
+### Correct exhausted-state handling
 
-- Codex accounts use an OpenAI admin/API key and fetch organization completions usage plus costs.
-- `OPENAI_ADMIN_KEY` or `OPENAI_API_KEY` can be used by the CLI without extra provider flags.
-- CLI login supports `--provider codex --key K`.
+- Recent Codex premium exhaustion now marks the 5-hour quota as fully used while leaving weekly usage based on Codex's weekly limit data.
+- Weekly Codex quota now reports used and remaining values consistently across the widget, history chart, and CLI JSON.
 
-### Codex project tooling
+### Existing provider support
 
-- Legacy Claude Code template hooks/scripts/docs were copied into `.codex/`.
-- Active setup, manifest, audit, usage-log, and AGENTS checks now target Codex paths.
-- Hook tests now run from `.codex/hooks/tests`.
+- Multi-account Claude and Codex support remains available from the settings drawer.
+- Codex accounts can still use OpenAI admin/API keys for organization usage and cost snapshots.
 
 For full release history, see [CHANGELOG.md](./CHANGELOG.md) and the [Releases](../../releases) page.
 
