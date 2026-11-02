@@ -873,7 +873,9 @@ async function fetchAccountUsage(activeAccount) {
     const data = await fetchLocalUsage(activeAccount);
     return applyCodexQuotaDisplay(data, store.get('settings.codexQuotaDisplay', 'used'));
   }
-  if (activeAccount.provider === 'codex') return fetchCodexUsage(activeAccount);
+  if (activeAccount.provider === 'codex') return fetchCodexUsage({
+    ...activeAccount, codexQuotaDisplay: store.get('settings.codexQuotaDisplay', 'used'),
+  });
 
   const { sessionKey, organizationId } = activeAccount;
 

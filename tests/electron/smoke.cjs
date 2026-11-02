@@ -90,6 +90,13 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(screenshots, 'account-setup.png'), (await win.webContents.capturePage()).toPNG());
     await js('document.getElementById("cancelAddAccount").click()');
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'cancel setup');
+    await js('document.querySelectorAll(".account-card")[2].click()');
+    await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "64%"'), 'Codex subscription quota');
+    await js('document.getElementById("settingsBtn").click()');
+    await delay(100);
+    await js('document.getElementById("codexQuotaDisplay").value = "remaining"; document.getElementById("codexQuotaDisplay").dispatchEvent(new Event("change", { bubbles: true }))');
+    await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "36%"'), 'remaining quota display');
+    await js('document.getElementById("closeSettingsBtn").click()');
     await js(`window.electronAPI.saveCredentials({ id: 'api', provider: 'codex', label: 'OpenAI API test', apiKey: 'fixture-not-a-real-key' })`);
     await js('document.getElementById("refreshBtn").click()');
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "250"'), 'API count metric');
