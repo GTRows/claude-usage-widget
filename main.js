@@ -8,6 +8,7 @@ const { isNewerVersion, pickLatestRelease } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 const { t, setLanguage } = require('./src/shared/i18n');
 const { fetchCodexUsage } = require('./src/cli/api');
+const { applyCodexQuotaDisplay } = require('./src/shared/codex-rate-limits');
 const { randomUUID } = require('crypto');
 const { createAccountStore, publicAccount } = require('./src/main/account-store');
 const { createAccountUsage } = require('./src/main/account-usage');
@@ -668,6 +669,7 @@ ipcMain.handle('get-settings', () => {
     dangerThreshold: store.get('settings.dangerThreshold', 90),
     timeFormat: store.get('settings.timeFormat', '12h'),
     weeklyDateFormat: store.get('settings.weeklyDateFormat', 'date'),
+    codexQuotaDisplay: store.get('settings.codexQuotaDisplay', 'used'),
     usageAlerts: store.get('settings.usageAlerts', true),
     compactMode: store.get('settings.compactMode', false),
     refreshInterval: store.get('settings.refreshInterval', '300'),
@@ -701,6 +703,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.dangerThreshold', settings.dangerThreshold);
   store.set('settings.timeFormat', settings.timeFormat);
   store.set('settings.weeklyDateFormat', settings.weeklyDateFormat);
+  store.set('settings.codexQuotaDisplay', settings.codexQuotaDisplay === 'remaining' ? 'remaining' : 'used');
   store.set('settings.usageAlerts', settings.usageAlerts);
   store.set('settings.compactMode', settings.compactMode);
   store.set('settings.refreshInterval', settings.refreshInterval);
@@ -866,7 +869,10 @@ async function fetchAccountUsage(activeAccount) {
     throw new Error('Missing credentials');
   }
 
-  if (activeAccount.authType === 'local') return fetchLocalUsage(activeAccount);
+  if (activeAccount.authType === 'local') {
+    const data = await fetchLocalUsage(activeAccount);
+    return applyCodexQuotaDisplay(data, store.get('settings.codexQuotaDisplay', 'used'));
+  }
   if (activeAccount.provider === 'codex') return fetchCodexUsage(activeAccount);
 
   const { sessionKey, organizationId } = activeAccount;

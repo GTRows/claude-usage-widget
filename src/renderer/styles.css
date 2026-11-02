@@ -1542,6 +1542,8 @@ body.theme-light .range-custom input[type="datetime-local"] {
 .history-table .col-delta-up::before { content: "▲ "; font-size: 8px; }
 .history-table .col-delta-down { color: var(--jade); }
 .history-table .col-delta-down::before { content: "▼ "; font-size: 8px; }
+.history-table .col-delta-good { color: var(--jade); }
+.history-table .col-delta-bad { color: var(--coral); }
 
 .history-empty {
     flex: 1;

@@ -27,14 +27,30 @@ function colorForStatus(status) {
   }
 }
 
-function bar(percent, width = 20, useColor = true) {
+function bar(percent, width = 20, useColor = true, statusOverride = null) {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
   const filled = Math.round((p / 100) * width);
   const empty = width - filled;
-  const status = statusForPercent(p);
+  const status = statusOverride || statusForPercent(p);
   const color = colorForStatus(status);
   const inner = '#'.repeat(filled) + '-'.repeat(empty);
   return `[${colorize(inner, color, useColor)}]`;
+}
+
+function isRemainingQuotaData(data) {
+  return data?.quota_display === 'remaining'
+    || data?.five_hour?.display_mode === 'remaining'
+    || data?.seven_day?.display_mode === 'remaining';
+}
+
+function statusForMetric(percent, thresholds, remainingMode) {
+  if (!remainingMode) return statusForPercent(percent, thresholds);
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  const danger = 100 - thresholds.danger;
+  const warn = 100 - thresholds.warn;
+  if (p <= danger) return 'danger';
+  if (p <= warn) return 'warn';
+  return 'low';
 }
 
 function pickPercent(data, key) {
@@ -58,17 +74,18 @@ function summary(data, opts = {}) {
   const thresholds = normalizeThresholds(opts.thresholds || {});
   const sessionPct = pickPercent(data, 'five_hour') || pickPercent(data, 'fiveHour') || pickPercent(data, 'session');
   const weeklyPct = pickPercent(data, 'seven_day') || pickPercent(data, 'sevenDay') || pickPercent(data, 'weekly');
+  const remainingMode = isRemainingQuotaData(data);
 
-  const sessionStatus = statusForPercent(sessionPct, thresholds);
-  const weeklyStatus = statusForPercent(weeklyPct, thresholds);
+  const sessionStatus = statusForMetric(sessionPct, thresholds, remainingMode);
+  const weeklyStatus = statusForMetric(weeklyPct, thresholds, remainingMode);
 
   const sessionResetMs = pickResetMs(data, 'five_hour') || pickResetMs(data, 'fiveHour');
   const weeklyResetMs = pickResetMs(data, 'seven_day') || pickResetMs(data, 'sevenDay');
 
   const lines = [];
-  lines.push(`${colorize('5h ', 'bold', useColor)}${bar(sessionPct, 20, useColor)} ${colorize(formatPercent(sessionPct), colorForStatus(sessionStatus), useColor)}` +
+  lines.push(`${colorize('5h ', 'bold', useColor)}${bar(sessionPct, 20, useColor, sessionStatus)} ${colorize(formatPercent(sessionPct), colorForStatus(sessionStatus), useColor)}` +
     (sessionResetMs ? colorize(`  resets in ${formatDuration(sessionResetMs - Date.now())}`, 'dim', useColor) : ''));
-  lines.push(`${colorize('7d ', 'bold', useColor)}${bar(weeklyPct, 20, useColor)} ${colorize(formatPercent(weeklyPct), colorForStatus(weeklyStatus), useColor)}` +
+  lines.push(`${colorize('7d ', 'bold', useColor)}${bar(weeklyPct, 20, useColor, weeklyStatus)} ${colorize(formatPercent(weeklyPct), colorForStatus(weeklyStatus), useColor)}` +
     (weeklyResetMs ? colorize(`  resets in ${formatDuration(weeklyResetMs - Date.now())}`, 'dim', useColor) : ''));
   return lines.join('\n');
 }
@@ -98,7 +115,7 @@ function inlinePrompt(data, opts = {}) {
     const def = SEGMENT_DEFS[name];
     if (!def) continue;
     const pct = pickFirst(data, def.keys);
-    const status = statusForPercent(pct, thresholds);
+    const status = statusForMetric(pct, thresholds, isRemainingQuotaData(data));
     parts.push(colorize(`${def.label}:${formatPercent(pct)}`, colorForStatus(status), useColor));
   }
   return parts.join(' ');

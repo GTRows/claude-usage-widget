@@ -1,4 +1,9 @@
 const { normalizeProvider } = require('../shared/accounts');
+const {
+  applyCodexQuotaDisplay,
+  latestCodexRateLimits,
+  usageFromCodexRateLimits,
+} = require('../shared/codex-rate-limits');
 
 const CLAUDE_BASE = 'https://claude.ai/api';
 const OPENAI_BASE = 'https://api.openai.com/v1';
@@ -126,9 +131,14 @@ function sumBuckets(response, selector) {
 }
 
 async function fetchCodexUsage(credentials) {
+  const localUsage = !credentials.apiKey && usageFromCodexRateLimits(latestCodexRateLimits(credentials), {
+    displayMode: credentials.codexQuotaDisplay,
+  });
+  if (localUsage) return localUsage;
+
   const { apiKey } = credentials;
   if (!apiKey) {
-    throw new Error('Missing Codex credentials. Set OPENAI_ADMIN_KEY or run `claude-usage login --provider codex --key K`.');
+    throw new Error('No Codex rate-limit data found. Open Codex once, then refresh usage.');
   }
 
   const end = Math.floor(Date.now() / 1000);
@@ -154,7 +164,7 @@ async function fetchCodexUsage(credentials) {
   const currency = costs?.data?.flatMap((bucket) => bucket.results || [])
     .find((row) => row.amount?.currency)?.amount.currency?.toUpperCase() || 'USD';
 
-  return {
+  return applyCodexQuotaDisplay({
     provider: 'codex',
     five_hour: {
       utilization: 0,
@@ -183,7 +193,7 @@ async function fetchCodexUsage(credentials) {
       cost: costValue,
       currency,
     },
-  };
+  }, credentials.codexQuotaDisplay);
 }
 
 async function fetchUsage(credentials = {}) {

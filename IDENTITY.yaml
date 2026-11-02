@@ -15,7 +15,7 @@ identity:
   icon: assets/logo.png
   license: MIT
 
-version: 1.16.4-gtrows.1
+version: 1.16.4-gtrows.2
 
 release:
   platforms:

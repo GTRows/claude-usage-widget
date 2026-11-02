@@ -12,6 +12,7 @@ describe('normalizeSettings', () => {
   it('rejects unknown enum values and falls back', () => {
     expect(normalizeSettings({ themeStyle: 'gibberish' }).themeStyle).toBe('classic');
     expect(normalizeSettings({ trayStyle: 'something' }).trayStyle).toBe('bigNumber');
+    expect(normalizeSettings({ codexQuotaDisplay: 'sideways' }).codexQuotaDisplay).toBe('used');
   });
   it('clamps numeric ranges', () => {
     expect(normalizeSettings({ refreshInterval: 1 }).refreshInterval).toBe(15);
@@ -32,6 +33,16 @@ describe('normalizeSettings', () => {
   it('falls back the active profile to default when missing or empty', () => {
     expect(normalizeSettings({ activeProfile: '' }).activeProfile).toBe('default');
     expect(normalizeSettings({ activeProfile: 123 }).activeProfile).toBe('123');
+  });
+});
+
+describe('codex quota display setting', () => {
+  it('defaults to used quota display', () => {
+    expect(normalizeSettings({}).codexQuotaDisplay).toBe('used');
+  });
+
+  it('preserves remaining quota display', () => {
+    expect(normalizeSettings({ codexQuotaDisplay: 'remaining' }).codexQuotaDisplay).toBe('remaining');
   });
 });
 

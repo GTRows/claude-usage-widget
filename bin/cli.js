@@ -74,14 +74,22 @@ function getRenderOpts(flags) {
   return opts;
 }
 
+function loadCommandCredentials(flags) {
+  const creds = loadCredentials(flags.provider);
+  if (flags['quota-display']) {
+    creds.codexQuotaDisplay = flags['quota-display'];
+  }
+  return creds;
+}
+
 async function cmdStatus(flags) {
-  const creds = loadCredentials();
+  const creds = loadCommandCredentials(flags);
   const data = await fetchUsage(creds);
   process.stdout.write(summary(data, getRenderOpts(flags)) + '\n');
 }
 
 async function cmdJson(flags) {
-  const creds = loadCredentials();
+  const creds = loadCommandCredentials(flags);
   const data = await fetchUsage(creds);
   process.stdout.write(JSON.stringify(data, null, flags.compact ? 0 : 2) + '\n');
 }
@@ -121,7 +129,7 @@ async function cmdPrompt(flags) {
       return;
     }
   }
-  const creds = loadCredentials();
+  const creds = loadCommandCredentials(flags);
   const data = await fetchUsage(creds);
   if (Number.isFinite(cacheSec) && cacheSec > 0) writePromptCache(data);
   process.stdout.write(inlinePrompt(data, getRenderOpts(flags)) + '\n');
@@ -129,7 +137,7 @@ async function cmdPrompt(flags) {
 
 async function cmdWatch(flags) {
   const intervalSec = Math.max(15, Number(flags.interval) || 60);
-  const creds = loadCredentials();
+  const creds = loadCommandCredentials(flags);
   const opts = getRenderOpts(flags);
   const tick = async () => {
     try {

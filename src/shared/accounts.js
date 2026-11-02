@@ -96,7 +96,7 @@ function hasUsableCredentials(account) {
       && typeof account.configDir === 'string' && Boolean(account.configDir.trim());
   }
   if (account.provider === 'claude') return Boolean(account.sessionKey && account.organizationId);
-  if (account.provider === 'codex') return Boolean(account.apiKey);
+  if (account.provider === 'codex') return true;
   return false;
 }
 

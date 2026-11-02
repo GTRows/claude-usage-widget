@@ -11,6 +11,7 @@ const SETTINGS_DEFAULTS = {
   dangerThreshold: 90,
   timeFormat: '12h',
   weeklyDateFormat: 'date',
+  codexQuotaDisplay: 'used',
   usageAlerts: true,
   compactMode: false,
   refreshInterval: 300,
@@ -31,6 +32,7 @@ const ENUM_VALUES = {
   trayStyle: ['bigNumber', 'ring', 'bar', 'dot'],
   timeFormat: ['12h', '24h'],
   weeklyDateFormat: ['date', 'date-day', 'date-day-time'],
+  codexQuotaDisplay: ['used', 'remaining'],
   language: ['tr', 'en'],
 };
 

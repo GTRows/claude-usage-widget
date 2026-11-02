@@ -18,7 +18,7 @@ function appendAccountSample(history, data, accountId, { now = Date.now(), reten
   const percentage = (window) => Number.isFinite(window?.utilization) ? window.utilization : null;
   const api = data.codex_usage;
   const entry = {
-    accountId, timestamp: now,
+    accountId, timestamp: now, provider: data.provider || 'claude', quotaDisplay: data.quota_display || 'used',
     session: api ? null : percentage(data.five_hour), weekly: api ? null : percentage(data.seven_day),
     sonnet: percentage(data.seven_day_sonnet), opus: percentage(data.seven_day_opus),
     extraUsage: percentage(data.extra_usage),

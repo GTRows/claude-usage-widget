@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
     await delay(100);
     await js('document.getElementById("autoPruneToggle").checked = true; document.getElementById("autoPruneDays").value = "1"; document.getElementById("autoPruneToggle").dispatchEvent(new Event("change", { bubbles: true }))');
     await waitFor(async () => { const settings = await js('window.electronAPI.getSettings()'); return settings.autoPrune && settings.autoPruneDays === 1; }, 'work account retention setting');
-    await js('document.getElementById("closeSettingsBtn").click()');
+    await js('document.getElementById("autoPruneDays").value = "2"; document.getElementById("autoPruneDays").dispatchEvent(new Event("input", { bubbles: true }))');
     await js('document.querySelectorAll(".account-card")[1].click()');
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'account switch');
     await js('document.getElementById("graphBtn").click(); document.getElementById("graphBtn").click()');
