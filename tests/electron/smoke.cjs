@@ -1,5 +1,7 @@
 // Fixture-only integration test. It never reads real profile credentials.
 const { app, BrowserWindow } = require('electron');
+// Hosted Windows VMs do not provide a reliable accelerated GPU process.
+if (process.platform === 'win32' && process.env.CI) app.disableHardwareAcceleration();
 const path = require('path');
 const fs = require('fs');
 const assert = require('assert/strict');
