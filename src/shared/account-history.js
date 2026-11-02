@@ -25,7 +25,7 @@ function appendAccountSample(history, data, accountId, { now = Date.now(), reten
   };
   if (api) Object.assign(entry, { apiRequests: api.num_model_requests, apiCost: api.cost, inputTokens: api.input_tokens, outputTokens: api.output_tokens, apiCurrency: api.currency });
   const cutoff = now - retentionDays * 86400000;
-  const retained = history.filter((sample) => sample.timestamp > cutoff);
+  const retained = pruneAccountHistory(history, accountId, cutoff);
   const scoped = [...selectAccountHistory(retained, accountId), entry].slice(-maxSamples);
   return [...removeAccountHistory(retained, accountId), ...scoped].sort((a, b) => a.timestamp - b.timestamp);
 }

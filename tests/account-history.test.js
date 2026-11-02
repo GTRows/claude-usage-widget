@@ -17,6 +17,12 @@ describe('account history isolation', () => {
   it('removes only the selected account history', () => {
     expect(removeAccountHistory(history, 'work')).toEqual([history[0], history[2]]);
   });
+  it('preserves old unrelated and disconnected history when an account refreshes', () => {
+    const now = 60 * 86400000;
+    const samples = [{ timestamp: 1 }, { timestamp: 2, accountId: 'offline' }, { timestamp: 3, accountId: 'work' }];
+    const next = appendAccountSample(samples, { five_hour: { utilization: 20 } }, 'work', { now });
+    expect(next).toEqual([samples[0], samples[1], expect.objectContaining({ timestamp: now, accountId: 'work' })]);
+  });
   it('prunes only the selected account and preserves old unrelated and unassigned rows', () => {
     const samples = [...history, { timestamp: 40, accountId: 'work', session: 30 }];
     expect(pruneAccountHistory(samples, 'work', 25)).toEqual([history[0], history[2], samples[3]]);

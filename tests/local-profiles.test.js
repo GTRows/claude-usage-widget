@@ -80,8 +80,10 @@ describe('local profile boundaries', () => {
     const f = await fixture();
     const first = await profile(f.homeDir, '.claude', claude('first'));
     const second = await profile(f.homeDir, '.claude-personal', claude('second'));
-    await fs.writeFile(path.join(first, 'settings.json'), '{}');
-    await fs.symlink(path.join(first, 'settings.json'), path.join(second, 'settings.json'));
+    const shared = path.join(first, 'shared-settings');
+    await fs.mkdir(shared);
+    await fs.writeFile(path.join(shared, 'settings.json'), '{}');
+    await fs.symlink(shared, path.join(second, 'shared-settings'), process.platform === 'win32' ? 'junction' : 'dir');
     const a = await f.adapters.linkLocalProfile('claude', first);
     const b = await f.adapters.linkLocalProfile('claude', second);
     expect(a.id).not.toBe(b.id);
