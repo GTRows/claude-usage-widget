@@ -10,7 +10,7 @@ describe('Windows desktop integration', () => {
   it.runIf(process.platform === 'win32' && Boolean(process.env.CI))(broken ? 'keeps healthy accounts available when the selected credential is unreadable' : 'completes the real account, theme, logout and history flow', async () => {
     const binary = require('electron');
     const result = await new Promise((resolve, reject) => {
-      const child = spawn(binary, [path.join(process.cwd(), 'tests/electron/smoke.cjs')], { cwd: process.cwd(), env: { ...process.env, WIDGET_BROKEN_START: broken ? '1' : '', WIDGET_HOLD: '' }, windowsHide: true });
+      const child = spawn(binary, ['--disable-gpu', '--disable-software-rasterizer', '--enable-logging=stderr', path.join(process.cwd(), 'tests/electron/smoke.cjs')], { cwd: process.cwd(), env: { ...process.env, WIDGET_BROKEN_START: broken ? '1' : '', WIDGET_HOLD: '' }, windowsHide: true });
       let output = '';
       child.stdout.on('data', (data) => { output += data; });
       child.stderr.on('data', (data) => { output += data; });
