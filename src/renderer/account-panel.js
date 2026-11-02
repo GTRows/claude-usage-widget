@@ -1,6 +1,6 @@
 import { accountProviderLabel, quotaText } from './account-presentation.js';
 
-export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChanged, onResize }) {
+export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChanged, onResize, setup }) {
   const byId = (id) => document.getElementById(id);
   let state = { accounts: [], activeAccountId: null, snapshots: [] };
   const node = (tag, className, text) => {
@@ -40,7 +40,7 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
           metrics.append(metric);
         }
       }
-      const status = node('span', `account-status${snapshot?.error ? ' has-error' : ''}`, snapshot?.error ? t(snapshot.error.code === 'AUTH_REQUIRED' ? 'accounts.signIn' : 'accounts.retry') : snapshot?.updatedAt ? new Date(snapshot.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('accounts.waiting'));
+      const status = node('span', `account-status${snapshot?.error ? ' has-error' : ''}`, snapshot?.error ? `${t(snapshot.error.code === 'AUTH_REQUIRED' ? 'accounts.signIn' : 'accounts.retry')}${snapshot.updatedAt ? ' · ' + new Date(snapshot.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}` : snapshot?.updatedAt ? new Date(snapshot.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('accounts.waiting'));
       button.append(identity, metrics, status);
       button.addEventListener('click', () => onSelect(account.id));
       byId('accountList').append(button);
@@ -66,9 +66,19 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
   async function link(provider, configDir) {
     const error = byId('localProfileError');
     error.textContent = t('accounts.linking');
-    const result = await api.linkLocalProfile(provider, configDir);
-    error.textContent = result.canceled || result.success ? '' : t('accounts.profileUnavailable');
-    if (result.success) await onChanged();
+    try {
+      await setup.run({
+        prepare: async () => {
+          const result = await api.linkLocalProfile(provider, configDir);
+          if (result.canceled) throw new Error('Canceled');
+          if (!result.success) throw new Error('Profile unavailable');
+          return result.ticket;
+        },
+        commit: (ticket) => api.saveLocalProfile(ticket),
+        apply: onChanged,
+      });
+      error.textContent = '';
+    } catch { error.textContent = t('accounts.profileUnavailable'); }
   }
 
   async function discover() {

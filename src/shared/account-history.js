@@ -10,6 +10,10 @@ function removeAccountHistory(history, accountId) {
   return history.filter((entry) => !belongsTo(entry, accountId));
 }
 
+function pruneAccountHistory(history, accountId, cutoffMs) {
+  return history.filter((entry) => !belongsTo(entry, accountId) || entry.timestamp > cutoffMs);
+}
+
 function appendAccountSample(history, data, accountId, { now = Date.now(), retentionDays = 30, maxSamples = 10000 } = {}) {
   const percentage = (window) => Number.isFinite(window?.utilization) ? window.utilization : null;
   const api = data.codex_usage;
@@ -26,4 +30,4 @@ function appendAccountSample(history, data, accountId, { now = Date.now(), reten
   return [...removeAccountHistory(retained, accountId), ...scoped].sort((a, b) => a.timestamp - b.timestamp);
 }
 
-module.exports = { selectAccountHistory, appendAccountSample, removeAccountHistory };
+module.exports = { selectAccountHistory, appendAccountSample, removeAccountHistory, pruneAccountHistory };

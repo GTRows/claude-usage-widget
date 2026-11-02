@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { selectAccountHistory, appendAccountSample, removeAccountHistory } = require('../src/shared/account-history');
+const { selectAccountHistory, appendAccountSample, removeAccountHistory, pruneAccountHistory } = require('../src/shared/account-history');
 
 describe('account history isolation', () => {
   const history = [{ timestamp: 10, session: 40 }, { timestamp: 20, accountId: 'work', session: 25 }, { timestamp: 30, accountId: 'personal', session: 75 }];
@@ -16,5 +16,14 @@ describe('account history isolation', () => {
   });
   it('removes only the selected account history', () => {
     expect(removeAccountHistory(history, 'work')).toEqual([history[0], history[2]]);
+  });
+  it('prunes only the selected account and preserves old unrelated and unassigned rows', () => {
+    const samples = [...history, { timestamp: 40, accountId: 'work', session: 30 }];
+    expect(pruneAccountHistory(samples, 'work', 25)).toEqual([history[0], history[2], samples[3]]);
+    expect(samples).toHaveLength(4);
+  });
+  it('applies the default cutoff to both default and unassigned legacy rows', () => {
+    const samples = [...history, { timestamp: 5, accountId: 'default' }, { timestamp: 40, accountId: 'default' }];
+    expect(pruneAccountHistory(samples, 'default', 20)).toEqual([history[1], history[2], samples[4]]);
   });
 });

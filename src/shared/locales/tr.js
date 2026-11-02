@@ -1,4 +1,10 @@
 const tr = {
+  "accounts.savedHistory": "Saklanan geçmiş",
+  "accounts.legacyHistory": "Önceki geçmiş (hesapsız)",
+  "accounts.savedHistoryHint": "Eski ve çıkış yapılmış hesapların geçmişi, güncel hesap kullanımından ayrı korunur.",
+  "accounts.viewHistory": "Görüntüle",
+  "accounts.exportHistory": "JSON dışa aktar",
+  "accounts.backToAccounts": "Hesaplara dön",
   "accounts.signIn": "Giriş gerekli",
   "accounts.retry": "Tekrar dene",
   "accounts.inputTokens": "Girdi tokenı",

@@ -12,7 +12,7 @@ function quotaWindow(percent, reset) {
 
 function normalizeClaudeUsage(data) {
   const result = { provider: 'claude', usageType: 'subscription' };
-  for (const key of ['five_hour', 'seven_day', 'seven_day_sonnet', 'seven_day_opus', 'seven_day_oauth_apps']) {
+  for (const key of ['five_hour', 'seven_day', 'seven_day_sonnet', 'seven_day_opus', 'seven_day_oauth_apps', 'seven_day_cowork']) {
     const window = quotaWindow(data?.[key]?.utilization, data?.[key]?.resets_at);
     if (window) result[key] = window;
   }

@@ -1,4 +1,10 @@
 const en = {
+  "accounts.savedHistory": "Saved history",
+  "accounts.legacyHistory": "Earlier history (unassigned)",
+  "accounts.savedHistoryHint": "Earlier and disconnected history is kept separately from current account usage.",
+  "accounts.viewHistory": "View",
+  "accounts.exportHistory": "Export JSON",
+  "accounts.backToAccounts": "Back to accounts",
   "accounts.signIn": "Sign in again",
   "accounts.retry": "Retry later",
   "accounts.inputTokens": "Input tokens",

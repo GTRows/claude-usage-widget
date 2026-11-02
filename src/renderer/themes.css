@@ -150,3 +150,8 @@ body :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline
 body:is([data-theme-style="glass"], [data-theme-style="graphite"]) :is(.compact-collapse-btn, .compact-expand-btn) { border-style: solid; }
 body:is([data-theme-style="glass"], [data-theme-style="graphite"]) .control-btn { border-color: transparent; }
 body:is([data-theme-style="glass"], [data-theme-style="graphite"]) .control-btn.active { border-color: var(--hairline-strong); background: var(--surface-2); }
+
+body:is([data-theme-style="glass"], [data-theme-style="graphite"]) .compact-collapse-btn { border: 0; border-right: 1px solid var(--hairline); }
+body:is([data-theme-style="glass"], [data-theme-style="graphite"]) .compact-expand-btn { border: 0; border-left: 1px solid var(--hairline); }
+body.compact-mode .account-status { display: none; }
+body:is([data-theme-style="glass"], [data-theme-style="graphite"]) .compact-label { min-width: 76px; white-space: nowrap; font-size: 10px; }

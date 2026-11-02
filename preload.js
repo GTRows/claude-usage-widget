@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   renameAccount: (id, label) => ipcRenderer.invoke('rename-account', id, label),
   discoverLocalProfiles: () => ipcRenderer.invoke('discover-local-profiles'),
   linkLocalProfile: (provider, directory) => ipcRenderer.invoke('link-local-profile', provider, directory),
+  saveLocalProfile: (ticket) => ipcRenderer.invoke('save-local-profile', ticket),
+  getHistorySources: () => ipcRenderer.invoke('get-history-sources'),
+  getHistorySource: (source) => ipcRenderer.invoke('get-history-source', source),
   fetchAllUsage: () => ipcRenderer.invoke('fetch-all-usage'),
   onAccountUsageUpdated: (callback) => ipcRenderer.on('account-usage-updated', (_event, snapshot) => callback(snapshot)),
   setActiveAccount: (accountId) => ipcRenderer.invoke('set-active-account', accountId),
@@ -71,6 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveAppearance: (patch) => ipcRenderer.invoke('save-appearance', patch),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
 
   // Language

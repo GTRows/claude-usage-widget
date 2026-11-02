@@ -45,3 +45,8 @@ body.account-setup-open :is(.account-overview, .account-detail-label, .account-r
 .graph-empty { padding: 24px 12px; text-align: center; color: var(--ink-mute); font-size: 11px; }
 
 body.api-account :is(.metric-card-bar, .metric-ring) { display: none; }
+
+.archive-banner { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; color: var(--ink); font-size: 12px; }
+.archive-banner button { border: 1px solid var(--hairline-strong); border-radius: 7px; padding: 6px 9px; background: var(--surface); color: var(--ink); cursor: pointer; }
+body.history-archive-open :is(.account-overview, .account-detail-label, .account-refresh-status, .metric-grid, .expand-toggle, .expand-section, .compact-collapse-btn, .compact-expand-btn) { display: none !important; }
+body.history-archive-open #mainContent { overflow-y: auto; max-height: calc(100vh - 58px); }

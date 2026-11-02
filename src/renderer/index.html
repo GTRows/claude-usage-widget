@@ -244,6 +244,7 @@
                     <div id="extraRows"></div>
                 </div>
 
+                <div id="archiveBanner" class="archive-banner" hidden><span id="archiveHistoryTitle"></span><button id="closeArchiveHistoryBtn" data-i18n="accounts.backToAccounts">Back to accounts</button></div>
                 <div class="graph-section" id="graphSection" style="display: none;">
                     <div class="graph-controls">
                         <div class="range-tabs" id="graphRangeTabs">
@@ -333,7 +334,7 @@
                 </button>
                 <div class="compact-rows">
                     <div class="compact-row">
-                        <span class="compact-label" data-i18n="metric.session">Session</span>
+                        <span class="compact-label" id="compactSessionLabel" data-i18n="metric.session">Session</span>
                         <div class="compact-bar-wrap">
                             <div class="compact-bar-bg">
                                 <div class="compact-bar-fill" id="compactSessionFill" style="width: 0%"></div>
@@ -342,7 +343,7 @@
                         </div>
                     </div>
                     <div class="compact-row">
-                        <span class="compact-label" data-i18n="metric.weekly">Weekly</span>
+                        <span class="compact-label" id="compactWeeklyLabel" data-i18n="metric.weekly">Weekly</span>
                         <div class="compact-bar-wrap">
                             <div class="compact-bar-bg">
                                 <div class="compact-bar-fill weekly" id="compactWeeklyFill" style="width: 0%"></div>
@@ -389,6 +390,12 @@
                                     </div>
                                 </div>
                             </div>
+                        </section>
+
+                        <section id="savedHistoryControls" class="settings-group" hidden>
+                            <header class="settings-group-head"><h4 class="settings-group-title" data-i18n="accounts.savedHistory">Saved history</h4></header>
+                            <p class="local-profile-hint" data-i18n="accounts.savedHistoryHint">Earlier and disconnected history is kept separately from current account usage.</p>
+                            <div class="account-actions"><select id="savedHistorySelect" class="settings-select" aria-label="Saved history" data-i18n-attr="aria-label:accounts.savedHistory"></select><button id="viewSavedHistoryBtn" data-i18n="accounts.viewHistory">View</button><button id="exportSavedHistoryBtn" data-i18n="accounts.exportHistory">Export JSON</button></div>
                         </section>
 
                         <section class="settings-group">

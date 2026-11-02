@@ -2,6 +2,8 @@ import { createAccountPanel } from './account-panel.js';
 import { accountProviderLabel, quotaText } from './account-presentation.js';
 import { createThemeController } from './theme.js';
 import { chartPoints } from './usage-chart.js';
+import { createAccountSetup } from './account-setup.js';
+import { createSavedHistory, filterSavedHistory } from './saved-history.js';
 
 // Application state
 let credentials = null;
@@ -9,6 +11,13 @@ let accountPanel = null;
 let themeController = null;
 let addingAccount = false;
 let selectionVersion = 0;
+let historySourceId = null;
+let archiveReturnView = null;
+let savedHistory = null;
+let refreshPending = false;
+const accountSetup = createAccountSetup({ onBusy: (busy) => {
+    document.querySelectorAll('#cancelAddAccount, #connectBtn, #autoDetectBtn, #chooseLocalProfileBtn, .profile-choice').forEach((button) => { button.disabled = busy; });
+} });
 let updateInterval = null;
 const RELEASES_PAGE_URL = 'https://github.com/GTRows/claude-usage-widget/releases';
 let latestReleaseUrl = RELEASES_PAGE_URL;
@@ -385,9 +394,8 @@ async function init() {
     window._cachedSettings = settings;
     themeController = createThemeController({
         persist: async (patch) => {
-            const latest = await window.electronAPI.getSettings();
-            window._cachedSettings = { ...latest, ...patch };
-            await window.electronAPI.saveSettings(window._cachedSettings);
+            window._cachedSettings = { ...window._cachedSettings, ...patch };
+            await window.electronAPI.saveAppearance(patch);
         },
         onChange: () => { if (usageChart && graphVisible) loadChart(); }
     });
@@ -395,39 +403,31 @@ async function init() {
     accountPanel = createAccountPanel({
         api: window.electronAPI, t: (key, params) => window.i18n.t(key, params),
         onSelect: selectAccount,
+        setup: accountSetup,
         onAdd: () => {
+            accountSetup.invalidate();
             addingAccount = true;
             selectionVersion++;
-            _settingsOpen = false;
-            window.electronAPI.setSettingsWindow(false);
+            leaveSettings();
             showLoginRequired();
             accountPanel.discover();
             resizeWidget();
         },
         onCancel: async () => {
-            addingAccount = false;
-            credentials = await window.electronAPI.getCredentials();
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
+            if (!accountSetup.cancel()) return;
+            await reloadActiveAccount();
         },
-        onChanged: async () => {
-            addingAccount = false;
-            credentials = await window.electronAPI.getCredentials();
-            await refreshAccountSelector();
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-        },
+        onChanged: async (_account, token) => reloadActiveAccount({ token }),
         onResize: resizeWidget
     });
+    savedHistory = createSavedHistory({ api: window.electronAPI, t: (key) => window.i18n.t(key), onView: showSavedHistory, onBack: closeSavedHistory });
     await accountPanel.discover();
     window.electronAPI.onAccountUsageUpdated(async (snapshot) => {
         if (addingAccount) return;
         const version = selectionVersion;
         await accountPanel.refresh();
         if (addingAccount || version !== selectionVersion) return;
-        if (snapshot.accountId === credentials?.id && snapshot.data) updateUI(snapshot.data);
+        if (!historySourceId && snapshot.accountId === credentials?.id && snapshot.data) updateUI(snapshot.data);
     });
     if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
     warnThreshold = settings.warnThreshold;
@@ -474,7 +474,7 @@ async function init() {
 
     await refreshAccountSelector();
 
-    if (hasActiveCredentials(credentials)) {
+    if (credentials?.accounts?.length) {
         showMainContent();
         await fetchUsageData();
         startAutoUpdate();
@@ -818,17 +818,10 @@ function setupEventListeners() {
     }
 
     elements.logoutBtn.addEventListener('click', async () => {
+        accountSetup.invalidate();
+        selectionVersion++;
         await window.electronAPI.deleteCredentials(credentials?.id);
-        credentials = await window.electronAPI.getCredentials();
-        await refreshAccountSelector();
-        elements.settingsOverlay.style.display = 'none';
-        _settingsOpen = false;
-        _lastResizeHeight = 0;
-        if (hasActiveCredentials(credentials)) {
-            await fetchUsageData();
-        } else {
-            showLoginRequired();
-        }
+        await reloadActiveAccount();
     });
 
     // Theme buttons
@@ -856,13 +849,7 @@ function setupEventListeners() {
         if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
     });
 
-    // Listen for session expiration events (403 errors)
-    window.electronAPI.onSessionExpired(async () => {
-        debugLog('Session expired event received');
-        credentials = await window.electronAPI.getCredentials();
-        await refreshAccountSelector();
-        showLoginRequired();
-    });
+    window.electronAPI.onSessionExpired(() => reloadActiveAccount());
 
     // Update banner
     elements.updateBannerDismiss.addEventListener('click', () => {
@@ -1014,67 +1001,33 @@ function setupKeyboardShortcuts() {
     });
 }
 
-// Handle manual sessionKey connect
+async function applyConnectedAccount(_saved, token) {
+    await reloadActiveAccount({ token });
+}
+
 async function handleConnect() {
     const provider = selectedProvider();
     const secret = elements.sessionKeyInput.value.trim();
-    if (!secret) {
-        elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorEmptyCodex' : 'login.errorEmpty');
-        return;
-    }
-
-    elements.connectBtn.disabled = true;
-    elements.connectBtn.textContent = '...';
+    if (!secret) { elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorEmptyCodex' : 'login.errorEmpty'); return; }
     elements.sessionKeyError.textContent = '';
-
+    const label = accountLabelValue(provider);
     try {
-        if (provider === 'codex') {
-            credentials = {
-                id: `codex-${Date.now()}`,
-                provider,
-                label: accountLabelValue(provider),
-                apiKey: secret
-            };
-            await window.electronAPI.saveCredentials(credentials);
-            credentials = await window.electronAPI.getCredentials();
-            addingAccount = false;
-            await refreshAccountSelector();
-            elements.sessionKeyInput.value = '';
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-            return;
-        }
-
-        const result = await window.electronAPI.validateSessionKey(secret);
-        if (result.success) {
-            credentials = {
-                id: `claude-${Date.now()}`,
-                provider,
-                label: accountLabelValue(provider),
-                sessionKey: secret,
-                organizationId: result.organizationId
-            };
-            await window.electronAPI.saveCredentials(credentials);
-            credentials = await window.electronAPI.getCredentials();
-            addingAccount = false;
-            await refreshAccountSelector();
-            elements.sessionKeyInput.value = '';
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-        } else {
-            elements.sessionKeyError.textContent = result.error || 'Invalid session key';
-        }
-    } catch (error) {
+        await accountSetup.run({
+            prepare: async () => {
+                const base = { id: `${provider}-${crypto.randomUUID()}`, provider, label };
+                if (provider === 'codex') return { ...base, apiKey: secret };
+                const validation = await window.electronAPI.validateSessionKey(secret);
+                if (!validation.success) throw new Error('Invalid session');
+                return { ...base, sessionKey: secret, organizationId: validation.organizationId };
+            },
+            commit: (account) => window.electronAPI.saveCredentials(account),
+            apply: applyConnectedAccount
+        });
+    } catch {
         elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorFailedCodex' : 'login.errorFailed');
-    } finally {
-        elements.connectBtn.disabled = false;
-        elements.connectBtn.textContent = window.i18n.t('login.connectBtn');
     }
 }
 
-// Handle auto-detect from browser cookies
 async function handleAutoDetect() {
     if (selectedProvider() === 'codex') {
         window.electronAPI.openExternal(codexKeyUrl());
@@ -1082,81 +1035,134 @@ async function handleAutoDetect() {
         showManualEntry();
         return;
     }
-
-    elements.autoDetectBtn.disabled = true;
-    elements.autoDetectBtn.textContent = window.i18n.t('login.waiting');
+    const label = accountLabelValue('claude');
     elements.autoDetectError.textContent = '';
-
     try {
-        const result = await window.electronAPI.detectSessionKey();
-        if (!result.success) {
-            elements.autoDetectError.textContent = result.error || 'Login failed';
-            return;
-        }
-
-        // Got sessionKey from login, now validate it
-        elements.autoDetectBtn.textContent = window.i18n.t('login.validating');
-        const validation = await window.electronAPI.validateSessionKey(result.sessionKey);
-
-        if (validation.success) {
-            credentials = {
-                id: `claude-${Date.now()}`,
-                provider: 'claude',
-                label: accountLabelValue('claude'),
-                sessionKey: result.sessionKey,
-                organizationId: validation.organizationId
-            };
-            await window.electronAPI.saveCredentials(credentials);
-            credentials = await window.electronAPI.getCredentials();
-            addingAccount = false;
-            await refreshAccountSelector();
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-        } else {
-            elements.autoDetectError.textContent =
-                'Session invalid. Try again or use Manual →';
-        }
-    } catch (error) {
-        elements.autoDetectError.textContent = error.message || 'Login failed';
-    } finally {
-        elements.autoDetectBtn.disabled = false;
-        elements.autoDetectBtn.textContent = window.i18n.t('login.autoBtn');
+        await accountSetup.run({
+            prepare: async () => {
+                const result = await window.electronAPI.detectSessionKey();
+                if (!result.success) throw new Error('Login canceled');
+                const validation = await window.electronAPI.validateSessionKey(result.sessionKey);
+                if (!validation.success) throw new Error('Invalid session');
+                return { id: `claude-${crypto.randomUUID()}`, provider: 'claude', label, sessionKey: result.sessionKey, organizationId: validation.organizationId };
+            },
+            commit: (account) => window.electronAPI.saveCredentials(account),
+            apply: applyConnectedAccount
+        });
+    } catch {
+        elements.autoDetectError.textContent = window.i18n.t('login.errorFailed');
     }
 }
 
-async function selectAccount(accountId) {
-    if (!accountId) return;
-    const version = ++selectionVersion;
-    await window.electronAPI.setActiveAccount(accountId);
-    const selected = await window.electronAPI.getCredentials();
-    if (version !== selectionVersion) return;
-    credentials = selected;
-    elements.activeAccountSelect.value = selected.id;
+function leaveSettings() {
+    elements.settingsOverlay.style.display = 'none';
+    elements.compactSettingsOverlay.style.display = 'none';
+    _settingsOpen = false;
+    _lastResizeHeight = 0;
+    window.electronAPI.setSettingsWindow(false);
+}
+
+async function showSavedHistory(source) {
+    selectionVersion++;
+    archiveReturnView = { graphVisible, historyVisible };
+    leaveSettings();
+    historySourceId = source.id;
     addingAccount = false;
+    document.body.classList.add('history-archive-open');
+    document.body.classList.remove('account-setup-open');
+    document.getElementById('archiveBanner').hidden = false;
+    document.getElementById('archiveHistoryTitle').textContent = `${window.i18n.t('accounts.savedHistory')}: ${source.label}`;
+    elements.loginContainer.style.display = 'none';
+    elements.noUsageContainer.style.display = 'none';
+    elements.loadingContainer.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    elements.mainContent.style.display = 'block';
+    graphVisible = true;
+    historyVisible = true;
+    elements.graphSection.style.display = 'block';
+    elements.historySection.style.display = 'block';
+    window.electronAPI.setSettingsWindow(true);
+    await loadChart();
+    await loadHistoryTable();
+    resizeWidget();
+}
+
+async function closeSavedHistory() {
+    if (archiveReturnView) {
+        ({ graphVisible, historyVisible } = archiveReturnView);
+        elements.graphSection.style.display = graphVisible ? 'block' : 'none';
+        elements.historySection.style.display = historyVisible ? 'block' : 'none';
+        archiveReturnView = null;
+    }
+    await reloadActiveAccount();
+}
+
+function resetAccountView() {
     latestUsageData = null;
+    historyLastEntries = [];
+    historyPage = 1;
+    historySourceId = null;
+    document.body.classList.remove('history-archive-open', 'api-account');
+    document.getElementById('archiveBanner').hidden = true;
+    if (usageChart) { usageChart.destroy(); usageChart = null; }
+    elements.historyTableBody.replaceChildren();
+    if (countdownInterval) clearInterval(countdownInterval);
+    elements.sessionPercentage.textContent = '—';
+    elements.weeklyPercentage.textContent = '—';
+    elements.mainContent.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    elements.noUsageContainer.style.display = 'none';
+    elements.loginContainer.style.display = 'none';
+    elements.loadingContainer.style.display = 'flex';
+    window.electronAPI.setTrayFrames([]);
     isFirstDataLoad = true;
     sessionResetTriggered = false;
     weeklyResetTriggered = false;
-    if (usageChart) { usageChart.destroy(); usageChart = null; }
-    elements.historyTableBody.replaceChildren();
+}
+
+async function reloadActiveAccount({ token } = {}) {
+    if (token == null) accountSetup.invalidate();
+    const version = ++selectionVersion;
+    addingAccount = false;
+    leaveSettings();
+    resetAccountView();
+    const selected = await window.electronAPI.getCredentials();
+    if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
+    credentials = selected;
+    const settings = await window.electronAPI.getSettings();
+    if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
+    window._cachedSettings = settings;
     const state = await accountPanel.refresh();
-    const cached = state.snapshots?.find((row) => row.accountId === accountId);
+    if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
+    elements.activeAccountSelect.value = credentials?.id || '';
+    if (!state.accounts.length) { showLoginRequired(); return; }
+    const cached = state.snapshots?.find((row) => row.accountId === credentials.id);
     if (cached?.data) updateUI(cached.data);
-    else elements.loadingContainer.style.display = 'flex';
     await fetchUsageData();
     startAutoUpdate();
 }
 
+async function selectAccount(accountId) {
+    if (!accountId) return;
+    accountSetup.invalidate();
+    const version = ++selectionVersion;
+    resetAccountView();
+    await window.electronAPI.setActiveAccount(accountId);
+    if (version !== selectionVersion) return;
+    await reloadActiveAccount();
+}
+
 // Every account is polled independently; the selected account controls details only.
 async function fetchUsageData() {
-    if (isFetching || addingAccount) return;
-    if (!hasActiveCredentials(credentials)) { showLoginRequired(); return; }
+    if (addingAccount) return;
+    if (isFetching) { refreshPending = true; return; }
+    if (!credentials?.accounts?.length) { showLoginRequired(); return; }
     isFetching = true;
     try {
         const snapshots = await window.electronAPI.fetchAllUsage();
         if (addingAccount) return;
         await accountPanel.refresh(snapshots);
+        if (historySourceId) return;
         const version = selectionVersion;
         const selected = await window.electronAPI.getCredentials();
         if (version !== selectionVersion || addingAccount) return;
@@ -1172,6 +1178,7 @@ async function fetchUsageData() {
     } finally {
         isFetching = false;
         resizeWidget();
+        if (refreshPending && !addingAccount) { refreshPending = false; fetchUsageData(); }
     }
 }
 
@@ -1192,6 +1199,8 @@ function formatCount(value) {
 
 function applyProviderMetricPresentation(data) {
     document.body.classList.toggle('api-account', Boolean(data?.codex_usage));
+    document.getElementById('compactSessionLabel').textContent = window.i18n.t(data?.codex_usage ? 'metric.codexRequests' : 'metric.session');
+    document.getElementById('compactWeeklyLabel').textContent = window.i18n.t(data?.codex_usage ? 'metric.codexCost' : 'metric.weekly');
     if (!data?.codex_usage) {
         if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.session');
         if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.weekly');
@@ -1231,6 +1240,7 @@ const EXTRA_ROW_CONFIG = {
 };
 
 function buildExtraRows(data) {
+    if (data.codex_usage) { elements.extraRows.replaceChildren(); elements.expandToggle.style.display = 'none'; elements.expandSection.style.display = 'none'; return 0; }
     elements.extraRows.innerHTML = '';
     let count = 0;
 
@@ -1384,6 +1394,7 @@ function buildExtraRows(data) {
         elements.expandSection.style.display = 'none';
     }
 
+    if (count > 0 && isExpanded) elements.expandSection.style.display = 'block';
     return count;
 }
 
@@ -1450,6 +1461,7 @@ function startContentObserver() {
 }
 
 function updateUI(data) {
+    if (historySourceId) return;
     latestUsageData = data;
 
     showMainContent();
@@ -1607,7 +1619,7 @@ function updateCompactBars(data) {
     elements.compactSessionFill.style.width = `${sessionPct}%`;
     elements.compactSessionPct.textContent = data.codex_usage ? formatCount(data.codex_usage.num_model_requests) : quotaText(data.five_hour);
     elements.compactWeeklyFill.style.width = `${weeklyPct}%`;
-    elements.compactWeeklyPct.textContent = data.codex_usage ? formatCurrency(Math.round(data.codex_usage.cost * 100), data.codex_usage.currency) : quotaText(data.seven_day);
+    elements.compactWeeklyPct.textContent = data.codex_usage ? new Intl.NumberFormat(undefined, { style: 'currency', currency: data.codex_usage.currency || 'USD' }).format(data.codex_usage.cost || 0) : quotaText(data.seven_day);
 
     // Apply warning/danger classes to compact bars
     elements.compactSessionFill.className = 'compact-bar-fill';
@@ -2108,6 +2120,12 @@ function buildMascotAnimation(status, restFrame) {
 }
 
 function updateTrayIcon(data) {
+    if (data?.codex_usage) { window.electronAPI.setTrayFrames([]); return; }
+    if (data?.provider === 'codex') {
+        const metric = data.five_hour || data.seven_day;
+        window.electronAPI.setTrayFrames(metric ? [buildTrayFrame(window.i18n.t(data.five_hour ? 'metric.session' : 'metric.weekly'), metric.utilization)] : []);
+        return;
+    }
     try {
         const frames = [];
         const session = data && data.five_hour ? data.five_hour.utilization : undefined;
@@ -2279,7 +2297,7 @@ function showLoginRequired() {
     elements.settingsOverlay.style.display = 'none';
     elements.compactSettingsOverlay.style.display = 'none';
     // Hide header buttons during login
-    elements.settingsBtn.style.display = 'none';
+    elements.settingsBtn.style.display = 'flex';
     elements.refreshBtn.style.display = 'none';
     elements.graphBtn.style.display = 'none';
     stopAutoUpdate();
@@ -2341,8 +2359,9 @@ function stopAutoUpdate() {
 
 async function loadChart() {
     const accountId = credentials?.id;
+    const version = selectionVersion;
     const history = await fetchGraphHistory();
-    if (accountId !== credentials?.id) return;
+    if (accountId !== credentials?.id || version !== selectionVersion) return;
     document.getElementById('graphEmpty').hidden = history.length > 0;
     if (!history.length) {
         if (usageChart) { usageChart.destroy(); usageChart = null; }
@@ -2352,6 +2371,7 @@ async function loadChart() {
 }
 
 async function fetchGraphHistory() {
+    if (historySourceId) return filterSavedHistory(await window.electronAPI.getHistorySource(historySourceId), { rangeMs: graphRangeMs, custom: graphCustomActive, from: graphCustomFrom, to: graphCustomTo });
     if (graphCustomActive && (graphCustomFrom != null || graphCustomTo != null)) {
         if (window.electronAPI.getUsageHistoryWindow) {
             return window.electronAPI.getUsageHistoryWindow(graphCustomFrom, graphCustomTo);
@@ -2364,6 +2384,7 @@ async function fetchGraphHistory() {
 }
 
 async function fetchHistoryTableData() {
+    if (historySourceId) return filterSavedHistory(await window.electronAPI.getHistorySource(historySourceId), { rangeMs: historyRangeMs, custom: historyCustomActive, from: historyCustomFrom, to: historyCustomTo });
     if (historyCustomActive && (historyCustomFrom != null || historyCustomTo != null)) {
         if (window.electronAPI.getUsageHistoryWindow) {
             return window.electronAPI.getUsageHistoryWindow(historyCustomFrom, historyCustomTo);
@@ -2378,8 +2399,9 @@ async function fetchHistoryTableData() {
 async function loadHistoryTable() {
     if (!elements.historyTableBody) return;
     const accountId = credentials?.id;
+    const version = selectionVersion;
     const history = await fetchHistoryTableData();
-    if (accountId !== credentials?.id) return;
+    if (accountId !== credentials?.id || version !== selectionVersion) return;
     historyLastEntries = [...history].sort((a, b) => b.timestamp - a.timestamp);
     renderHistoryPage();
 }
@@ -2423,7 +2445,7 @@ function renderHistoryPage() {
         : historyRangeMs;
     const showDate = !spanMs || spanMs === 0 || spanMs > 24 * 60 * 60 * 1000;
 
-    const apiHistory = Boolean(latestUsageData?.codex_usage);
+    const apiHistory = historyLastEntries.some((row) => row.apiRequests != null);
     const headers = document.querySelectorAll('.history-table th');
     const headerKeys = apiHistory ? ['header.time', 'metric.codexRequests', 'metric.codexCost', 'accounts.inputTokens', 'accounts.outputTokens'] : ['header.time', 'metric.session', 'metric.weekly', 'metric.sonnet', 'metric.opus', 'metric.extra', 'header.deltaSession', 'header.deltaWeekly'];
     headers.forEach((header, index) => { header.hidden = index >= headerKeys.length; if (headerKeys[index]) header.textContent = window.i18n.t(headerKeys[index]); });
@@ -2626,7 +2648,8 @@ function renderChart(history) {
         }
     }
 
-    const apiChart = Boolean(latestUsageData?.codex_usage);
+    const apiChart = history.some((row) => row.apiRequests != null);
+    const chartCurrency = history.find((row) => row.apiCurrency)?.apiCurrency || latestUsageData?.codex_usage?.currency || 'USD';
     if (apiChart) {
         datasets.splice(0, datasets.length,
             { label: window.i18n.t('metric.codexRequests'), data: chartPoints(history, 'apiRequests'), borderColor: sessionColor, borderWidth: 1.5, pointRadius: history.length === 1 ? 3 : 0, yAxisID: 'y' },
@@ -2647,7 +2670,7 @@ function renderChart(history) {
                 mode: 'nearest'
             },
             scales: {
-                ...(apiChart ? { cost: { axis: 'y', position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { color: weeklyColor, callback: (value) => new Intl.NumberFormat(undefined, { style: 'currency', currency: latestUsageData.codex_usage.currency || 'USD' }).format(value) } } } : {}),
+                ...(apiChart ? { cost: { axis: 'y', position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { color: weeklyColor, callback: (value) => new Intl.NumberFormat(undefined, { style: 'currency', currency: chartCurrency }).format(value) } } } : {}),
                 x: {
                     type: 'linear',
                     min: history[0].timestamp,
@@ -2715,7 +2738,7 @@ function renderChart(history) {
                             });
                         },
                         label(item) {
-                            return `${item.dataset.label}: ${apiChart ? item.dataset.yAxisID === 'cost' ? new Intl.NumberFormat(undefined, { style: 'currency', currency: latestUsageData.codex_usage.currency || 'USD' }).format(item.parsed.y) : formatCount(item.parsed.y) : `${Math.round(item.parsed.y)}%`}`;
+                            return `${item.dataset.label}: ${apiChart ? item.dataset.yAxisID === 'cost' ? new Intl.NumberFormat(undefined, { style: 'currency', currency: chartCurrency }).format(item.parsed.y) : formatCount(item.parsed.y) : `${Math.round(item.parsed.y)}%`}`;
                         }
                     }
                 }
@@ -2808,7 +2831,9 @@ let warnThreshold = 75;
 let dangerThreshold = 90;
 
 async function loadSettings() {
+    await savedHistory.refresh();
     const settings = await window.electronAPI.getSettings();
+    window._cachedSettings = settings;
 
     elements.autoStartToggle.checked = settings.autoStart;
     elements.alwaysOnTopToggle.checked = settings.alwaysOnTop;

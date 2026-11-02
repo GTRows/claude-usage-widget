@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'module';
+import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const { createLocalProviderAdapters } = require('../src/providers');
@@ -8,12 +9,13 @@ const { readMacKeychain } = require('../src/providers/keychain');
 const RESET = '2026-11-02T13:00:00.000Z';
 const window = (utilization) => ({ utilization, resets_at: RESET });
 const response = (data, options = {}) => ({ ok: true, status: 200, redirected: false, json: async () => data, ...options });
+const FIXTURE_HOME = path.resolve('provider-fixture');
 function setup(provider = 'claude', fetch = vi.fn(async () => response({ five_hour: window(25) })), extra = {}) {
   const readFile = vi.fn(async () => JSON.stringify(provider === 'claude'
     ? { claudeAiOauth: { accessToken: 'fixture-secret' } }
     : { tokens: { access_token: 'fixture-secret', account_id: 'fixture-account' } }));
-  const adapters = createLocalProviderAdapters({ fs: { readFile, stat: async () => ({ isDirectory: () => true }) }, homeDir: '/fixture', env: {}, platform: 'linux', fetch, ...extra });
-  const account = { id: 'local-test', provider, authType: 'local', configDir: `/fixture/.${provider}` };
+  const adapters = createLocalProviderAdapters({ fs: { readFile, stat: async () => ({ isDirectory: () => true }) }, homeDir: FIXTURE_HOME, env: {}, platform: process.platform, fetch, ...extra });
+  const account = { id: 'local-test', provider, authType: 'local', configDir: path.join(FIXTURE_HOME, `.${provider}`) };
   return { adapters, account, fetch, readFile };
 }
 
@@ -35,6 +37,11 @@ describe('subscription quota normalization', () => {
     expect(normalizeCodexUsage({ rate_limit: { primary_window: { used_percent: null, reset_at: 1, limit_window_seconds: 18000 } } })).toEqual({ provider: 'codex', usageType: 'subscription' });
     expect(normalizeCodexUsage({ rate_limit: { primary_window: { used_percent: 20, reset_at: 1, limit_window_seconds: 60 } } }).five_hour).toBeUndefined();
   });
+
+  it('retains a valid Claude cowork window without admitting invalid values', () => {
+    expect(normalizeClaudeUsage({ seven_day_cowork: window(42) }).seven_day_cowork).toEqual(window(42));
+    expect(normalizeClaudeUsage({ seven_day_cowork: window(101) }).seven_day_cowork).toBeUndefined();
+  });
 });
 
 describe('read-only local subscription fetch', () => {
@@ -48,7 +55,8 @@ describe('read-only local subscription fetch', () => {
     f.readFile.mockResolvedValue(JSON.stringify({ claudeAiOauth: { accessToken: 'new-fixture-secret' } }));
     await f.adapters.fetchLocalUsage(f.account);
     expect(f.fetch.mock.calls[1][1].headers.Authorization).toBe('Bearer new-fixture-secret');
-    expect(f.readFile.mock.calls.map(([file]) => file)).toEqual(['/fixture/.claude/.credentials.json', '/fixture/.claude/.credentials.json']);
+    const credentialFile = path.join(FIXTURE_HOME, '.claude', '.credentials.json');
+    expect(f.readFile.mock.calls.map(([file]) => file)).toEqual([credentialFile, credentialFile]);
   });
 
   it('uses Codex subscription tokens and account header, without calling API usage endpoints', async () => {

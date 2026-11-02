@@ -15,13 +15,9 @@ const { selectAccountHistory, appendAccountSample, removeAccountHistory } = requ
 const { discoverLocalProfiles, linkLocalProfile, fetchLocalUsage } = require('./src/providers');
 const { fitWindowBounds, trayWindowBounds } = require('./src/shared/window-geometry');
 const { createDockVisibility } = require('./src/main/dock-visibility');
+const { historyForSource, historySources, applyHistoryPolicies, disconnectAccount } = require('./src/main/history-sources');
 const {
-  DEFAULT_ACCOUNT_ID,
-  getActiveAccount,
   hasUsableCredentials,
-  legacyClaudeAccount,
-  normalizeAccount,
-  normalizeAccounts,
   normalizeProvider,
 } = require('./src/shared/accounts');
 
@@ -33,16 +29,8 @@ const GITHUB_REPO = 'claude-usage-widget';
 const fs = require('fs');
 const os = require('os');
 
-// electron-store uses different paths per platform
-let configPath;
-if (process.platform === 'darwin') {
-  configPath = path.join(os.homedir(), 'Library', 'Application Support', 'claude-usage-widget', 'config.json');
-} else if (process.platform === 'win32') {
-  configPath = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'claude-usage-widget', 'config.json');
-} else {
-  // Linux
-  configPath = path.join(os.homedir(), '.config', 'claude-usage-widget', 'config.json');
-}
+// Use Electron's actual user-data location, including isolated integration profiles.
+const configPath = path.join(app.getPath('userData'), 'config.json');
 
 try {
   if (fs.existsSync(configPath)) {
@@ -101,14 +89,11 @@ function decryptSecret(secret) {
 
 const accountStore = createAccountStore(store, { encrypt: encryptSecret, decrypt: decryptSecret });
 const loadAccounts = () => accountStore.load();
-const getActiveStoredAccount = () => accountStore.active();
 const saveAccount = (input) => accountStore.save(input);
 function deleteAccount(accountId) {
   const id = accountId || accountStore.active()?.id;
   if (!id) return;
-  accountStore.remove(id);
-  accountUsage.invalidate(id);
-  store.set('usageHistory', removeAccountHistory(store.get('usageHistory', []), id));
+  disconnectAccount({ store, accounts: accountStore, invalidate: accountUsage.invalidate }, id);
   session.fromPartition(`persist:account-${id}`).clearStorageData().catch(() => {});
 }
 function activeHistory() {
@@ -131,10 +116,7 @@ let defaultTrayImage = null;
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_COMPACT_WIDTH = 320;
 const WIDGET_HEIGHT = 155;
-const TRAY_ANCHOR_GAP = 6;
-const HISTORY_RETENTION_DAYS = 30;
 const CHART_DAYS = 7;
-const MAX_HISTORY_SAMPLES = 10000; // Cap total samples to prevent unbounded growth
 
 function storeUsageHistory(data, accountId) {
   store.set('usageHistory', appendAccountSample(store.get('usageHistory', []), data, accountId));
@@ -319,17 +301,6 @@ function applyNativeAppearance() {
   }
 }
 
-function centerWindowOnDisplay() {
-  if (!mainWindow) return;
-  const { screen } = require('electron');
-  const display = screen.getDisplayMatching(mainWindow.getBounds());
-  const [w, h] = mainWindow.getSize();
-  const x = Math.round(display.workArea.x + (display.workArea.width - w) / 2);
-  const y = Math.round(display.workArea.y + (display.workArea.height - h) / 2);
-  mainWindow.setPosition(x, y);
-  store.set('windowPosition', { x, y });
-}
-
 function applyTaskbarVisibility() {
   if (!mainWindow) return;
   const compact = store.get('settings.compactMode', false);
@@ -379,6 +350,15 @@ ipcMain.handle('get-accounts', () => ({ activeAccountId: accountStore.active()?.
 ipcMain.handle('set-active-account', (event, accountId) => accountStore.select(accountId));
 ipcMain.handle('rename-account', (event, accountId, label) => accountStore.rename(accountId, label));
 ipcMain.handle('discover-local-profiles', () => discoverLocalProfiles());
+const pendingProfiles = new Map();
+ipcMain.handle('save-local-profile', (event, ticket) => {
+  const pending = pendingProfiles.get(ticket);
+  pendingProfiles.delete(ticket);
+  if (!pending || Date.now() - pending.createdAt > 60000) throw new Error('Profile setup expired');
+  const account = saveAccount(pending.account);
+  accountUsage.invalidate(account.id);
+  return publicAccount(account);
+});
 ipcMain.handle('link-local-profile', async (event, provider, directory) => {
   if (!['claude', 'codex'].includes(provider)) return { success: false, code: 'INVALID_PROVIDER' };
   try {
@@ -390,9 +370,12 @@ ipcMain.handle('link-local-profile', async (event, provider, directory) => {
       if (result.canceled) return { canceled: true };
       directory = result.filePaths[0];
     }
-    const account = saveAccount(await linkLocalProfile(provider, directory));
-    accountUsage.invalidate(account.id);
-    return { success: true, account: publicAccount(account) };
+    const account = await linkLocalProfile(provider, directory);
+    for (const [key, value] of pendingProfiles) if (Date.now() - value.createdAt > 60000) pendingProfiles.delete(key);
+    if (pendingProfiles.size >= 32) pendingProfiles.delete(pendingProfiles.keys().next().value);
+    const ticket = randomUUID();
+    pendingProfiles.set(ticket, { account, createdAt: Date.now() });
+    return { success: true, ticket, account: publicAccount(account) };
   } catch {
     return { success: false, code: 'PROFILE_UNAVAILABLE' };
   }
@@ -536,6 +519,8 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+ipcMain.handle('get-history-sources', () => historySources(store.get('usageHistory', []), loadAccounts(), store.get('historyArchives', {})));
+ipcMain.handle('get-history-source', (event, id) => historyForSource(store.get('usageHistory', []), id));
 ipcMain.handle('get-storage-info', () => {
   const fs = require('fs');
   let storeBytes = 0;
@@ -568,7 +553,7 @@ ipcMain.handle('clear-history', () => {
 
 ipcMain.handle('export-history', async (event, options = {}) => {
   const format = options.format === 'json' ? 'json' : 'csv';
-  const history = activeHistory();
+  const history = options.source ? historyForSource(store.get('usageHistory', []), options.source) : activeHistory();
   const fromMs = Number.isFinite(options.fromMs) ? options.fromMs : null;
   const toMs = Number.isFinite(options.toMs) ? options.toMs : null;
   const filtered = (fromMs != null || toMs != null)
@@ -653,7 +638,22 @@ ipcMain.on('set-compact-mode', (event, compact) => {
   }
 });
 
+function getHistoryPolicy() {
+  return store.get('historyPolicies', {})[accountStore.active()?.id] || { enabled: false, days: 30 };
+}
+function applyAutoPrune() {
+  const history = store.get('usageHistory', []);
+  const kept = applyHistoryPolicies(history, store.get('historyPolicies', {}));
+  if (kept.length !== history.length) store.set('usageHistory', kept);
+}
+
 // Settings handlers
+ipcMain.handle('save-appearance', (event, patch = {}) => {
+  const settings = normalizeSettings(patch);
+  for (const key of ['theme', 'themeStyle']) if (key in patch) store.set(`settings.${key}`, settings[key]);
+  applyNativeAppearance();
+  return true;
+});
 ipcMain.handle('get-settings', () => {
   return {
     autoStart: store.get('settings.autoStart', false),
@@ -674,8 +674,8 @@ ipcMain.handle('get-settings', () => {
     graphVisible: store.get('settings.graphVisible', false),
     expandedOpen: store.get('settings.expandedOpen', false),
     historyVisible: store.get('settings.historyVisible', false),
-    autoPrune: store.get('settings.autoPrune', false),
-    autoPruneDays: store.get('settings.autoPruneDays', 30),
+    autoPrune: getHistoryPolicy().enabled,
+    autoPruneDays: getHistoryPolicy().days,
     hideFromTaskbar: store.get('settings.hideFromTaskbar', false),
     headlessMode: store.get('settings.headlessMode', false),
     language: store.get('settings.language', 'tr')
@@ -707,22 +707,15 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.graphVisible', settings.graphVisible);
   store.set('settings.expandedOpen', settings.expandedOpen);
   store.set('settings.historyVisible', settings.historyVisible);
-  store.set('settings.autoPrune', !!settings.autoPrune);
-  if (Number.isFinite(settings.autoPruneDays)) {
-    store.set('settings.autoPruneDays', Math.max(1, Math.floor(settings.autoPruneDays)));
-  }
+  const accountId = accountStore.active()?.id;
+  if (accountId) store.set('historyPolicies', { ...store.get('historyPolicies', {}), [accountId]: { enabled: !!settings.autoPrune, days: Math.max(1, Math.floor(settings.autoPruneDays || 30)) } });
   store.set('settings.hideFromTaskbar', !!settings.hideFromTaskbar);
   store.set('settings.headlessMode', !!settings.headlessMode);
   if (settings.language) store.set('settings.language', settings.language);
   applyTaskbarVisibility();
   applyNativeAppearance();
 
-  if (settings.autoPrune && settings.autoPruneDays >= 1) {
-    const cutoff = Date.now() - settings.autoPruneDays * 24 * 60 * 60 * 1000;
-    const history = store.get('usageHistory', []);
-    const kept = Array.isArray(history) ? history.filter((e) => e.timestamp >= cutoff) : [];
-    if (kept.length !== history.length) store.set('usageHistory', kept);
-  }
+  applyAutoPrune();
 
   // openAtLogin is not supported on Linux — Electron silently ignores it.
   // Skip the call entirely to avoid misleading behaviour.
@@ -986,7 +979,7 @@ function applyTrayFrame(index) {
     debugLog('Failed to apply tray frame:', err.message);
   }
   if (frame.tooltip) tray.setToolTip(frame.tooltip);
-  if (process.platform === 'darwin' && frame.title) tray.setTitle(frame.title);
+  if (process.platform === 'darwin') tray.setTitle(frame.title || '');
 }
 
 function startTrayCycle() {
@@ -1021,14 +1014,11 @@ app.whenReady().then(async () => {
 
   accountStore.load();
 
-  // Apply auto-prune on startup before window opens
-  if (store.get('settings.autoPrune', false)) {
-    const days = Math.max(1, Math.floor(store.get('settings.autoPruneDays', 30)));
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-    const history = store.get('usageHistory', []);
-    const kept = Array.isArray(history) ? history.filter((e) => e.timestamp >= cutoff) : [];
-    if (kept.length !== history.length) store.set('usageHistory', kept);
+  if (!store.has('historyPolicies')) {
+    const activeId = accountStore.active()?.id;
+    store.set('historyPolicies', activeId ? { [activeId]: { enabled: store.get('settings.autoPrune', false), days: store.get('settings.autoPruneDays', 30) } } : {});
   }
+  applyAutoPrune();
 
   const headlessMode = store.get('settings.headlessMode', false);
   createMainWindow();
