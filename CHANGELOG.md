@@ -8,10 +8,17 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ## [Unreleased]
 
 ### Added
+- Independent account monitoring for local Claude Code and Codex subscription profiles, alongside Claude web and OpenAI API accounts.
+- Glass and Graphite desktop themes with dark, light, and system appearance modes.
+- Account-scoped history retention, disconnected-account history browsing, and API billing charts.
 ### Changed
+- Improve macOS tray activation, Dock visibility, window recovery, and clean shutdown.
 ### Deprecated
 ### Removed
 ### Fixed
+- Preserve unrelated account history during refresh and prevent delayed settings saves from changing another account's retention policy.
+- Keep API billing separate from local Codex subscription metadata and normalize quota history when switching used/remaining display modes.
+- Preserve the quota display and CLI options from v1.16.4-gtrows.2.
 ### Security
 
 ## [1.16.4-gtrows.2] - 2026-05-29
