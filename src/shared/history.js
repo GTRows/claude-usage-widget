@@ -1,4 +1,6 @@
 const HISTORY_FIELDS = ['session', 'weekly', 'sonnet', 'opus', 'extraUsage'];
+const API_HISTORY_FIELDS = ['apiRequests', 'apiCost', 'inputTokens', 'outputTokens', 'apiCurrency'];
+const fieldsFor = (history) => Array.isArray(history) && history.some((row) => row.apiRequests != null) ? API_HISTORY_FIELDS : HISTORY_FIELDS;
 
 function normalizeRow(row) {
   if (!row || typeof row !== 'object') return null;
@@ -7,8 +9,12 @@ function normalizeRow(row) {
   const out = { timestamp: ts };
   for (const field of HISTORY_FIELDS) {
     const v = Number(row[field]);
-    out[field] = Number.isFinite(v) ? v : null;
+    out[field] = row[field] != null && row[field] !== '' && Number.isFinite(v) ? v : null;
   }
+  for (const field of API_HISTORY_FIELDS.filter((key) => key !== 'apiCurrency')) {
+    if (field in row) out[field] = Number.isFinite(row[field]) ? row[field] : null;
+  }
+  if (typeof row.apiCurrency === 'string' && /^[A-Z]{3}$/.test(row.apiCurrency)) out.apiCurrency = row.apiCurrency;
   return out;
 }
 
@@ -41,7 +47,7 @@ function estimateSpanMs(entries) {
   return hi - lo;
 }
 
-function toCSV(history, fields = HISTORY_FIELDS) {
+function toCSV(history, fields = fieldsFor(history)) {
   const cols = ['timestamp', 'iso', ...fields];
   const lines = [cols.join(',')];
   if (!Array.isArray(history)) return lines.join('\n');
@@ -55,7 +61,7 @@ function toCSV(history, fields = HISTORY_FIELDS) {
   return lines.join('\n');
 }
 
-function toJSON(history, fields = HISTORY_FIELDS) {
+function toJSON(history, fields = fieldsFor(history)) {
   if (!Array.isArray(history)) return [];
   return history
     .map(normalizeRow)

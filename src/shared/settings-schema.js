@@ -27,7 +27,7 @@ const SETTINGS_DEFAULTS = {
 
 const ENUM_VALUES = {
   theme: ['dark', 'light', 'system'],
-  themeStyle: ['classic', 'plate', 'nord', 'sunset', 'mono'],
+  themeStyle: ['classic', 'plate', 'nord', 'sunset', 'mono', 'graphite', 'glass'],
   trayStyle: ['bigNumber', 'ring', 'bar', 'dot'],
   timeFormat: ['12h', '24h'],
   weeklyDateFormat: ['date', 'date-day', 'date-day-time'],

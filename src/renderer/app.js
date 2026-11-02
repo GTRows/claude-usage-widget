@@ -1,5 +1,14 @@
+import { createAccountPanel } from './account-panel.js';
+import { accountProviderLabel, quotaText } from './account-presentation.js';
+import { createThemeController } from './theme.js';
+import { chartPoints } from './usage-chart.js';
+
 // Application state
 let credentials = null;
+let accountPanel = null;
+let themeController = null;
+let addingAccount = false;
+let selectionVersion = 0;
 let updateInterval = null;
 const RELEASES_PAGE_URL = 'https://github.com/GTRows/claude-usage-widget/releases';
 let latestReleaseUrl = RELEASES_PAGE_URL;
@@ -227,8 +236,9 @@ function applyTranslations(root = document) {
 
 function hasActiveCredentials(creds) {
     if (!creds) return false;
-    if (creds.provider === 'codex') return Boolean(creds.apiKey);
-    return Boolean(creds.sessionKey && creds.organizationId);
+    if (creds.authType === 'local') return Boolean(creds.configDir);
+    if (creds.provider === 'codex') return Boolean(creds.hasApiKey || creds.apiKey);
+    return Boolean((creds.hasSessionKey || creds.sessionKey) && creds.organizationId);
 }
 
 function activeProvider() {
@@ -326,10 +336,11 @@ async function refreshAccountSelector() {
     for (const account of data.accounts || []) {
         const option = document.createElement('option');
         option.value = account.id;
-        option.textContent = `${account.label || account.id} (${account.provider || 'claude'})`;
+        option.textContent = `${account.label || account.id} (${accountProviderLabel(account)})`;
         elements.activeAccountSelect.appendChild(option);
     }
     elements.activeAccountSelect.value = data.activeAccountId || '';
+    if (accountPanel) await accountPanel.refresh();
 }
 
 // Initialize
@@ -353,6 +364,7 @@ async function init() {
             if (window.i18n) window.i18n.setLanguage(lang);
             applyTranslations();
             applyLoginProvider();
+            if (accountPanel) accountPanel.refresh();
             // Re-render dynamic surfaces — chart labels, tray frames, version label.
             try {
                 if (latestUsageData) updateUI(latestUsageData);
@@ -371,8 +383,52 @@ async function init() {
     // Apply saved theme and load thresholds immediately
     const settings = await window.electronAPI.getSettings();
     window._cachedSettings = settings;
-    applyTheme(settings.theme);
-    applyThemeStyle(settings.themeStyle || 'classic');
+    themeController = createThemeController({
+        persist: async (patch) => {
+            const latest = await window.electronAPI.getSettings();
+            window._cachedSettings = { ...latest, ...patch };
+            await window.electronAPI.saveSettings(window._cachedSettings);
+        },
+        onChange: () => { if (usageChart && graphVisible) loadChart(); }
+    });
+    themeController.apply(settings);
+    accountPanel = createAccountPanel({
+        api: window.electronAPI, t: (key, params) => window.i18n.t(key, params),
+        onSelect: selectAccount,
+        onAdd: () => {
+            addingAccount = true;
+            selectionVersion++;
+            _settingsOpen = false;
+            window.electronAPI.setSettingsWindow(false);
+            showLoginRequired();
+            accountPanel.discover();
+            resizeWidget();
+        },
+        onCancel: async () => {
+            addingAccount = false;
+            credentials = await window.electronAPI.getCredentials();
+            showMainContent();
+            await fetchUsageData();
+            startAutoUpdate();
+        },
+        onChanged: async () => {
+            addingAccount = false;
+            credentials = await window.electronAPI.getCredentials();
+            await refreshAccountSelector();
+            showMainContent();
+            await fetchUsageData();
+            startAutoUpdate();
+        },
+        onResize: resizeWidget
+    });
+    await accountPanel.discover();
+    window.electronAPI.onAccountUsageUpdated(async (snapshot) => {
+        if (addingAccount) return;
+        const version = selectionVersion;
+        await accountPanel.refresh();
+        if (addingAccount || version !== selectionVersion) return;
+        if (snapshot.accountId === credentials?.id && snapshot.data) updateUI(snapshot.data);
+    });
     if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
@@ -479,18 +535,7 @@ function setupEventListeners() {
     });
 
     if (elements.activeAccountSelect) {
-        elements.activeAccountSelect.addEventListener('change', async () => {
-            const accountId = elements.activeAccountSelect.value;
-            if (!accountId) return;
-            await window.electronAPI.setActiveAccount(accountId);
-            credentials = await window.electronAPI.getCredentials();
-            if (hasActiveCredentials(credentials)) {
-                await fetchUsageData();
-                startAutoUpdate();
-            } else {
-                showLoginRequired();
-            }
-        });
+        elements.activeAccountSelect.addEventListener('change', () => selectAccount(elements.activeAccountSelect.value));
     }
 
     elements.refreshBtn.addEventListener('click', async () => {
@@ -791,7 +836,7 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             elements.themeBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            applyTheme(btn.dataset.theme);
+            themeController.setMode(btn.dataset.theme);
         });
     });
 
@@ -800,7 +845,7 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             elements.themeStyleBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            applyThemeStyle(btn.dataset.themeStyle);
+            themeController.setStyle(btn.dataset.themeStyle);
         });
     });
 
@@ -991,6 +1036,8 @@ async function handleConnect() {
                 apiKey: secret
             };
             await window.electronAPI.saveCredentials(credentials);
+            credentials = await window.electronAPI.getCredentials();
+            addingAccount = false;
             await refreshAccountSelector();
             elements.sessionKeyInput.value = '';
             showMainContent();
@@ -1009,6 +1056,8 @@ async function handleConnect() {
                 organizationId: result.organizationId
             };
             await window.electronAPI.saveCredentials(credentials);
+            credentials = await window.electronAPI.getCredentials();
+            addingAccount = false;
             await refreshAccountSelector();
             elements.sessionKeyInput.value = '';
             showMainContent();
@@ -1058,6 +1107,8 @@ async function handleAutoDetect() {
                 organizationId: validation.organizationId
             };
             await window.electronAPI.saveCredentials(credentials);
+            credentials = await window.electronAPI.getCredentials();
+            addingAccount = false;
             await refreshAccountSelector();
             showMainContent();
             await fetchUsageData();
@@ -1074,42 +1125,55 @@ async function handleAutoDetect() {
     }
 }
 
-// Fetch usage data from the active provider account
-async function fetchUsageData() {
-    debugLog('fetchUsageData called');
-
-    if (isFetching) {
-        debugLog('Fetch already in flight — skipping');
-        return;
-    }
-
-    if (!hasActiveCredentials(credentials)) {
-        debugLog('Missing credentials, showing login');
-        showLoginRequired();
-        return;
-    }
-
-    isFetching = true;
-    try {
-        debugLog('Calling electronAPI.fetchUsageData...');
-        const data = await window.electronAPI.fetchUsageData();
-        debugLog('Received usage data:', data);
-        updateUI(data);
-    } catch (error) {
-        console.error('Error fetching usage data:', error);
-        if (error.message.includes('SessionExpired') || error.message.includes('Unauthorized')) {
-            credentials = null;
-            await refreshAccountSelector();
-            showLoginRequired();
-        } else {
-            debugLog('Failed to fetch usage data');
-            displayFetchError(error);
-        }
-    } finally {
-        isFetching = false;
-    }
+async function selectAccount(accountId) {
+    if (!accountId) return;
+    const version = ++selectionVersion;
+    await window.electronAPI.setActiveAccount(accountId);
+    const selected = await window.electronAPI.getCredentials();
+    if (version !== selectionVersion) return;
+    credentials = selected;
+    elements.activeAccountSelect.value = selected.id;
+    addingAccount = false;
+    latestUsageData = null;
+    isFirstDataLoad = true;
+    sessionResetTriggered = false;
+    weeklyResetTriggered = false;
+    if (usageChart) { usageChart.destroy(); usageChart = null; }
+    elements.historyTableBody.replaceChildren();
+    const state = await accountPanel.refresh();
+    const cached = state.snapshots?.find((row) => row.accountId === accountId);
+    if (cached?.data) updateUI(cached.data);
+    else elements.loadingContainer.style.display = 'flex';
+    await fetchUsageData();
+    startAutoUpdate();
 }
 
+// Every account is polled independently; the selected account controls details only.
+async function fetchUsageData() {
+    if (isFetching || addingAccount) return;
+    if (!hasActiveCredentials(credentials)) { showLoginRequired(); return; }
+    isFetching = true;
+    try {
+        const snapshots = await window.electronAPI.fetchAllUsage();
+        if (addingAccount) return;
+        await accountPanel.refresh(snapshots);
+        const version = selectionVersion;
+        const selected = await window.electronAPI.getCredentials();
+        if (version !== selectionVersion || addingAccount) return;
+        credentials = selected;
+        const snapshot = snapshots.find((row) => row.accountId === credentials?.id);
+        if (snapshot?.data) updateUI(snapshot.data);
+        else {
+            const code = snapshot?.error?.code;
+            displayFetchError(new Error(window.i18n.t(code === 'AUTH_REQUIRED' ? 'accounts.authRequired' : code === 'RATE_LIMITED' ? 'accounts.rateLimited' : 'accounts.fetchFailed')));
+        }
+    } catch {
+        displayFetchError(new Error(window.i18n.t('accounts.fetchFailed')));
+    } finally {
+        isFetching = false;
+        resizeWidget();
+    }
+}
 
 // Update UI with usage data
 // Format a cent-based amount with the correct currency symbol.
@@ -1127,7 +1191,8 @@ function formatCount(value) {
 }
 
 function applyProviderMetricPresentation(data) {
-    if (data?.provider !== 'codex') {
+    document.body.classList.toggle('api-account', Boolean(data?.codex_usage));
+    if (!data?.codex_usage) {
         if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.session');
         if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.weekly');
         if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
@@ -1143,7 +1208,7 @@ function applyProviderMetricPresentation(data) {
     if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
     if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
     if (elements.sessionPercentage) elements.sessionPercentage.textContent = formatCount(usage.num_model_requests);
-    if (elements.weeklyPercentage) elements.weeklyPercentage.textContent = formatCurrency(Math.round(Number(usage.cost || 0) * 100), currency);
+    if (elements.weeklyPercentage) elements.weeklyPercentage.textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(usage.cost || 0));
     if (elements.sessionTimeText) elements.sessionTimeText.textContent = window.i18n.t('metric.last7d');
     if (elements.weeklyTimeText) elements.weeklyTimeText.textContent = window.i18n.t('metric.last7d');
     if (elements.sessionResetsAt) {
@@ -1471,6 +1536,7 @@ function checkUsageAlerts(data) {
 
 // Apply or remove compact mode — switches view, resizes window, syncs all toggles
 function applyCompactMode(compact) {
+    document.body.classList.toggle('compact-mode', compact);
     isCompactMode = compact;
 
     // Show/hide the correct content view
@@ -1539,9 +1605,9 @@ function updateCompactBars(data) {
     const weeklyPct = Math.min(Math.max(data.seven_day?.utilization || 0, 0), 100);
 
     elements.compactSessionFill.style.width = `${sessionPct}%`;
-    elements.compactSessionPct.textContent = `${Math.round(sessionPct)}%`;
+    elements.compactSessionPct.textContent = data.codex_usage ? formatCount(data.codex_usage.num_model_requests) : quotaText(data.five_hour);
     elements.compactWeeklyFill.style.width = `${weeklyPct}%`;
-    elements.compactWeeklyPct.textContent = `${Math.round(weeklyPct)}%`;
+    elements.compactWeeklyPct.textContent = data.codex_usage ? formatCurrency(Math.round(data.codex_usage.cost * 100), data.codex_usage.currency) : quotaText(data.seven_day);
 
     // Apply warning/danger classes to compact bars
     elements.compactSessionFill.className = 'compact-bar-fill';
@@ -1618,13 +1684,14 @@ function seedAlertFlags(data) {
 
 function refreshTimers() {
     if (!latestUsageData) return;
+    if (latestUsageData.codex_usage) { applyProviderMetricPresentation(latestUsageData); return; }
 
     const settings = window._cachedSettings || {};
     const timeFormat = settings.timeFormat || '12h';
     const weeklyDateFormat = settings.weeklyDateFormat || 'date';
 
     // Session data
-    const sessionUtilization = latestUsageData.five_hour?.utilization || 0;
+    const sessionUtilization = latestUsageData.five_hour?.utilization;
     const sessionResetsAt = latestUsageData.five_hour?.resets_at;
 
     // Check if session timer has expired and we need to refresh
@@ -1657,9 +1724,10 @@ function refreshTimers() {
     );
     elements.sessionResetsAt.textContent = formatResetsAt(sessionResetsAt, false, timeFormat, weeklyDateFormat);
     elements.sessionResetsAt.style.opacity = sessionResetsAt ? '1' : '0.4';
+    if (!latestUsageData.five_hour) elements.sessionTimeText.textContent = '—';
 
     // Weekly data
-    const weeklyUtilization = latestUsageData.seven_day?.utilization || 0;
+    const weeklyUtilization = latestUsageData.seven_day?.utilization;
     const weeklyResetsAt = latestUsageData.seven_day?.resets_at;
 
     // Check if weekly timer has expired and we need to refresh
@@ -1691,6 +1759,7 @@ function refreshTimers() {
     );
     elements.weeklyResetsAt.textContent = formatResetsAt(weeklyResetsAt, true, timeFormat, weeklyDateFormat);
     elements.weeklyResetsAt.style.opacity = weeklyResetsAt ? '1' : '0.4';
+    if (!latestUsageData.seven_day) elements.weeklyTimeText.textContent = '—';
 }
 
 function startCountdown() {
@@ -2080,6 +2149,7 @@ function updateTrayIcon(data) {
 
 // Update progress bar
 function updateProgressBar(progressElement, percentageElement, value, isWeekly = false) {
+    if (!Number.isFinite(value)) { progressElement.style.width = '0%'; percentageElement.textContent = '—'; return; }
     const percentage = Math.min(Math.max(value, 0), 100);
 
     progressElement.style.width = `${percentage}%`;
@@ -2190,10 +2260,14 @@ function updateTimer(timerElement, textElement, resetsAt, totalMinutes) {
 
 // UI State Management
 function showLoginRequired() {
+    document.body.classList.add('account-setup-open');
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'flex';
     elements.noUsageContainer.style.display = 'none';
     elements.mainContent.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    if (accountPanel) accountPanel.discover();
+    resizeWidget();
     // Reset to step 1
     elements.loginStep1.style.display = 'flex';
     elements.loginStep2.style.display = 'none';
@@ -2224,6 +2298,7 @@ function showLoginRequired() {
 }
 
 function showMainContent() {
+    document.body.classList.remove('account-setup-open');
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'none';
     elements.noUsageContainer.style.display = 'none';
@@ -2265,7 +2340,10 @@ function stopAutoUpdate() {
 }
 
 async function loadChart() {
+    const accountId = credentials?.id;
     const history = await fetchGraphHistory();
+    if (accountId !== credentials?.id) return;
+    document.getElementById('graphEmpty').hidden = history.length > 0;
     if (!history.length) {
         if (usageChart) { usageChart.destroy(); usageChart = null; }
         return;
@@ -2299,7 +2377,9 @@ async function fetchHistoryTableData() {
 
 async function loadHistoryTable() {
     if (!elements.historyTableBody) return;
+    const accountId = credentials?.id;
     const history = await fetchHistoryTableData();
+    if (accountId !== credentials?.id) return;
     historyLastEntries = [...history].sort((a, b) => b.timestamp - a.timestamp);
     renderHistoryPage();
 }
@@ -2343,6 +2423,10 @@ function renderHistoryPage() {
         : historyRangeMs;
     const showDate = !spanMs || spanMs === 0 || spanMs > 24 * 60 * 60 * 1000;
 
+    const apiHistory = Boolean(latestUsageData?.codex_usage);
+    const headers = document.querySelectorAll('.history-table th');
+    const headerKeys = apiHistory ? ['header.time', 'metric.codexRequests', 'metric.codexCost', 'accounts.inputTokens', 'accounts.outputTokens'] : ['header.time', 'metric.session', 'metric.weekly', 'metric.sonnet', 'metric.opus', 'metric.extra', 'header.deltaSession', 'header.deltaWeekly'];
+    headers.forEach((header, index) => { header.hidden = index >= headerKeys.length; if (headerKeys[index]) header.textContent = window.i18n.t(headerKeys[index]); });
     const frag = document.createDocumentFragment();
     for (let i = 0; i < pageEntries.length; i++) {
         const entry = pageEntries[i];
@@ -2365,6 +2449,13 @@ function renderHistoryPage() {
         timeCell.title = date.toLocaleString();
         tr.appendChild(timeCell);
 
+        if (apiHistory) {
+            for (const value of [formatCount(entry.apiRequests), new Intl.NumberFormat(undefined, { style: 'currency', currency: entry.apiCurrency || 'USD' }).format(entry.apiCost || 0), formatCount(entry.inputTokens), formatCount(entry.outputTokens)]) {
+                const cell = document.createElement('td'); cell.className = 'col-pct'; cell.textContent = value; tr.appendChild(cell);
+            }
+            frag.appendChild(tr);
+            continue;
+        }
         tr.appendChild(makePctCell(entry.session));
         tr.appendChild(makePctCell(entry.weekly));
         tr.appendChild(makePctCell(entry.sonnet));
@@ -2464,9 +2555,9 @@ function renderChart(history) {
         if (showExtraUsage) values.push(entry.extraUsage || 0);
         return values;
     });
-    const yMax = Math.max(10, Math.ceil(Math.max(...allValues) / 10) * 10);
+    const yMax = Math.min(100, Math.max(10, Math.ceil(Math.max(...allValues.filter(Number.isFinite), 0) / 10) * 10));
 
-    const styles = getComputedStyle(document.documentElement);
+    const styles = getComputedStyle(document.body);
     const cssVar = (name, fallback) => {
         const v = styles.getPropertyValue(name).trim();
         return v || fallback;
@@ -2479,23 +2570,23 @@ function renderChart(history) {
     const datasets = [
         {
             label: window.i18n.t('metric.session'),
-            data: history.map((entry) => entry.session),
+            data: chartPoints(history, 'session'),
             borderColor: sessionColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
         },
         {
             label: window.i18n.t('metric.weekly'),
-            data: history.map((entry) => entry.weekly),
+            data: chartPoints(history, 'weekly'),
             borderColor: weeklyColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
         }
@@ -2506,12 +2597,12 @@ function renderChart(history) {
         if (sonnetData.some((value) => value > 0)) {
             datasets.push({
             label: window.i18n.t('metric.sonnet'),
-            data: sonnetData,
+            data: chartPoints(history, 'sonnet'),
             borderColor: sonnetColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
             });
@@ -2523,22 +2614,28 @@ function renderChart(history) {
         if (extraUsageData.some((value) => value > 0)) {
             datasets.push({
             label: window.i18n.t('metric.extraUsage'),
-            data: extraUsageData,
+            data: chartPoints(history, 'extraUsage'),
             borderColor: extraColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
             });
         }
     }
 
+    const apiChart = Boolean(latestUsageData?.codex_usage);
+    if (apiChart) {
+        datasets.splice(0, datasets.length,
+            { label: window.i18n.t('metric.codexRequests'), data: chartPoints(history, 'apiRequests'), borderColor: sessionColor, borderWidth: 1.5, pointRadius: history.length === 1 ? 3 : 0, yAxisID: 'y' },
+            { label: window.i18n.t('metric.codexCost'), data: chartPoints(history, 'apiCost'), borderColor: weeklyColor, borderWidth: 1.5, pointRadius: history.length === 1 ? 3 : 0, yAxisID: 'cost' }
+        );
+    }
     usageChart = new Chart(elements.usageChart.getContext('2d'), {
         type: 'line',
         data: {
-            labels: history.map((entry) => entry.timestamp),
             datasets
         },
         options: {
@@ -2550,10 +2647,14 @@ function renderChart(history) {
                 mode: 'nearest'
             },
             scales: {
+                ...(apiChart ? { cost: { axis: 'y', position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { color: weeklyColor, callback: (value) => new Intl.NumberFormat(undefined, { style: 'currency', currency: latestUsageData.codex_usage.currency || 'USD' }).format(value) } } } : {}),
                 x: {
-                    offset: true,
+                    type: 'linear',
+                    min: history[0].timestamp,
+                    max: history.at(-1).timestamp === history[0].timestamp ? history[0].timestamp + 60000 : history.at(-1).timestamp,
+                    offset: false,
                     ticks: {
-                        autoSkip: false,
+                        maxTicksLimit: 5,
                         maxRotation: 0,
                         minRotation: 0,
                         color: cssVar('--ink-mute', '#8a8070'),
@@ -2563,7 +2664,7 @@ function renderChart(history) {
                         },
                         callback(value, index) {
                             const tf = (window._cachedSettings || {}).timeFormat || '12h';
-                            return formatXAxisTick(history, index, tf);
+                            return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: tf !== '24h' });
                         }
                     },
                     grid: {
@@ -2575,14 +2676,14 @@ function renderChart(history) {
                 },
                 y: {
                     min: 0,
-                    max: yMax,
+                    ...(apiChart ? {} : { max: yMax }),
                     ticks: {
                         color: cssVar('--ink-mute', '#8a8070'),
                         font: {
                             family: cssVar('--font-mono', 'monospace'),
                             size: 9
                         },
-                        callback: (value) => `${value}%`
+                        callback: (value) => apiChart ? formatCount(value) : `${value}%`
                     },
                     grid: {
                         color: cssVar('--hairline', 'rgba(236,214,170,0.09)'),
@@ -2598,6 +2699,11 @@ function renderChart(history) {
                     display: false
                 },
                 tooltip: {
+                    backgroundColor: cssVar('--bg-raised', '#222'),
+                    titleColor: cssVar('--ink', '#fff'),
+                    bodyColor: cssVar('--ink-soft', '#ddd'),
+                    borderColor: cssVar('--hairline-strong', '#555'),
+                    borderWidth: 1,
                     callbacks: {
                         title(items) {
                             const point = history[items[0].dataIndex];
@@ -2609,13 +2715,14 @@ function renderChart(history) {
                             });
                         },
                         label(item) {
-                            return `${item.dataset.label}: ${Math.round(item.parsed.y)}%`;
+                            return `${item.dataset.label}: ${apiChart ? item.dataset.yAxisID === 'cost' ? new Intl.NumberFormat(undefined, { style: 'currency', currency: latestUsageData.codex_usage.currency || 'USD' }).format(item.parsed.y) : formatCount(item.parsed.y) : `${Math.round(item.parsed.y)}%`}`;
                         }
                     }
                 }
             }
         }
     });
+
 }
 
 function formatXAxisTick(history, index, timeFormat) {
@@ -2837,13 +2944,15 @@ async function saveSettings() {
 }
 
 function applyTheme(theme) {
+    if (themeController) { themeController.apply({ theme }); return; }
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const useDark = theme === 'dark' || (theme === 'system' && prefersDark);
     document.body.classList.toggle('theme-light', !useDark);
 }
 
 function applyThemeStyle(style) {
-    const allowed = new Set(['classic', 'plate', 'nord', 'sunset', 'mono']);
+    if (themeController) { themeController.apply({ themeStyle: style }); return; }
+    const allowed = new Set(['classic', 'plate', 'nord', 'sunset', 'mono', 'glass', 'graphite']);
     const value = allowed.has(style) ? style : 'classic';
     document.body.setAttribute('data-theme-style', value);
 }

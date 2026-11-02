@@ -8,6 +8,13 @@ const { isNewerVersion, pickLatestRelease } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 const { t, setLanguage } = require('./src/shared/i18n');
 const { fetchCodexUsage } = require('./src/cli/api');
+const { randomUUID } = require('crypto');
+const { createAccountStore, publicAccount } = require('./src/main/account-store');
+const { createAccountUsage } = require('./src/main/account-usage');
+const { selectAccountHistory, appendAccountSample, removeAccountHistory } = require('./src/shared/account-history');
+const { discoverLocalProfiles, linkLocalProfile, fetchLocalUsage } = require('./src/providers');
+const { fitWindowBounds, trayWindowBounds } = require('./src/shared/window-geometry');
+const { createDockVisibility } = require('./src/main/dock-visibility');
 const {
   DEFAULT_ACCOUNT_ID,
   getActiveAccount,
@@ -92,110 +99,29 @@ function decryptSecret(secret) {
   return secret.plain || null;
 }
 
-function getLegacySessionKey() {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = store.get('sessionKey_encrypted');
-    if (encrypted) {
-      try {
-        return safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
-      } catch (err) {
-        console.error('[Keychain] Failed to decrypt session key:', err.message);
-      }
-    }
-  }
-  return store.get('sessionKey') || null;
-}
-
-function publicAccount(account) {
-  if (!account) return null;
-  const { sessionKey, apiKey, ...safe } = account;
-  return {
-    ...safe,
-    hasSessionKey: Boolean(sessionKey),
-    hasApiKey: Boolean(apiKey),
-  };
-}
-
-function loadAccounts() {
-  const accounts = normalizeAccounts(store.get('accounts', []));
-  const secrets = store.get('accountSecrets', {});
-  for (const account of accounts) {
-    const accountSecret = secrets[account.id] || {};
-    if (account.provider === 'claude') {
-      account.sessionKey = decryptSecret(accountSecret.sessionKey) || account.sessionKey;
-    } else if (account.provider === 'codex') {
-      account.apiKey = decryptSecret(accountSecret.apiKey) || account.apiKey;
-    }
-  }
-
-  if (!accounts.length) {
-    const legacy = legacyClaudeAccount({
-      sessionKey: getLegacySessionKey(),
-      organizationId: store.get('organizationId'),
-    });
-    if (legacy) accounts.push(legacy);
-  }
-
-  return accounts;
-}
-
-function saveAccount(accountInput) {
-  const account = normalizeAccount(accountInput);
-  const accounts = normalizeAccounts(store.get('accounts', []));
-  const existing = accounts.findIndex((item) => item.id === account.id);
-  const metadata = { ...account };
-  delete metadata.sessionKey;
-  delete metadata.apiKey;
-  if (existing >= 0) accounts[existing] = metadata;
-  else accounts.push(metadata);
-
-  const secrets = store.get('accountSecrets', {});
-  secrets[account.id] = secrets[account.id] || {};
-  if (account.sessionKey) secrets[account.id].sessionKey = encryptSecret(account.sessionKey);
-  if (account.apiKey) secrets[account.id].apiKey = encryptSecret(account.apiKey);
-
-  store.set('accounts', accounts);
-  store.set('accountSecrets', secrets);
-  store.set('settings.activeProfile', account.id);
-
-  if (account.id === DEFAULT_ACCOUNT_ID && account.provider === 'claude') {
-    if (account.sessionKey) {
-      if (safeStorage.isEncryptionAvailable()) {
-        store.set('sessionKey_encrypted', safeStorage.encryptString(account.sessionKey).toString('base64'));
-        store.delete('sessionKey');
-      } else {
-        store.set('sessionKey', account.sessionKey);
-      }
-    }
-    if (account.organizationId) store.set('organizationId', account.organizationId);
-  }
-
-  return account;
-}
-
+const accountStore = createAccountStore(store, { encrypt: encryptSecret, decrypt: decryptSecret });
+const loadAccounts = () => accountStore.load();
+const getActiveStoredAccount = () => accountStore.active();
+const saveAccount = (input) => accountStore.save(input);
 function deleteAccount(accountId) {
-  const targetId = accountId || store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID);
-  const accounts = normalizeAccounts(store.get('accounts', []));
-  store.set('accounts', accounts.filter((account) => account.id !== targetId));
-  const secrets = store.get('accountSecrets', {});
-  delete secrets[targetId];
-  store.set('accountSecrets', secrets);
-  if (targetId === DEFAULT_ACCOUNT_ID) {
-    store.delete('sessionKey');
-    store.delete('sessionKey_encrypted');
-    store.delete('organizationId');
-  }
-  const remaining = normalizeAccounts(store.get('accounts', []));
-  store.set('settings.activeProfile', remaining[0]?.id || DEFAULT_ACCOUNT_ID);
+  const id = accountId || accountStore.active()?.id;
+  if (!id) return;
+  accountStore.remove(id);
+  accountUsage.invalidate(id);
+  store.set('usageHistory', removeAccountHistory(store.get('usageHistory', []), id));
+  session.fromPartition(`persist:account-${id}`).clearStorageData().catch(() => {});
 }
-
-function getActiveStoredAccount() {
-  return getActiveAccount(loadAccounts(), store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID));
+function activeHistory() {
+  return selectAccountHistory(store.get('usageHistory', []), accountStore.active()?.id || 'default');
 }
 
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 let mainWindow = null;
+let quitting = false;
+let dockVisibility = null;
+let settingsReturnBounds = null;
+app.on('before-quit', () => { quitting = true; dockVisibility?.dispose(); });
 let tray = null;
 let trayIconFrames = [];
 let trayIconIndex = 0;
@@ -210,29 +136,8 @@ const HISTORY_RETENTION_DAYS = 30;
 const CHART_DAYS = 7;
 const MAX_HISTORY_SAMPLES = 10000; // Cap total samples to prevent unbounded growth
 
-function storeUsageHistory(data) {
-  const timestamp = Date.now();
-  let history = store.get('usageHistory', []);
-
-  history.push({
-    timestamp,
-    session: data.five_hour?.utilization || 0,
-    weekly: data.seven_day?.utilization || 0,
-    sonnet: data.seven_day_sonnet?.utilization || 0,
-    opus: data.seven_day_opus?.utilization || 0,
-    extraUsage: data.extra_usage?.utilization || 0
-  });
-
-  // Rotation: apply both time-based and count-based limits
-  const cutoff = timestamp - (HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  history = history.filter((entry) => entry.timestamp > cutoff);
-
-  // If still over limit, drop oldest samples
-  if (history.length > MAX_HISTORY_SAMPLES) {
-    history = history.slice(history.length - MAX_HISTORY_SAMPLES);
-  }
-
-  store.set('usageHistory', history);
+function storeUsageHistory(data, accountId) {
+  store.set('usageHistory', appendAccountSample(store.get('usageHistory', []), data, accountId));
 }
 
 // Set session-level User-Agent to avoid Electron detection
@@ -241,8 +146,9 @@ app.on('ready', () => {
 });
 
 // Set sessionKey as a cookie in Electron's session
-async function setSessionCookie(sessionKey) {
-  await session.defaultSession.cookies.set({
+async function setSessionCookie(sessionKey, browserSession = session.defaultSession) {
+  browserSession.setUserAgent(CHROME_USER_AGENT);
+  await browserSession.cookies.set({
     url: 'https://claude.ai',
     name: 'sessionKey',
     value: sessionKey,
@@ -264,7 +170,7 @@ function createMainWindow() {
     backgroundColor: '#00000000',
     hasShadow: false,
     roundedCorners: false,
-    alwaysOnTop: true,
+    alwaysOnTop: store.get('settings.alwaysOnTop', true),
     resizable: false,
     icon: path.join(__dirname, process.platform === 'darwin' ? 'assets/icon.icns' : process.platform === 'linux' ? 'assets/logo.png' : 'assets/icon.ico'),
     webPreferences: {
@@ -276,17 +182,22 @@ function createMainWindow() {
   };
 
   if (savedPosition) {
-    windowOptions.x = savedPosition.x;
-    windowOptions.y = savedPosition.y;
+    const { screen } = require('electron');
+    const display = screen.getDisplayMatching({ ...savedPosition, width: WIDGET_WIDTH, height: WIDGET_HEIGHT });
+    Object.assign(windowOptions, fitWindowBounds({ ...savedPosition, width: WIDGET_WIDTH, height: WIDGET_HEIGHT }, display.workArea));
   }
 
   mainWindow = new BrowserWindow(windowOptions);
-  mainWindow.loadFile('src/renderer/index.html');
+  mainWindow.loadFile(path.join(__dirname, 'src/renderer/index.html'));
+  applyNativeAppearance();
+  applyTaskbarVisibility();
 
   let positionSaveTimer = null;
   mainWindow.on('move', () => {
+    if (store.get('settings.compactMode', false) || _settingsModeActive) return;
     if (positionSaveTimer) clearTimeout(positionSaveTimer);
     positionSaveTimer = setTimeout(() => {
+      if (!mainWindow || store.get('settings.compactMode', false) || _settingsModeActive) return;
       const position = mainWindow.getBounds();
       store.set('windowPosition', { x: position.x, y: position.y });
     }, 300);
@@ -305,15 +216,7 @@ function buildTrayMenuTemplate() {
   return [
     {
       label: t('tray.showWidget'),
-      click: () => {
-        if (mainWindow) {
-          if (mainWindow.isMinimized()) mainWindow.restore();
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createMainWindow();
-        }
-      }
+      click: showMainWindow
     },
     {
       label: t('tray.refresh'),
@@ -328,15 +231,6 @@ function buildTrayMenuTemplate() {
       label: t('tray.logOut'),
       click: async () => {
         deleteAccount();
-        // Clear all Claude.ai cookies and session storage
-        const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
-        for (const cookie of cookies) {
-          await session.defaultSession.cookies.remove('https://claude.ai', cookie.name);
-        }
-        await session.defaultSession.clearStorageData({
-          storages: ['localstorage', 'sessionstorage', 'cachestorage'],
-          origin: 'https://claude.ai'
-        });
         if (mainWindow) {
           mainWindow.webContents.send('session-expired');
         }
@@ -361,10 +255,16 @@ function createTray() {
     const contextMenu = Menu.buildFromTemplate(buildTrayMenuTemplate());
 
     tray.setToolTip(t('tray.tooltip'));
-    tray.setContextMenu(contextMenu);
+    if (process.platform === 'darwin') {
+      defaultTrayImage.setTemplateImage(true);
+      tray.on('right-click', () => tray.popUpContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate())));
+    } else {
+      tray.setContextMenu(contextMenu);
+    }
 
     tray.on('click', (event, bounds) => {
-      if (!mainWindow) return;
+      if (!mainWindow) { showMainWindow(); return; }
+      recoverWindow();
       if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
         mainWindow.hide();
         return;
@@ -373,8 +273,7 @@ function createTray() {
       if (store.get('settings.compactMode', false) && bounds) {
         anchorAboveTray(bounds);
       }
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindow();
     });
   } catch (error) {
     console.error('Failed to create tray:', error);
@@ -386,30 +285,38 @@ function createTray() {
 function anchorAboveTray(trayBounds) {
   if (!mainWindow) return;
   const { screen } = require('electron');
-  const bounds = trayBounds && trayBounds.x !== undefined ? trayBounds : (tray ? tray.getBounds() : null);
-  const winBounds = mainWindow.getBounds();
-  const display = bounds
-    ? screen.getDisplayMatching({ x: bounds.x, y: bounds.y, width: bounds.width || 1, height: bounds.height || 1 })
-    : screen.getPrimaryDisplay();
-  const area = display.workArea;
+  const bounds = trayBounds || tray?.getBounds();
+  if (!bounds) return;
+  const display = screen.getDisplayMatching(bounds);
+  mainWindow.setBounds(trayWindowBounds(mainWindow.getBounds(), bounds, display.workArea));
+}
 
-  let x;
-  let y;
-  if (bounds && bounds.x !== undefined) {
-    x = Math.round(bounds.x + bounds.width / 2 - winBounds.width / 2);
-    // Bottom edge sits just above the tray (or below if taskbar is at top).
-    y = Math.round(bounds.y - winBounds.height - TRAY_ANCHOR_GAP);
-    if (y < area.y) {
-      y = Math.round(bounds.y + bounds.height + TRAY_ANCHOR_GAP);
-    }
-  } else {
-    x = area.x + area.width - winBounds.width - TRAY_ANCHOR_GAP;
-    y = area.y + area.height - winBounds.height - TRAY_ANCHOR_GAP;
+function recoverWindow() {
+  if (!mainWindow) return;
+  if (store.get('settings.compactMode', false) && !_settingsModeActive && tray) { anchorAboveTray(); return; }
+  const { screen } = require('electron');
+  const bounds = mainWindow.getBounds();
+  mainWindow.setBounds(fitWindowBounds(bounds, screen.getDisplayMatching(bounds).workArea));
+}
+
+function showMainWindow() {
+  if (!app.isReady() || quitting) return;
+  if (!mainWindow) createMainWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  recoverWindow();
+  applyTaskbarVisibility();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function applyNativeAppearance() {
+  if (!mainWindow) return;
+  const glass = store.get('settings.themeStyle', process.platform === 'darwin' ? 'glass' : 'classic') === 'glass';
+  if (process.platform === 'darwin') {
+    mainWindow.setVibrancy(glass ? 'under-window' : null);
+  } else if (process.platform === 'win32' && mainWindow.setBackgroundMaterial && Number(os.release().split('.')[2]) >= 22000) {
+    mainWindow.setBackgroundMaterial(glass ? 'acrylic' : 'none');
   }
-
-  x = Math.max(area.x + TRAY_ANCHOR_GAP, Math.min(x, area.x + area.width - winBounds.width - TRAY_ANCHOR_GAP));
-  y = Math.max(area.y + TRAY_ANCHOR_GAP, Math.min(y, area.y + area.height - winBounds.height - TRAY_ANCHOR_GAP));
-  mainWindow.setPosition(x, y);
 }
 
 function centerWindowOnDisplay() {
@@ -427,7 +334,12 @@ function applyTaskbarVisibility() {
   if (!mainWindow) return;
   const compact = store.get('settings.compactMode', false);
   const hide = store.get('settings.hideFromTaskbar', false);
-  mainWindow.setSkipTaskbar(compact || hide);
+  if (process.platform === 'darwin') {
+    if (!dockVisibility) dockVisibility = createDockVisibility(app.dock);
+    dockVisibility.setVisible(!compact && !hide);
+  } else {
+    mainWindow.setSkipTaskbar(compact || hide);
+  }
 }
 
 function applyCompactWindowMode(compact) {
@@ -442,84 +354,60 @@ function applyCompactWindowMode(compact) {
     const saved = store.get('windowPosition');
     if (saved) mainWindow.setPosition(saved.x, saved.y);
     if (!mainWindow.isVisible()) mainWindow.show();
+    recoverWindow();
   }
   applyTaskbarVisibility();
 }
 
 // IPC Handlers
-ipcMain.handle('get-credentials', () => {
-  const accounts = loadAccounts();
-  const active = getActiveAccount(accounts, store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID));
-  return {
-    ...publicAccount(active),
-    sessionKey: active?.sessionKey || null,
-    apiKey: active?.apiKey || null,
-    accounts: accounts.map(publicAccount),
-  };
-});
+ipcMain.handle('get-credentials', () => ({
+  ...publicAccount(accountStore.active()), accounts: accountStore.list(),
+}));
 
 ipcMain.handle('save-credentials', async (event, credentials) => {
   const account = saveAccount({
-    id: credentials.id || credentials.accountId || store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID),
-    provider: normalizeProvider(credentials.provider),
-    label: credentials.label,
-    sessionKey: credentials.sessionKey,
-    organizationId: credentials.organizationId,
-    apiKey: credentials.apiKey,
-    organizationHeader: credentials.organizationHeader,
-    projectId: credentials.projectId,
+    id: credentials.id, provider: normalizeProvider(credentials.provider), label: credentials.label,
+    sessionKey: credentials.sessionKey, organizationId: credentials.organizationId,
+    apiKey: credentials.apiKey, organizationHeader: credentials.organizationHeader, projectId: credentials.projectId,
   });
-  if (account.provider === 'claude' && account.sessionKey) {
-    await setSessionCookie(account.sessionKey);
-  }
-  return true;
+  accountUsage.invalidate(account.id);
+  return publicAccount(account);
 });
 
-ipcMain.handle('delete-credentials', async (event, accountId) => {
-  deleteAccount(accountId);
-  // Remove all Claude.ai cookies
-  const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
-  for (const cookie of cookies) {
-    await session.defaultSession.cookies.remove('https://claude.ai', cookie.name);
+ipcMain.handle('delete-credentials', (event, accountId) => { deleteAccount(accountId); return true; });
+ipcMain.handle('get-accounts', () => ({ activeAccountId: accountStore.active()?.id || null, accounts: accountStore.list(), snapshots: accountUsage.snapshots() }));
+ipcMain.handle('set-active-account', (event, accountId) => accountStore.select(accountId));
+ipcMain.handle('rename-account', (event, accountId, label) => accountStore.rename(accountId, label));
+ipcMain.handle('discover-local-profiles', () => discoverLocalProfiles());
+ipcMain.handle('link-local-profile', async (event, provider, directory) => {
+  if (!['claude', 'codex'].includes(provider)) return { success: false, code: 'INVALID_PROVIDER' };
+  try {
+    if (directory) {
+      const known = await discoverLocalProfiles();
+      if (!known.some((profile) => profile.provider === provider && profile.configDir === directory)) return { success: false, code: 'UNKNOWN_PROFILE' };
+    } else {
+      const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'showHiddenFiles'] });
+      if (result.canceled) return { canceled: true };
+      directory = result.filePaths[0];
+    }
+    const account = saveAccount(await linkLocalProfile(provider, directory));
+    accountUsage.invalidate(account.id);
+    return { success: true, account: publicAccount(account) };
+  } catch {
+    return { success: false, code: 'PROFILE_UNAVAILABLE' };
   }
-  // Clear any cached data from the Electron session (storage, cache)
-  // so nothing lingers on shared machines
-  await session.defaultSession.clearStorageData({
-    storages: ['localstorage', 'sessionstorage', 'cachestorage'],
-    origin: 'https://claude.ai'
-  });
-  return true;
 });
-
-ipcMain.handle('get-accounts', () => {
-  const accounts = loadAccounts();
-  const active = getActiveAccount(accounts, store.get('settings.activeProfile', DEFAULT_ACCOUNT_ID));
-  return {
-    activeAccountId: active?.id || DEFAULT_ACCOUNT_ID,
-    accounts: accounts.map(publicAccount),
-  };
-});
-
-ipcMain.handle('set-active-account', async (event, accountId) => {
-  const accounts = loadAccounts();
-  const active = getActiveAccount(accounts, accountId);
-  if (!active) return false;
-  store.set('settings.activeProfile', active.id);
-  if (active.provider === 'claude' && active.sessionKey) {
-    await setSessionCookie(active.sessionKey);
-  }
-  return true;
-});
+ipcMain.handle('fetch-all-usage', () => accountUsage.refreshAll());
 
 // Validate a sessionKey by fetching org ID via hidden BrowserWindow
 ipcMain.handle('validate-session-key', async (event, sessionKey) => {
-  debugLog('Validating session key:', sessionKey.substring(0, 20) + '...');
+  const validationSession = session.fromPartition(`validation-${randomUUID()}`);
   try {
     // Set the cookie in Electron's session first
-    await setSessionCookie(sessionKey);
+    await setSessionCookie(sessionKey, validationSession);
 
     // Fetch organizations using hidden BrowserWindow (bypasses Cloudflare)
-    const data = await fetchViaWindow('https://claude.ai/api/organizations');
+    const data = await fetchViaWindow('https://claude.ai/api/organizations', { browserSession: validationSession });
 
     if (data && Array.isArray(data) && data.length > 0) {
       const orgId = data[0].uuid || data[0].id;
@@ -536,8 +424,9 @@ ipcMain.handle('validate-session-key', async (event, sessionKey) => {
   } catch (error) {
     console.error('Session key validation failed:', error.message);
     // Clean up the invalid cookie
-    await session.defaultSession.cookies.remove('https://claude.ai', 'sessionKey');
-    return { success: false, error: error.message };
+    return { success: false, error: 'Unable to validate session' };
+  } finally {
+    await validationSession.clearStorageData();
   }
 });
 
@@ -557,7 +446,6 @@ ipcMain.on('close-window', () => {
   if (mainWindow) {
     if (process.platform === 'darwin') {
       mainWindow.hide();
-      app.dock.hide();
     } else {
       mainWindow.hide();
     }
@@ -582,31 +470,32 @@ ipcMain.on('resize-window', (event, height) => {
   mainWindow.setContentSize(width, clamped);
   if (compact && !_settingsModeActive && tray) {
     anchorAboveTray(tray.getBounds());
+  } else {
+    recoverWindow();
   }
 });
 
 ipcMain.on('set-settings-window', (event, on) => {
   if (!mainWindow) return;
-  _settingsModeActive = !!on;
+  const compact = store.get('settings.compactMode', false);
   const { screen } = require('electron');
-  const bounds = mainWindow.getBounds();
-  const display = screen.getDisplayMatching(bounds);
-  const maxH = Math.max(200, display.workArea.height - 40);
-
   if (on) {
-    const target = Math.min(640, maxH);
+    if (!_settingsModeActive && !compact) settingsReturnBounds = mainWindow.getBounds();
+    _settingsModeActive = true;
+    const area = screen.getDisplayMatching(mainWindow.getBounds()).workArea;
     mainWindow.setMovable(true);
-    mainWindow.setContentSize(WIDGET_WIDTH, target);
-    if (store.get('settings.compactMode', false) && tray) {
-      anchorAboveTray(tray.getBounds());
-    }
+    mainWindow.setBounds(fitWindowBounds({ ...mainWindow.getBounds(), width: WIDGET_WIDTH, height: 640 }, area));
+    if (compact && tray) anchorAboveTray();
   } else {
-    const compact = store.get('settings.compactMode', false);
-    if (compact) {
+    if (!compact && settingsReturnBounds) {
+      const area = screen.getDisplayMatching(settingsReturnBounds).workArea;
+      mainWindow.setBounds(fitWindowBounds(settingsReturnBounds, area));
+      mainWindow.setMovable(true);
+      settingsReturnBounds = null;
+    } else if (compact) {
       applyCompactWindowMode(true);
-    } else {
-      applyCompactWindowMode(false);
     }
+    _settingsModeActive = false;
   }
 });
 
@@ -627,7 +516,7 @@ ipcMain.handle('set-window-position', (event, { x, y }) => {
 
 ipcMain.on('open-external', (event, url) => {
   // Trust boundary enforcement: duplicate allowlist check in main process
-  const allowedDomains = ['claude.ai', 'github.com', 'paypal.me', 'platform.openai.com'];
+  const allowedDomains = ['claude.ai', 'chatgpt.com', 'github.com', 'paypal.me', 'platform.openai.com'];
   try {
     const parsedUrl = new URL(url);
     const isAllowed = allowedDomains.some(domain => 
@@ -651,7 +540,7 @@ ipcMain.handle('get-storage-info', () => {
   const fs = require('fs');
   let storeBytes = 0;
   try { storeBytes = fs.statSync(store.path).size; } catch {}
-  const history = store.get('usageHistory', []);
+  const history = activeHistory();
   const historyCount = Array.isArray(history) ? history.length : 0;
   const historyBytes = Buffer.byteLength(JSON.stringify(history), 'utf8');
   return {
@@ -666,20 +555,20 @@ ipcMain.handle('get-storage-info', () => {
 ipcMain.handle('prune-history', (event, days) => {
   const n = Math.max(1, Math.floor(days || 0));
   const cutoff = Date.now() - n * 24 * 60 * 60 * 1000;
-  const history = store.get('usageHistory', []);
+  const history = activeHistory();
   const kept = Array.isArray(history) ? history.filter((e) => e.timestamp >= cutoff) : [];
-  store.set('usageHistory', kept);
+  store.set('usageHistory', [...removeAccountHistory(store.get('usageHistory', []), accountStore.active()?.id || 'default'), ...kept]);
   return { kept: kept.length, removed: (history.length || 0) - kept.length };
 });
 
 ipcMain.handle('clear-history', () => {
-  store.set('usageHistory', []);
+  store.set('usageHistory', removeAccountHistory(store.get('usageHistory', []), accountStore.active()?.id || 'default'));
   return true;
 });
 
 ipcMain.handle('export-history', async (event, options = {}) => {
   const format = options.format === 'json' ? 'json' : 'csv';
-  const history = store.get('usageHistory', []);
+  const history = activeHistory();
   const fromMs = Number.isFinite(options.fromMs) ? options.fromMs : null;
   const toMs = Number.isFinite(options.toMs) ? options.toMs : null;
   const filtered = (fromMs != null || toMs != null)
@@ -712,7 +601,7 @@ ipcMain.on('open-path', (event, target) => {
 });
 
 ipcMain.handle('get-usage-history', () => {
-  const history = store.get('usageHistory', []);
+  const history = activeHistory();
   const cutoff = Date.now() - (CHART_DAYS * 24 * 60 * 60 * 1000);
   return history
     .filter((entry) => entry.timestamp > cutoff)
@@ -722,7 +611,7 @@ ipcMain.handle('get-usage-history', () => {
 // Range-scoped history fetch for the detail table.
 // rangeMs: positive number = last N ms; 0 or null = full retained history.
 ipcMain.handle('get-usage-history-range', (event, rangeMs) => {
-  const history = store.get('usageHistory', []);
+  const history = activeHistory();
   if (!rangeMs || rangeMs <= 0) {
     return [...history].sort((a, b) => a.timestamp - b.timestamp);
   }
@@ -735,7 +624,7 @@ ipcMain.handle('get-usage-history-range', (event, rangeMs) => {
 // Absolute window fetch: inclusive [fromMs, toMs].
 // Either bound may be null/undefined meaning "open on that side".
 ipcMain.handle('get-usage-history-window', (event, fromMs, toMs) => {
-  const history = store.get('usageHistory', []);
+  const history = activeHistory();
   const lo = Number.isFinite(fromMs) ? fromMs : -Infinity;
   const hi = Number.isFinite(toMs) ? toMs : Infinity;
   return history
@@ -759,7 +648,7 @@ ipcMain.on('set-compact-mode', (event, compact) => {
   store.set('settings.compactMode', !!compact);
   applyCompactWindowMode(!!compact);
   if (wasCompact && !compact) {
-    centerWindowOnDisplay();
+    recoverWindow();
     mainWindow.focus();
   }
 });
@@ -769,8 +658,8 @@ ipcMain.handle('get-settings', () => {
   return {
     autoStart: store.get('settings.autoStart', false),
     alwaysOnTop: store.get('settings.alwaysOnTop', true),
-    theme: store.get('settings.theme', 'dark'),
-    themeStyle: store.get('settings.themeStyle', 'classic'),
+    theme: store.get('settings.theme', process.platform === 'darwin' ? 'system' : 'dark'),
+    themeStyle: store.get('settings.themeStyle', process.platform === 'darwin' ? 'glass' : 'classic'),
     trayStyle: store.get('settings.trayStyle', 'bigNumber'),
     trayShowLogo: store.get('settings.trayShowLogo', false),
     trayMascotInterval: store.get('settings.trayMascotInterval', 2),
@@ -826,6 +715,7 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('settings.headlessMode', !!settings.headlessMode);
   if (settings.language) store.set('settings.language', settings.language);
   applyTaskbarVisibility();
+  applyNativeAppearance();
 
   if (settings.autoPrune && settings.autoPruneDays >= 1) {
     const cutoff = Date.now() - settings.autoPruneDays * 24 * 60 * 60 * 1000;
@@ -863,7 +753,7 @@ ipcMain.handle('set-language', (event, lang) => {
   }
   try {
     if (tray && !tray.isDestroyed?.()) {
-      tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate()));
+      if (process.platform !== 'darwin') tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate()));
       tray.setToolTip(t('tray.tooltip'));
     }
   } catch (err) {
@@ -881,11 +771,8 @@ ipcMain.handle('set-language', (event, lang) => {
 // Do NOT attempt to "fix" this back to an embedded login without verifying
 // that Claude.ai/Cloudflare no longer blocks it.
 ipcMain.handle('detect-session-key', async () => {
-  // Clear any leftover sessionKey cookie
-  try {
-    await session.defaultSession.cookies.remove('https://claude.ai', 'sessionKey');
-  } catch (e) { /* ignore */ }
-
+  const loginSession = session.fromPartition(`login-${randomUUID()}`);
+  loginSession.setUserAgent(CHROME_USER_AGENT);
   return new Promise((resolve) => {
     const loginWin = new BrowserWindow({
       width: 1000,
@@ -893,7 +780,8 @@ ipcMain.handle('detect-session-key', async () => {
       title: t('dialog.loginTitle'),
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        session: loginSession
       }
     });
 
@@ -908,16 +796,17 @@ ipcMain.handle('detect-session-key', async () => {
         cookie.value
       ) {
         resolved = true;
-        session.defaultSession.cookies.removeListener('changed', onCookieChanged);
+        loginSession.cookies.removeListener('changed', onCookieChanged);
         loginWin.close();
         resolve({ success: true, sessionKey: cookie.value });
       }
     };
 
-    session.defaultSession.cookies.on('changed', onCookieChanged);
+    loginSession.cookies.on('changed', onCookieChanged);
 
     loginWin.on('closed', () => {
-      session.defaultSession.cookies.removeListener('changed', onCookieChanged);
+      loginSession.clearStorageData().catch(() => {});
+      loginSession.cookies.removeListener('changed', onCookieChanged);
       if (!resolved) {
         resolve({ success: false, error: 'Login window closed' });
       }
@@ -978,23 +867,20 @@ ipcMain.handle('check-for-update', () => {
   });
 });
 
-ipcMain.handle('fetch-usage-data', async () => {
-  const activeAccount = getActiveStoredAccount();
+async function fetchAccountUsage(activeAccount) {
 
   if (!hasUsableCredentials(activeAccount)) {
     throw new Error('Missing credentials');
   }
 
-  if (activeAccount.provider === 'codex') {
-    const data = await fetchCodexUsage(activeAccount);
-    storeUsageHistory(data);
-    return data;
-  }
+  if (activeAccount.authType === 'local') return fetchLocalUsage(activeAccount);
+  if (activeAccount.provider === 'codex') return fetchCodexUsage(activeAccount);
 
   const { sessionKey, organizationId } = activeAccount;
 
   // Ensure cookie is set
-  await setSessionCookie(sessionKey);
+  const browserSession = session.fromPartition(`persist:account-${activeAccount.id}`);
+  await setSessionCookie(sessionKey, browserSession);
 
   const usageUrl = `https://claude.ai/api/organizations/${organizationId}/usage`;
   const overageUrl = `https://claude.ai/api/organizations/${organizationId}/overage_spend_limit`;
@@ -1002,29 +888,20 @@ ipcMain.handle('fetch-usage-data', async () => {
 
   // Fetch all endpoints in parallel. Usage is required; overage and prepaid are optional.
   const [usageResult, overageResult, prepaidResult] = await Promise.allSettled([
-    fetchViaWindow(usageUrl),
-    fetchViaWindow(overageUrl),
-    fetchViaWindow(prepaidUrl)
+    fetchViaWindow(usageUrl, { browserSession }),
+    fetchViaWindow(overageUrl, { browserSession }),
+    fetchViaWindow(prepaidUrl, { browserSession })
   ]);
 
   // Usage endpoint is mandatory
   if (usageResult.status === 'rejected') {
     const error = usageResult.reason;
     debugLog('API request failed:', error.message);
-    const isBlocked = error.message.startsWith('CloudflareBlocked')
-      || error.message.startsWith('CloudflareChallenge')
-      || error.message.startsWith('UnexpectedHTML');
-    if (isBlocked) {
-      deleteAccount(activeAccount.id);
-      if (mainWindow) {
-        mainWindow.webContents.send('session-expired');
-      }
-      throw new Error('SessionExpired');
-    }
     throw error;
   }
 
   const data = usageResult.value;
+  if (!data || data.error) throw new Error('SessionExpired');
 
   // Merge overage spending data into data.extra_usage
   if (overageResult.status === 'fulfilled' && overageResult.value) {
@@ -1067,7 +944,6 @@ ipcMain.handle('fetch-usage-data', async () => {
     debugLog('Prepaid fetch skipped or failed:', prepaidResult.reason?.message || 'no data');
   }
 
-  storeUsageHistory(data);
 
   // Re-assert always-on-top after hidden BrowserWindows from fetchViaWindow
   // are destroyed — creating/destroying BrowserWindows can temporarily disrupt
@@ -1080,6 +956,16 @@ ipcMain.handle('fetch-usage-data', async () => {
   }
 
   return data;
+}
+
+const accountUsage = createAccountUsage({
+  getAccounts: loadAccounts, fetchUsage: fetchAccountUsage, recordHistory: storeUsageHistory,
+  onUpdate: (snapshot) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('account-usage-updated', snapshot); }
+});
+ipcMain.handle('fetch-usage-data', async () => {
+  const snapshot = await accountUsage.refreshAccount(accountStore.active()?.id);
+  if (!snapshot?.data) throw new Error(snapshot?.error?.code || 'Missing credentials');
+  return snapshot.data;
 });
 
 // Renderer pushes pre-rendered tray icon frames (one per metric).
@@ -1133,24 +1019,7 @@ app.whenReady().then(async () => {
   // Ctrl+Shift+I devtools, etc.) don't collide with widget shortcuts.
   Menu.setApplicationMenu(null);
 
-  // Restore session cookie if we have stored credentials
-  let sessionKey = null;
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = store.get('sessionKey_encrypted');
-    if (encrypted) {
-      try {
-        sessionKey = safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
-      } catch (err) {
-        console.error('[Keychain] Failed to decrypt session key on startup:', err.message);
-      }
-    }
-  } else {
-    sessionKey = store.get('sessionKey');
-  }
-
-  if (sessionKey) {
-    await setSessionCookie(sessionKey);
-  }
+  accountStore.load();
 
   // Apply auto-prune on startup before window opens
   if (store.get('settings.autoPrune', false)) {
@@ -1164,6 +1033,8 @@ app.whenReady().then(async () => {
   const headlessMode = store.get('settings.headlessMode', false);
   createMainWindow();
   createTray();
+  const { screen } = require('electron');
+  for (const event of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(event, recoverWindow);
 
   // Apply persisted settings
   const alwaysOnTop = store.get('settings.alwaysOnTop', true);
@@ -1196,25 +1067,12 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createMainWindow();
-  } else {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  }
-});
+app.on('activate', showMainWindow);
 
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
+  app.on('second-instance', showMainWindow);
 }

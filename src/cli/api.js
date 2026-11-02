@@ -5,6 +5,7 @@ const OPENAI_BASE = 'https://api.openai.com/v1';
 
 async function fetchJSON(url, sessionKey) {
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(15000), redirect: 'error',
     headers: {
       cookie: `sessionKey=${sessionKey}`,
       accept: 'application/json',
@@ -46,7 +47,7 @@ async function fetchOpenAIJSON(url, { apiKey, organizationHeader, projectId }) {
   if (organizationHeader) headers['OpenAI-Organization'] = organizationHeader;
   if (projectId) headers['OpenAI-Project'] = projectId;
 
-  const res = await fetch(url, { headers });
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000), redirect: 'error' });
   const text = await res.text();
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {

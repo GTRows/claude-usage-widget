@@ -1,4 +1,31 @@
 const tr = {
+  "accounts.signIn": "Giriş gerekli",
+  "accounts.retry": "Tekrar dene",
+  "accounts.inputTokens": "Girdi tokenı",
+  "accounts.outputTokens": "Çıktı tokenı",
+
+  'accounts.sessionShort': '5 sa',
+  'accounts.weeklyShort': '7 gün',
+  // Accounts and desktop appearance
+  "accounts.title": "Hesaplar",
+  "accounts.add": "Hesap ekle",
+  "accounts.cancel": "Vazgeç",
+  "accounts.rename": "Adı değiştir",
+  "accounts.localTitle": "Yerel hesabını bağla",
+  "accounts.localHint": "Mevcut Claude Code veya Codex oturumunu kullan. Her profili ayrı bağlayabilirsin; terminal hesapların değişmez.",
+  "accounts.noProfiles": "Yerel profil bulunamadı. Bağlamak için profil klasörünü seç.",
+  "accounts.provider": "Sağlayıcı",
+  "accounts.chooseFolder": "Profil klasörünü seç",
+  "accounts.linking": "Seçilen profile bağlanılıyor…",
+  "accounts.profileUnavailable": "Profil okunamadı. Asıl CLI üzerinden giriş yapıp tekrar dene. Mac’te sorulursa ilgili Anahtar Zinciri kaydına erişim ver.",
+  "accounts.authRequired": "Bu hesabın asıl uygulamasından veya CLI üzerinden tekrar giriş yapıp yenile. Diğer hesaplar etkilenmez.",
+  "accounts.rateLimited": "Çok fazla istek gönderildi. Son başarılı veri gösteriliyor; biraz sonra tekrar dene.",
+  "accounts.fetchFailed": "Yenilenemedi. Son başarılı veri korundu; bağlantını kontrol edip tekrar dene.",
+  "accounts.waiting": "Veri bekleniyor",
+  "accounts.apiTotal": "{requests} istek · {cost}",
+  "settings.style.glass": "Glass",
+  "settings.style.graphite": "Graphite",
+  "accounts.chartEmpty": "İlk yenilemeden sonra kullanım geçmişin burada görünecek.",
   // Seed keys (07-01)
   'app.name': 'Claude Widget',
   'common.loading': 'Yükleniyor…',
@@ -55,7 +82,7 @@ const tr = {
   'login.errorFailedCodex': 'Bağlantı başarısız. Organizasyon kullanım erişimi olan bir OpenAI admin key kullanın.',
   'login.accountLabelPlaceholder': 'Hesap adı',
   'provider.claude': 'Claude',
-  'provider.codex': 'Codex',
+  'provider.codex': 'OpenAI API',
 
   // metric.* and header.*
   'metric.session': 'Mevcut Oturum',

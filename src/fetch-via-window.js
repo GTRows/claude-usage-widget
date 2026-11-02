@@ -25,7 +25,7 @@ const BLOCKED_SIGNATURES = [
   { pattern: '<html', error: 'UnexpectedHTML' },
 ];
 
-function fetchViaWindow(url, { timeoutMs = 30000 } = {}) {
+function fetchViaWindow(url, { timeoutMs = 30000, browserSession } = {}) {
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
       width: 800,
@@ -33,7 +33,8 @@ function fetchViaWindow(url, { timeoutMs = 30000 } = {}) {
       show: false,
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        ...(browserSession ? { session: browserSession } : {})
       }
     });
 
