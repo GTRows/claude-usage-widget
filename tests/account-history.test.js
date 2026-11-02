@@ -14,6 +14,11 @@ describe('account history isolation', () => {
     const next = appendAccountSample([], { seven_day: { utilization: 17 } }, 'work', { now: 100 });
     expect(next[0]).toMatchObject({ accountId: 'work', weekly: 17, session: null });
   });
+  it('keeps subscription quotas when Codex includes local session metadata', () => {
+    const next = appendAccountSample([], { provider: 'codex', five_hour: { utilization: 37 }, codex_usage: { plan_type: 'plus' } }, 'codex', { now: 100 });
+    expect(next[0].session).toBe(37);
+    expect(next[0].apiRequests).toBeUndefined();
+  });
   it('removes only the selected account history', () => {
     expect(removeAccountHistory(history, 'work')).toEqual([history[0], history[2]]);
   });

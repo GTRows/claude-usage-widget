@@ -1,7 +1,7 @@
 import { createAccountPanel } from './account-panel.js';
-import { accountProviderLabel, quotaText } from './account-presentation.js';
+import { accountProviderLabel, quotaText, isApiUsage } from './account-presentation.js';
 import { createThemeController } from './theme.js';
-import { chartPoints } from './usage-chart.js';
+import { chartPoints, quotaHistory } from './usage-chart.js';
 import { createAccountSetup } from './account-setup.js';
 import { createSavedHistory, filterSavedHistory } from './saved-history.js';
 
@@ -1200,10 +1200,10 @@ function formatCount(value) {
 }
 
 function applyProviderMetricPresentation(data) {
-    document.body.classList.toggle('api-account', Boolean(data?.codex_usage));
-    document.getElementById('compactSessionLabel').textContent = window.i18n.t(data?.codex_usage ? 'metric.codexRequests' : 'metric.session');
-    document.getElementById('compactWeeklyLabel').textContent = window.i18n.t(data?.codex_usage ? 'metric.codexCost' : 'metric.weekly');
-    if (!data?.codex_usage) {
+    document.body.classList.toggle('api-account', isApiUsage(data));
+    document.getElementById('compactSessionLabel').textContent = window.i18n.t(isApiUsage(data) ? 'metric.codexRequests' : 'metric.session');
+    document.getElementById('compactWeeklyLabel').textContent = window.i18n.t(isApiUsage(data) ? 'metric.codexCost' : 'metric.weekly');
+    if (!isApiUsage(data)) {
         if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.session');
         if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.weekly');
         if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
@@ -1247,7 +1247,7 @@ const EXTRA_ROW_CONFIG = {
 };
 
 function buildExtraRows(data) {
-    if (data.codex_usage) { elements.extraRows.replaceChildren(); elements.expandToggle.style.display = 'none'; elements.expandSection.style.display = 'none'; return 0; }
+    if (isApiUsage(data)) { elements.extraRows.replaceChildren(); elements.expandToggle.style.display = 'none'; elements.expandSection.style.display = 'none'; return 0; }
     elements.extraRows.innerHTML = '';
     let count = 0;
 
@@ -1626,9 +1626,9 @@ function updateCompactBars(data) {
     const remainingMode = isRemainingQuotaData(data);
 
     elements.compactSessionFill.style.width = `${sessionPct}%`;
-    elements.compactSessionPct.textContent = data.codex_usage ? formatCount(data.codex_usage.num_model_requests) : quotaText(data.five_hour);
+    elements.compactSessionPct.textContent = isApiUsage(data) ? formatCount(data.codex_usage.num_model_requests) : quotaText(data.five_hour);
     elements.compactWeeklyFill.style.width = `${weeklyPct}%`;
-    elements.compactWeeklyPct.textContent = data.codex_usage ? new Intl.NumberFormat(undefined, { style: 'currency', currency: data.codex_usage.currency || 'USD' }).format(data.codex_usage.cost || 0) : quotaText(data.seven_day);
+    elements.compactWeeklyPct.textContent = isApiUsage(data) ? new Intl.NumberFormat(undefined, { style: 'currency', currency: data.codex_usage.currency || 'USD' }).format(data.codex_usage.cost || 0) : quotaText(data.seven_day);
 
     // Apply warning/danger classes to compact bars
     elements.compactSessionFill.className = 'compact-bar-fill';
@@ -1704,7 +1704,7 @@ function seedAlertFlags(data) {
 
 function refreshTimers() {
     if (!latestUsageData) return;
-    if (latestUsageData.codex_usage) { applyProviderMetricPresentation(latestUsageData); return; }
+    if (isApiUsage(latestUsageData)) { applyProviderMetricPresentation(latestUsageData); return; }
 
     const settings = window._cachedSettings || {};
     const timeFormat = settings.timeFormat || '12h';
@@ -2132,7 +2132,7 @@ function buildMascotAnimation(status, restFrame) {
 }
 
 function updateTrayIcon(data) {
-    if (data?.codex_usage) { window.electronAPI.setTrayFrames([]); return; }
+    if (isApiUsage(data)) { window.electronAPI.setTrayFrames([]); return; }
     if (data?.provider === 'codex') {
         const metric = data.five_hour || data.seven_day;
         window.electronAPI.setTrayFrames(metric ? [buildTrayFrame(window.i18n.t(data.five_hour ? 'metric.session' : 'metric.weekly'), metric.utilization)] : []);
@@ -2414,7 +2414,7 @@ function stopAutoUpdate() {
 async function loadChart() {
     const accountId = credentials?.id;
     const version = selectionVersion;
-    const history = await fetchGraphHistory();
+    const history = quotaHistory(await fetchGraphHistory(), activeCodexQuotaDisplay());
     if (accountId !== credentials?.id || version !== selectionVersion) return;
     document.getElementById('graphEmpty').hidden = history.length > 0;
     if (!history.length) {
@@ -2454,7 +2454,7 @@ async function loadHistoryTable() {
     if (!elements.historyTableBody) return;
     const accountId = credentials?.id;
     const version = selectionVersion;
-    const history = await fetchHistoryTableData();
+    const history = quotaHistory(await fetchHistoryTableData(), activeCodexQuotaDisplay());
     if (accountId !== credentials?.id || version !== selectionVersion) return;
     historyLastEntries = [...history].sort((a, b) => b.timestamp - a.timestamp);
     renderHistoryPage();

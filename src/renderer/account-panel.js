@@ -26,7 +26,7 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
       identity.append(node('span', 'account-card-title', account.label), node('span', 'account-provider', accountProviderLabel(account)));
       const metrics = node('span', 'account-metrics');
       const data = snapshot?.data;
-      if (account.provider === 'codex' && account.authType !== 'local') {
+      if (account.provider === 'codex' && account.authType !== 'local' && account.hasApiKey !== false) {
         metrics.append(node('span', 'account-api-total', data?.codex_usage ? t('accounts.apiTotal', { requests: data.codex_usage.num_model_requests, cost: new Intl.NumberFormat(undefined, { style: 'currency', currency: data.codex_usage.currency || 'USD' }).format(data.codex_usage.cost || 0) }) : '—'));
       } else {
         for (const [key, title] of [['five_hour', 'accounts.sessionShort'], ['seven_day', 'accounts.weeklyShort']]) {

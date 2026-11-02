@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { accountProviderLabel, quotaText } from '../src/renderer/account-presentation.js';
+import { accountProviderLabel, quotaText, isApiUsage } from '../src/renderer/account-presentation.js';
 
 describe('account presentation', () => {
+  it('distinguishes local session metadata from API billing metrics', () => {
+    expect(isApiUsage({ codex_usage: { plan_type: 'plus' } })).toBe(false);
+    expect(isApiUsage({ codex_usage: { num_model_requests: 0, cost: 0 } })).toBe(true);
+  });
   it('distinguishes API billing from a Codex subscription', () => {
     expect(accountProviderLabel({ provider: 'codex', authType: 'local' })).toBe('Codex');
     expect(accountProviderLabel({ provider: 'codex', hasApiKey: true })).toBe('OpenAI API');

@@ -16,7 +16,7 @@ function pruneAccountHistory(history, accountId, cutoffMs) {
 
 function appendAccountSample(history, data, accountId, { now = Date.now(), retentionDays = 30, maxSamples = 10000 } = {}) {
   const percentage = (window) => Number.isFinite(window?.utilization) ? window.utilization : null;
-  const api = data.codex_usage;
+  const api = Number.isFinite(data.codex_usage?.num_model_requests) ? data.codex_usage : null;
   const entry = {
     accountId, timestamp: now, provider: data.provider || 'claude', quotaDisplay: data.quota_display || 'used',
     session: api ? null : percentage(data.five_hour), weekly: api ? null : percentage(data.seven_day),
