@@ -4,6 +4,7 @@ import { createThemeController } from './theme.js';
 import { chartPoints, quotaHistory } from './usage-chart.js';
 import { createAccountSetup } from './account-setup.js';
 import { createSavedHistory, filterSavedHistory } from './saved-history.js';
+import { buildMacTrayFrame } from './mac-tray.js';
 
 // Application state
 let credentials = null;
@@ -355,6 +356,11 @@ async function refreshAccountSelector() {
 
 // Initialize
 async function init() {
+    if (window.electronAPI.platform === 'darwin') {
+        for (const [key, replacement] of [['label', 'labelMac'], ['hint', 'hintMac'], ['bigNumber', 'nativePercentage']]) {
+            document.querySelector(`[data-i18n="settings.trayStyle.${key}"]`)?.setAttribute('data-i18n', `settings.trayStyle.${replacement}`);
+        }
+    }
     setupEventListeners();
     startContentObserver();
 
@@ -1797,6 +1803,9 @@ function startCountdown() {
 // Build a pre-rendered tray icon frame for a single metric.
 // Layout is controlled by the user's "Tray style" setting.
 function buildTrayFrame(label, percent) {
+    if (window.electronAPI.platform === 'darwin') {
+        return buildMacTrayFrame(document, label, percent, window._cachedSettings?.trayStyle || 'bigNumber');
+    }
     const size = 32;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -2169,7 +2178,7 @@ function updateTrayIcon(data) {
             for (const f of mascotFrames) {
                 frames.push({ ...f, tooltip: f.tooltip || label, title: rounded != null ? ` ${rounded}%` : '' });
             }
-        } else if (status === 'dead' || status === 'zero') {
+        } else if ((status === 'dead' || status === 'zero') && window.electronAPI.platform !== 'darwin') {
             frames.push(...buildMascotAnimation(status));
         } else if (typeof session === 'number') {
             frames.push(buildTrayFrame(window.i18n.t('metric.session'), session));

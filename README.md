@@ -40,6 +40,8 @@ Choose **Glass** for a translucent surface or **Graphite** for a restrained, hig
 
 Glass uses native macOS vibrancy and Windows 11 acrylic when available, with a CSS surface fallback elsewhere. It is a Liquid Glass-inspired Electron theme, not a WidgetKit extension or an implementation of Apple's Liquid Glass API. On Mac, left-click the menu-bar icon to toggle the widget and right-click for its menu. Compact mode anchors to the menu bar; normal window position is retained through settings and compact transitions and recovered after display changes.
 
+The Mac menu bar uses one native system-font percentage by default. Optional ring, bar and dot icons use monochrome 16-point Retina images; mascot animation runs only when enabled. Windows retains its existing colored tray styles.
+
 ### Local sign-ins and privacy
 
 Linked CLI credentials stay in their original location. The widget rereads the exact profile, never rotates its tokens, launches an inference request, changes the CLI's active account or copies those credentials into its settings, renderer, history or exports. When a local sign-in expires, use the original CLI to sign in or refresh it, then refresh the widget. Other accounts remain available.
