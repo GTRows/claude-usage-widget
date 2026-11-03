@@ -1,5 +1,5 @@
 // Fixture-only integration test. It never reads real profile credentials.
-const { app, BrowserWindow, nativeImage } = require('electron');
+const { app, BrowserWindow, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const assert = require('assert/strict');
@@ -28,14 +28,23 @@ fs.writeFileSync(path.join(dataDir, 'config.json'), JSON.stringify({ accounts, u
 const api = require(path.join(root, 'src/cli/api'));
 api.fetchCodexUsage = async () => ({ provider: 'codex', codex_usage: { num_model_requests: 250, cost: 0.23, input_tokens: 50000, output_tokens: 12000, currency: 'USD' }, extra_usage: { used_cents: 23, currency: 'USD', is_enabled: true } });
 const adapters = require(path.join(root, 'src/providers'));
+let slowProfile = null;
 adapters.discoverLocalProfiles = async () => accounts;
-adapters.fetchLocalUsage = async (account) => ({
+adapters.fetchLocalUsage = async (account) => {
+  if (account.id === slowProfile) await new Promise((resolve) => setTimeout(resolve, 650));
+  return {
   provider: account.provider, usageType: 'subscription',
   five_hour: { utilization: account.id === 'team' ? 38 : account.id === 'personal' ? 17 : 64, resets_at: new Date(Date.now() + 11280000).toISOString() },
   seven_day: { utilization: account.id === 'team' ? 57 : account.id === 'personal' ? 31 : 42, resets_at: new Date(Date.now() + 242000000).toISOString() },
-});
+  };
+};
 adapters.linkLocalProfile = async (provider, configDir) => ({ id: 'added', provider, configDir, label: 'New profile', authType: 'local' });
+const registerHandler = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = (channel, handler) => registerHandler(channel, channel === 'set-active-account'
+  ? async (...args) => { await new Promise((resolve) => setTimeout(resolve, 180)); return handler(...args); }
+  : handler);
 require(path.join(root, 'main.js'));
+ipcMain.handle = registerHandler;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function waitFor(test, description) {
   for (let i = 0; i < 120; i++) { if (await test()) return; await delay(100); }
@@ -80,6 +89,29 @@ app.whenReady().then(async () => {
     if (process.env.WIDGET_HOLD === '1') { process.stdout.write('WIDGET_HOLD_READY\n'); return; }
     await delay(250);
     fs.writeFileSync(path.join(screenshots, 'glass-dark.png'), (await win.webContents.capturePage()).toPNG());
+    slowProfile = 'personal';
+    await js(`window.electronAPI.saveCredentials({ id: 'personal', provider: 'claude', label: 'Claude · Personal' })`);
+    const switchBounds = win.getContentSize();
+    const switchSizes = [];
+    const recordSwitchSize = () => switchSizes.push(win.getContentSize());
+    win.on('resize', recordSwitchSize);
+    await js('document.querySelectorAll(".account-card")[1].click()');
+    await delay(80);
+    assert.equal(await js('getComputedStyle(document.getElementById("loadingContainer")).display'), 'none');
+    await delay(250);
+    assert.equal(await js('document.body.classList.contains("account-switching")'), true);
+    assert.deepEqual(win.getContentSize(), switchBounds);
+    fs.writeFileSync(path.join(screenshots, 'account-switch-loading.png'), (await win.webContents.capturePage()).toPNG());
+    await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'stable account switch');
+    await delay(250);
+    slowProfile = null;
+    assert.deepEqual(win.getContentSize(), switchBounds);
+    fs.writeFileSync(path.join(screenshots, 'account-switch-ready.png'), (await win.webContents.capturePage()).toPNG());
+    await js('document.querySelectorAll(".account-card")[0].click()');
+    await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "38%"'), 'return to work account');
+    await delay(250);
+    win.removeListener('resize', recordSwitchSize);
+    assert(switchSizes.every((size) => size[0] === switchBounds[0] && size[1] === switchBounds[1]), `Account switch resized the window: ${JSON.stringify(switchSizes)}`);
     await js('document.getElementById("settingsBtn").click()');
     await delay(100);
     await js('document.getElementById("autoPruneToggle").checked = true; document.getElementById("autoPruneDays").value = "1"; document.getElementById("autoPruneToggle").dispatchEvent(new Event("change", { bubbles: true }))');
