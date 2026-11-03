@@ -14,6 +14,12 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.17.2-gtrows.1] - 2026-11-03
+
+### Changed
+- Show Add account only in Settings.
+- Place account switching below the session and weekly usage cards while keeping it available in compact and error views.
+
 ## [1.17.1-gtrows.1] - 2026-11-03
 
 ### Fixed
