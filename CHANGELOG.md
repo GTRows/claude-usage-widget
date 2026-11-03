@@ -14,6 +14,12 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.17.1-gtrows.1] - 2026-11-03
+
+### Fixed
+- Keep the Add account window at its content height instead of repeatedly shrinking with the viewport.
+- Include widget borders in automatic height measurement and restore the setup form after a small-window transition.
+
 ## [1.17.0-gtrows.1] - 2026-11-03
 
 Independent account monitoring and desktop themes contributed by KadirOzturkk in PR #2.
