@@ -39,6 +39,12 @@ function normalizeAccount(input = {}, fallbackId = DEFAULT_ACCOUNT_ID) {
     label: accountLabel({ ...input, provider }),
   };
 
+  if (input.authType === 'local') {
+    out.authType = 'local';
+    if (typeof input.configDir === 'string' && input.configDir.trim()) out.configDir = input.configDir;
+    return out;
+  }
+
   if (typeof input.sessionKey === 'string' && input.sessionKey) out.sessionKey = input.sessionKey;
   if (typeof input.organizationId === 'string' && input.organizationId) out.organizationId = input.organizationId;
   if (typeof input.apiKey === 'string' && input.apiKey) out.apiKey = input.apiKey;
@@ -85,8 +91,12 @@ function getActiveAccount(accounts, activeAccountId = DEFAULT_ACCOUNT_ID) {
 
 function hasUsableCredentials(account) {
   if (!account) return false;
+  if (account.authType === 'local') {
+    return ['claude', 'codex'].includes(account.provider)
+      && typeof account.configDir === 'string' && Boolean(account.configDir.trim());
+  }
   if (account.provider === 'claude') return Boolean(account.sessionKey && account.organizationId);
-  if (account.provider === 'codex') return Boolean(account.apiKey);
+  if (account.provider === 'codex') return true;
   return false;
 }
 

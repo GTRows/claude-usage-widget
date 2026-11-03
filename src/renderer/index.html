@@ -14,6 +14,8 @@
     ">
     <title>Claude Usage Widget</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="accounts.css">
+    <link rel="stylesheet" href="themes.css">
     <script src="../../node_modules/chart.js/dist/chart.umd.js"></script>
 </head>
 
@@ -67,6 +69,13 @@
                 <button class="update-banner-dismiss" id="updateBannerDismiss" title="Dismiss" data-i18n-attr="title:update.bannerDismiss">✕</button>
             </div>
 
+            <section class="account-overview" id="accountOverview" hidden>
+                <div class="account-overview-head"><span><strong data-i18n="accounts.title">Accounts</strong><span class="account-count" id="accountCount"></span></span><button id="addAccountBtn" data-i18n="accounts.add">Add account</button></div>
+                <div class="account-list" id="accountList"></div>
+            </section>
+            <div class="account-detail-label" id="accountDetailLabel" hidden></div>
+            <div class="account-refresh-status" id="accountRefreshStatus" role="status" hidden></div>
+
             <!-- Loading State -->
             <div class="loading-container" id="loadingContainer">
                 <div class="spinner"></div>
@@ -82,6 +91,17 @@
                         <span class="login-eyebrow-rule"></span>
                     </div>
 
+                    <section class="local-profile-panel">
+                        <div class="local-profile-title"><span data-i18n="accounts.localTitle">Connect a local account</span><button id="cancelAddAccount" class="cancel-add-account" data-i18n="accounts.cancel" hidden>Cancel</button></div>
+                        <p class="local-profile-hint" data-i18n="accounts.localHint">Link an existing Claude Code or Codex sign-in. Your terminal accounts stay unchanged.</p>
+                        <div class="profile-list" id="localProfileList"></div>
+                        <p class="local-profile-empty" id="localProfileEmpty" data-i18n="accounts.noProfiles" hidden>No local profiles found.</p>
+                        <div class="account-actions">
+                            <select id="localProviderSelect" class="settings-select" aria-label="Provider" data-i18n-attr="aria-label:accounts.provider"><option value="claude">Claude Code</option><option value="codex">Codex</option></select>
+                            <button id="chooseLocalProfileBtn" class="choose-profile-btn" data-i18n="accounts.chooseFolder">Choose profile folder</button>
+                        </div>
+                        <p id="localProfileError" class="local-profile-error" role="status"></p>
+                    </section>
                     <div class="login-step1" id="loginStep1">
                         <div class="login-glyph">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -224,6 +244,7 @@
                     <div id="extraRows"></div>
                 </div>
 
+                <div id="archiveBanner" class="archive-banner" hidden><span id="archiveHistoryTitle"></span><button id="closeArchiveHistoryBtn" data-i18n="accounts.backToAccounts">Back to accounts</button></div>
                 <div class="graph-section" id="graphSection" style="display: none;">
                     <div class="graph-controls">
                         <div class="range-tabs" id="graphRangeTabs">
@@ -242,7 +263,8 @@
                         <button class="range-apply-btn" id="graphRangeApply" data-i18n="range.apply">Apply</button>
                     </div>
                     <div class="graph-canvas-wrap">
-                        <canvas id="usageChart"></canvas>
+                        <p class="graph-empty" id="graphEmpty" data-i18n="accounts.chartEmpty" hidden>Your usage history will appear here after the first refresh.</p>
+                            <canvas id="usageChart"></canvas>
                     </div>
                 </div>
 
@@ -312,7 +334,7 @@
                 </button>
                 <div class="compact-rows">
                     <div class="compact-row">
-                        <span class="compact-label" data-i18n="metric.session">Session</span>
+                        <span class="compact-label" id="compactSessionLabel" data-i18n="metric.session">Session</span>
                         <div class="compact-bar-wrap">
                             <div class="compact-bar-bg">
                                 <div class="compact-bar-fill" id="compactSessionFill" style="width: 0%"></div>
@@ -321,7 +343,7 @@
                         </div>
                     </div>
                     <div class="compact-row">
-                        <span class="compact-label" data-i18n="metric.weekly">Weekly</span>
+                        <span class="compact-label" id="compactWeeklyLabel" data-i18n="metric.weekly">Weekly</span>
                         <div class="compact-bar-wrap">
                             <div class="compact-bar-bg">
                                 <div class="compact-bar-fill weekly" id="compactWeeklyFill" style="width: 0%"></div>
@@ -360,7 +382,20 @@
                                     </div>
                                     <select id="activeAccountSelect" class="settings-select"></select>
                                 </div>
+                                <div class="settings-item">
+                                    <div class="account-actions">
+                                        <input id="renameAccountInput" class="account-name-input" maxlength="80" aria-label="Account name" data-i18n-attr="aria-label:login.accountLabelPlaceholder">
+                                        <button id="renameAccountBtn" data-i18n="accounts.rename">Rename</button>
+                                        <button id="settingsAddAccountBtn" data-i18n="accounts.add">Add account</button>
+                                    </div>
+                                </div>
                             </div>
+                        </section>
+
+                        <section id="savedHistoryControls" class="settings-group" hidden>
+                            <header class="settings-group-head"><h4 class="settings-group-title" data-i18n="accounts.savedHistory">Saved history</h4></header>
+                            <p class="local-profile-hint" data-i18n="accounts.savedHistoryHint">Earlier and disconnected history is kept separately from current account usage.</p>
+                            <div class="account-actions"><select id="savedHistorySelect" class="settings-select" aria-label="Saved history" data-i18n-attr="aria-label:accounts.savedHistory"></select><button id="viewSavedHistoryBtn" data-i18n="accounts.viewHistory">View</button><button id="exportSavedHistoryBtn" data-i18n="accounts.exportHistory">Export JSON</button></div>
                         </section>
 
                         <section class="settings-group">
@@ -440,6 +475,16 @@
                                         <span class="threshold-pct" data-i18n="settings.refresh.unit">sec</span>
                                     </div>
                                 </div>
+                                <div class="settings-item">
+                                    <div class="settings-item-text">
+                                        <span class="settings-item-label" data-i18n="settings.codexQuotaDisplay.label">Codex quota display</span>
+                                        <span class="settings-item-hint" data-i18n="settings.codexQuotaDisplay.hint">Choose whether Codex quota counts up as used or down as remaining.</span>
+                                    </div>
+                                    <select id="codexQuotaDisplay" class="settings-select">
+                                        <option value="used" data-i18n="settings.codexQuotaDisplay.used">Used (0 to 100)</option>
+                                        <option value="remaining" data-i18n="settings.codexQuotaDisplay.remaining">Remaining (100 to 0)</option>
+                                    </select>
+                                </div>
                             </div>
                         </section>
 
@@ -467,6 +512,8 @@
                                         <span class="settings-item-hint" data-i18n="settings.style.hint">Visual character of the widget.</span>
                                     </div>
                                     <div class="theme-style-selector">
+                                        <button class="theme-style-btn" data-theme-style="glass" data-i18n="settings.style.glass">Glass</button>
+                                        <button class="theme-style-btn" data-theme-style="graphite" data-i18n="settings.style.graphite">Graphite</button>
                                         <button class="theme-style-btn active" data-theme-style="classic" data-i18n="settings.style.classic">Classic</button>
                                         <button class="theme-style-btn" data-theme-style="plate" data-i18n="settings.style.plate">Plate</button>
                                         <button class="theme-style-btn" data-theme-style="nord" data-i18n="settings.style.nord">Nord</button>
@@ -762,7 +809,7 @@
     <script src="../shared/locales/en.js"></script>
     <script src="../shared/locales/tr.js"></script>
     <script src="../shared/i18n-renderer-shim.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>

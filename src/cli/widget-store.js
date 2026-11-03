@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { selectAccountHistory } = require('../shared/account-history');
 
 function getWidgetUserDataDir(productName = 'claude-usage-widget') {
   if (process.env.CLAUDE_USAGE_WIDGET_DIR) return process.env.CLAUDE_USAGE_WIDGET_DIR;
@@ -35,7 +36,7 @@ function readWidgetHistory(productName) {
   if (!data) return null;
   const history = data.usageHistory;
   if (!Array.isArray(history)) return [];
-  return history;
+  return selectAccountHistory(history, data.settings?.activeProfile || 'default');
 }
 
 function getWidgetSettingsLanguage(productName) {

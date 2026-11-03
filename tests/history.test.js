@@ -72,3 +72,16 @@ describe('toJSON', () => {
     expect(out[0].session).toBe(10);
   });
 });
+
+
+describe('unknown and API history', () => {
+  it('preserves unknown quota values in exports', () => {
+    expect(toJSON([{ timestamp: 1000, session: null }])[0].session).toBeNull();
+    expect(toCSV([{ timestamp: 1000, session: null }]).split('\n')[1]).not.toContain(',0,');
+  });
+  it('exports API request and cost fields with their own units', () => {
+    const rows = [{ timestamp: 1000, apiRequests: 120, apiCost: 2.5, inputTokens: 200, outputTokens: 30, apiCurrency: 'USD' }];
+    expect(toJSON(rows)[0]).toMatchObject({ apiRequests: 120, apiCost: 2.5, apiCurrency: 'USD' });
+    expect(toCSV(rows).split('\n')[0]).toBe('timestamp,iso,apiRequests,apiCost,inputTokens,outputTokens,apiCurrency');
+  });
+});

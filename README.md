@@ -25,26 +25,62 @@ Runs on Windows, macOS, and Linux.
 
 ---
 
-## What's New in v1.16.0-gtrows.1
+## Account-aware desktop workflow
 
-### Multi-account and provider support
+- Keep a single account's familiar detailed view, or add more accounts to see an overview with independent refreshes, quotas, errors and last successful update times.
+- Connect an existing **Claude Code** or **Codex subscription** profile from the login screen. Use **Choose profile folder** for custom `CLAUDE_CONFIG_DIR` or `CODEX_HOME` locations. Each location is linked separately; shared configuration or project files do not merge accounts.
+- **OpenAI API** remains a separate billing connection using an admin key. It displays requests, tokens and currency totals rather than subscription quota percentages, including in the graph and compact view.
+- Add or rename accounts in **Settings → Accounts**. Selecting an account changes the detailed graph; every saved account continues refreshing. Logging out disconnects only that account and retains its history.
+- **Settings → Saved history** opens or exports disconnected accounts and older unassigned samples. Pre-upgrade samples without an account ID remain separately labeled, so mixed old data is never silently assigned to a new identity.
+- Automatic history cleanup is configured per account. Manual history deletion and exports also use the selected account.
 
-- Added a shared account model for `claude` and `codex` providers.
-- Existing single-account Claude credentials are migrated at runtime into the default Claude account.
-- The settings drawer now includes an active account selector.
-- The login screen can save separate Claude and Codex/OpenAI accounts.
+### Desktop appearance
 
-### Codex/OpenAI usage
+Choose **Glass** for a translucent surface or **Graphite** for a restrained, high-contrast menu-bar style. Both work with Dark, Light and System modes, alongside Classic, Plate, Nord, Sunset and Mono. System mode follows appearance changes while the app is running, and charts use the active palette. Existing saved choices and the Windows Classic default are preserved; a fresh Mac setup starts with Glass/System.
 
-- Codex accounts use an OpenAI admin/API key and fetch organization completions usage plus costs.
-- `OPENAI_ADMIN_KEY` or `OPENAI_API_KEY` can be used by the CLI without extra provider flags.
-- CLI login supports `--provider codex --key K`.
+Glass uses native macOS vibrancy and Windows 11 acrylic when available, with a CSS surface fallback elsewhere. It is a Liquid Glass-inspired Electron theme, not a WidgetKit extension or an implementation of Apple's Liquid Glass API. On Mac, left-click the menu-bar icon to toggle the widget and right-click for its menu. Compact mode anchors to the menu bar; normal window position is retained through settings and compact transitions and recovered after display changes.
 
-### Codex project tooling
+The Mac menu bar uses one native system-font percentage by default. Optional ring, bar and dot icons use monochrome 16-point Retina images; mascot animation runs only when enabled. Windows retains its existing colored tray styles.
 
-- Legacy Claude Code template hooks/scripts/docs were copied into `.codex/`.
-- Active setup, manifest, audit, usage-log, and AGENTS checks now target Codex paths.
-- Hook tests now run from `.codex/hooks/tests`.
+### Local sign-ins and privacy
+
+Linked CLI credentials stay in their original location. The widget rereads the exact profile, never rotates its tokens, launches an inference request, changes the CLI's active account or copies those credentials into its settings, renderer, history or exports. When a local sign-in expires, use the original CLI to sign in or refresh it, then refresh the widget. Other accounts remain available.
+
+Supported local stores are Claude Code's `.credentials.json`, its scoped macOS Keychain entries, and Codex's `auth.json` containing ChatGPT subscription tokens. Codex Keychain-only stores and redirected Claude secure-storage roots are not guessed; choose a supported credential directory explicitly. Two profile directories signed into the same real account still share that account's limits. The CLI companion keeps its existing web-session/API-key commands.
+
+Quota adapters use provider usage endpoints referenced by the MIT-licensed [CodexBar source](https://github.com/steipete/CodexBar); the JavaScript adapters were implemented independently. Credential storage is described in [OpenAI's authentication documentation](https://learn.chatgpt.com/docs/auth). Usage endpoint formats can change; errors retain the last successful snapshot and never delete a saved account.
+
+### Development verification
+
+`npm test` runs the unit suite. On hosted Windows CI it also launches real Electron windows using fixture-only data and exercises account switching, themes, API currency totals, logout, retained history, window restoration and an unreadable active credential. Run that same desktop smoke locally with:
+
+```bash
+npx electron tests/electron/smoke.cjs
+```
+
+The smoke uses a temporary user-data directory and fake provider responses. It does not read personal accounts. Native macOS interaction and material appearance still require an actual Mac; signed/notarized releases require the maintainer's signing credentials.
+
+This contribution was based on GTRows `1c9e11e`. The original project's history isolation, off-screen recovery and quit changes were reviewed against the fork, which was 145 commits ahead and 173 behind on 2026-11-02. Relevant behavior was adapted to this fork's account model rather than merging the divergent branches.
+
+---
+
+## What's New in v1.16.4-gtrows.2
+
+### Codex local quota display
+
+- Codex can now read local rate-limit data from the active Codex session logs.
+- Settings include a Codex quota display selector: used percentage (`0` to `100`) or remaining percentage (`100` to `0`).
+- CLI output supports the same mode with `--quota-display used|remaining` or `CODEX_QUOTA_DISPLAY`.
+
+### Correct exhausted-state handling
+
+- Recent Codex premium exhaustion now marks the 5-hour quota as fully used while leaving weekly usage based on Codex's weekly limit data.
+- Weekly Codex quota now reports used and remaining values consistently across the widget, history chart, and CLI JSON.
+
+### Existing provider support
+
+- Multi-account Claude and Codex support remains available from the settings drawer.
+- Codex accounts can still use OpenAI admin/API keys for organization usage and cost snapshots.
 
 For full release history, see [CHANGELOG.md](./CHANGELOG.md) and the [Releases](../../releases) page.
 
@@ -146,7 +182,7 @@ npm run cli
 ### Multiple Accounts
 
 - Add separate Claude and Codex accounts from the login screen.
-- Use Settings -> Accounts -> Active account to switch which account is polled.
+- Use Settings -> Accounts -> Active account to select the detailed view; all saved accounts refresh independently.
 - Logging out removes the selected account and switches to the next saved account when available.
 
 ### CLI
@@ -203,8 +239,8 @@ claude-usage doctor
 - Credentials are stored locally only.
 - Electron `safeStorage` is used for encrypted credential storage when available.
 - The app does not send telemetry.
-- Claude accounts communicate with Claude.ai endpoints.
-- Codex/OpenAI accounts communicate with official OpenAI organization usage and costs endpoints.
+- Claude web accounts communicate with Claude.ai; linked Claude Code profiles use the Anthropic OAuth usage endpoint.
+- Local Codex subscription profiles communicate with the ChatGPT usage endpoint; OpenAI API accounts use organization usage and costs endpoints.
 - Logout clears the selected account and Claude browser cookies/session storage when applicable.
 
 ---
@@ -259,7 +295,7 @@ If issues persist, open a [Support discussion](../../discussions/categories/supp
 - [x] Codex-ready `.codex/` automation files
 - [ ] Fresh GTRows visual assets
 - [ ] Verified macOS build with GTRows notarization
-- [ ] Provider-specific UI polish for Codex token/request metrics
+- [x] Provider-specific UI polish for Codex subscription and API metrics
 - [ ] Desktop notifications when the peak-throttle window starts or ends
 
 ---

@@ -1,5 +1,24 @@
+import { createAccountPanel } from './account-panel.js';
+import { accountProviderLabel, quotaText, isApiUsage } from './account-presentation.js';
+import { createThemeController } from './theme.js';
+import { chartPoints, quotaHistory } from './usage-chart.js';
+import { createAccountSetup } from './account-setup.js';
+import { createSavedHistory, filterSavedHistory } from './saved-history.js';
+import { buildMacTrayFrame } from './mac-tray.js';
+
 // Application state
 let credentials = null;
+let accountPanel = null;
+let themeController = null;
+let addingAccount = false;
+let selectionVersion = 0;
+let historySourceId = null;
+let archiveReturnView = null;
+let savedHistory = null;
+let refreshPending = false;
+const accountSetup = createAccountSetup({ onBusy: (busy) => {
+    document.querySelectorAll('#cancelAddAccount, #connectBtn, #autoDetectBtn, #chooseLocalProfileBtn, .profile-choice').forEach((button) => { button.disabled = busy; });
+} });
 let updateInterval = null;
 const RELEASES_PAGE_URL = 'https://github.com/GTRows/claude-usage-widget/releases';
 let latestReleaseUrl = RELEASES_PAGE_URL;
@@ -140,6 +159,7 @@ const elements = {
     trayMascotGapRow: document.getElementById('trayMascotGapRow'),
     timeFormat: document.getElementById('timeFormat'),
     weeklyDateFormat: document.getElementById('weeklyDateFormat'),
+    codexQuotaDisplay: document.getElementById('codexQuotaDisplay'),
     languageSelect: document.getElementById('languageSelect'),
     refreshInterval: document.getElementById('refreshInterval'),
 
@@ -227,8 +247,9 @@ function applyTranslations(root = document) {
 
 function hasActiveCredentials(creds) {
     if (!creds) return false;
-    if (creds.provider === 'codex') return Boolean(creds.apiKey);
-    return Boolean(creds.sessionKey && creds.organizationId);
+    if (creds.authType === 'local') return Boolean(creds.configDir);
+    if (creds.provider === 'codex') return Boolean(creds.hasApiKey || creds.apiKey);
+    return Boolean((creds.hasSessionKey || creds.sessionKey) && creds.organizationId);
 }
 
 function activeProvider() {
@@ -326,14 +347,20 @@ async function refreshAccountSelector() {
     for (const account of data.accounts || []) {
         const option = document.createElement('option');
         option.value = account.id;
-        option.textContent = `${account.label || account.id} (${account.provider || 'claude'})`;
+        option.textContent = `${account.label || account.id} (${accountProviderLabel(account)})`;
         elements.activeAccountSelect.appendChild(option);
     }
     elements.activeAccountSelect.value = data.activeAccountId || '';
+    if (accountPanel) await accountPanel.refresh();
 }
 
 // Initialize
 async function init() {
+    if (window.electronAPI.platform === 'darwin') {
+        for (const [key, replacement] of [['label', 'labelMac'], ['hint', 'hintMac'], ['bigNumber', 'nativePercentage']]) {
+            document.querySelector(`[data-i18n="settings.trayStyle.${key}"]`)?.setAttribute('data-i18n', `settings.trayStyle.${replacement}`);
+        }
+    }
     setupEventListeners();
     startContentObserver();
 
@@ -353,6 +380,7 @@ async function init() {
             if (window.i18n) window.i18n.setLanguage(lang);
             applyTranslations();
             applyLoginProvider();
+            if (accountPanel) accountPanel.refresh();
             // Re-render dynamic surfaces — chart labels, tray frames, version label.
             try {
                 if (latestUsageData) updateUI(latestUsageData);
@@ -371,8 +399,43 @@ async function init() {
     // Apply saved theme and load thresholds immediately
     const settings = await window.electronAPI.getSettings();
     window._cachedSettings = settings;
-    applyTheme(settings.theme);
-    applyThemeStyle(settings.themeStyle || 'classic');
+    themeController = createThemeController({
+        persist: async (patch) => {
+            window._cachedSettings = { ...window._cachedSettings, ...patch };
+            await window.electronAPI.saveAppearance(patch);
+        },
+        onChange: () => { if (usageChart && graphVisible) loadChart(); }
+    });
+    themeController.apply(settings);
+    accountPanel = createAccountPanel({
+        api: window.electronAPI, t: (key, params) => window.i18n.t(key, params),
+        onSelect: selectAccount,
+        setup: accountSetup,
+        onAdd: () => {
+            accountSetup.invalidate();
+            addingAccount = true;
+            selectionVersion++;
+            leaveSettings();
+            showLoginRequired();
+            accountPanel.discover();
+            resizeWidget();
+        },
+        onCancel: async () => {
+            if (!accountSetup.cancel()) return;
+            await reloadActiveAccount();
+        },
+        onChanged: async (_account, token) => reloadActiveAccount({ token }),
+        onResize: resizeWidget
+    });
+    savedHistory = createSavedHistory({ api: window.electronAPI, t: (key) => window.i18n.t(key), onView: showSavedHistory, onBack: closeSavedHistory });
+    await accountPanel.discover();
+    window.electronAPI.onAccountUsageUpdated(async (snapshot) => {
+        if (addingAccount) return;
+        const version = selectionVersion;
+        await accountPanel.refresh();
+        if (addingAccount || version !== selectionVersion) return;
+        if (!historySourceId && snapshot.accountId === credentials?.id && snapshot.data) updateUI(snapshot.data);
+    });
     if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
     warnThreshold = settings.warnThreshold;
     dangerThreshold = settings.dangerThreshold;
@@ -418,7 +481,7 @@ async function init() {
 
     await refreshAccountSelector();
 
-    if (hasActiveCredentials(credentials)) {
+    if (credentials?.accounts?.length) {
         showMainContent();
         await fetchUsageData();
         startAutoUpdate();
@@ -479,18 +542,7 @@ function setupEventListeners() {
     });
 
     if (elements.activeAccountSelect) {
-        elements.activeAccountSelect.addEventListener('change', async () => {
-            const accountId = elements.activeAccountSelect.value;
-            if (!accountId) return;
-            await window.electronAPI.setActiveAccount(accountId);
-            credentials = await window.electronAPI.getCredentials();
-            if (hasActiveCredentials(credentials)) {
-                await fetchUsageData();
-                startAutoUpdate();
-            } else {
-                showLoginRequired();
-            }
-        });
+        elements.activeAccountSelect.addEventListener('change', () => selectAccount(elements.activeAccountSelect.value));
     }
 
     elements.refreshBtn.addEventListener('click', async () => {
@@ -753,7 +805,8 @@ function setupEventListeners() {
         let liveTimer = null;
         const scheduleLiveSave = () => {
             if (liveTimer) clearTimeout(liveTimer);
-            liveTimer = setTimeout(() => { saveSettings(); }, 180);
+            const version = selectionVersion;
+            liveTimer = setTimeout(() => { if (version === selectionVersion) saveSettings(); }, 180);
         };
         elements.settingsOverlay.addEventListener('change', (e) => {
             if (e.target.closest('.settings-rows')) scheduleLiveSave();
@@ -773,17 +826,10 @@ function setupEventListeners() {
     }
 
     elements.logoutBtn.addEventListener('click', async () => {
+        accountSetup.invalidate();
+        selectionVersion++;
         await window.electronAPI.deleteCredentials(credentials?.id);
-        credentials = await window.electronAPI.getCredentials();
-        await refreshAccountSelector();
-        elements.settingsOverlay.style.display = 'none';
-        _settingsOpen = false;
-        _lastResizeHeight = 0;
-        if (hasActiveCredentials(credentials)) {
-            await fetchUsageData();
-        } else {
-            showLoginRequired();
-        }
+        await reloadActiveAccount();
     });
 
     // Theme buttons
@@ -791,7 +837,7 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             elements.themeBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            applyTheme(btn.dataset.theme);
+            themeController.setMode(btn.dataset.theme);
         });
     });
 
@@ -800,7 +846,7 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             elements.themeStyleBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            applyThemeStyle(btn.dataset.themeStyle);
+            themeController.setStyle(btn.dataset.themeStyle);
         });
     });
 
@@ -811,13 +857,7 @@ function setupEventListeners() {
         if (elements.refreshBtn) elements.refreshBtn.classList.remove('spinning');
     });
 
-    // Listen for session expiration events (403 errors)
-    window.electronAPI.onSessionExpired(async () => {
-        debugLog('Session expired event received');
-        credentials = await window.electronAPI.getCredentials();
-        await refreshAccountSelector();
-        showLoginRequired();
-    });
+    window.electronAPI.onSessionExpired(() => reloadActiveAccount());
 
     // Update banner
     elements.updateBannerDismiss.addEventListener('click', () => {
@@ -969,63 +1009,33 @@ function setupKeyboardShortcuts() {
     });
 }
 
-// Handle manual sessionKey connect
+async function applyConnectedAccount(_saved, token) {
+    await reloadActiveAccount({ token });
+}
+
 async function handleConnect() {
     const provider = selectedProvider();
     const secret = elements.sessionKeyInput.value.trim();
-    if (!secret) {
-        elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorEmptyCodex' : 'login.errorEmpty');
-        return;
-    }
-
-    elements.connectBtn.disabled = true;
-    elements.connectBtn.textContent = '...';
+    if (!secret) { elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorEmptyCodex' : 'login.errorEmpty'); return; }
     elements.sessionKeyError.textContent = '';
-
+    const label = accountLabelValue(provider);
     try {
-        if (provider === 'codex') {
-            credentials = {
-                id: `codex-${Date.now()}`,
-                provider,
-                label: accountLabelValue(provider),
-                apiKey: secret
-            };
-            await window.electronAPI.saveCredentials(credentials);
-            await refreshAccountSelector();
-            elements.sessionKeyInput.value = '';
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-            return;
-        }
-
-        const result = await window.electronAPI.validateSessionKey(secret);
-        if (result.success) {
-            credentials = {
-                id: `claude-${Date.now()}`,
-                provider,
-                label: accountLabelValue(provider),
-                sessionKey: secret,
-                organizationId: result.organizationId
-            };
-            await window.electronAPI.saveCredentials(credentials);
-            await refreshAccountSelector();
-            elements.sessionKeyInput.value = '';
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-        } else {
-            elements.sessionKeyError.textContent = result.error || 'Invalid session key';
-        }
-    } catch (error) {
+        await accountSetup.run({
+            prepare: async () => {
+                const base = { id: `${provider}-${crypto.randomUUID()}`, provider, label };
+                if (provider === 'codex') return { ...base, apiKey: secret };
+                const validation = await window.electronAPI.validateSessionKey(secret);
+                if (!validation.success) throw new Error('Invalid session');
+                return { ...base, sessionKey: secret, organizationId: validation.organizationId };
+            },
+            commit: (account) => window.electronAPI.saveCredentials(account),
+            apply: applyConnectedAccount
+        });
+    } catch {
         elements.sessionKeyError.textContent = window.i18n.t(provider === 'codex' ? 'login.errorFailedCodex' : 'login.errorFailed');
-    } finally {
-        elements.connectBtn.disabled = false;
-        elements.connectBtn.textContent = window.i18n.t('login.connectBtn');
     }
 }
 
-// Handle auto-detect from browser cookies
 async function handleAutoDetect() {
     if (selectedProvider() === 'codex') {
         window.electronAPI.openExternal(codexKeyUrl());
@@ -1033,83 +1043,152 @@ async function handleAutoDetect() {
         showManualEntry();
         return;
     }
-
-    elements.autoDetectBtn.disabled = true;
-    elements.autoDetectBtn.textContent = window.i18n.t('login.waiting');
+    const label = accountLabelValue('claude');
     elements.autoDetectError.textContent = '';
-
     try {
-        const result = await window.electronAPI.detectSessionKey();
-        if (!result.success) {
-            elements.autoDetectError.textContent = result.error || 'Login failed';
-            return;
-        }
-
-        // Got sessionKey from login, now validate it
-        elements.autoDetectBtn.textContent = window.i18n.t('login.validating');
-        const validation = await window.electronAPI.validateSessionKey(result.sessionKey);
-
-        if (validation.success) {
-            credentials = {
-                id: `claude-${Date.now()}`,
-                provider: 'claude',
-                label: accountLabelValue('claude'),
-                sessionKey: result.sessionKey,
-                organizationId: validation.organizationId
-            };
-            await window.electronAPI.saveCredentials(credentials);
-            await refreshAccountSelector();
-            showMainContent();
-            await fetchUsageData();
-            startAutoUpdate();
-        } else {
-            elements.autoDetectError.textContent =
-                'Session invalid. Try again or use Manual →';
-        }
-    } catch (error) {
-        elements.autoDetectError.textContent = error.message || 'Login failed';
-    } finally {
-        elements.autoDetectBtn.disabled = false;
-        elements.autoDetectBtn.textContent = window.i18n.t('login.autoBtn');
+        await accountSetup.run({
+            prepare: async () => {
+                const result = await window.electronAPI.detectSessionKey();
+                if (!result.success) throw new Error('Login canceled');
+                const validation = await window.electronAPI.validateSessionKey(result.sessionKey);
+                if (!validation.success) throw new Error('Invalid session');
+                return { id: `claude-${crypto.randomUUID()}`, provider: 'claude', label, sessionKey: result.sessionKey, organizationId: validation.organizationId };
+            },
+            commit: (account) => window.electronAPI.saveCredentials(account),
+            apply: applyConnectedAccount
+        });
+    } catch {
+        elements.autoDetectError.textContent = window.i18n.t('login.errorFailed');
     }
 }
 
-// Fetch usage data from the active provider account
+function leaveSettings() {
+    elements.settingsOverlay.style.display = 'none';
+    elements.compactSettingsOverlay.style.display = 'none';
+    _settingsOpen = false;
+    _lastResizeHeight = 0;
+    window.electronAPI.setSettingsWindow(false);
+}
+
+async function showSavedHistory(source) {
+    selectionVersion++;
+    archiveReturnView = { graphVisible, historyVisible };
+    leaveSettings();
+    historySourceId = source.id;
+    addingAccount = false;
+    document.body.classList.add('history-archive-open');
+    document.body.classList.remove('account-setup-open');
+    document.getElementById('archiveBanner').hidden = false;
+    document.getElementById('archiveHistoryTitle').textContent = `${window.i18n.t('accounts.savedHistory')}: ${source.label}`;
+    elements.loginContainer.style.display = 'none';
+    elements.noUsageContainer.style.display = 'none';
+    elements.loadingContainer.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    elements.mainContent.style.display = 'block';
+    graphVisible = true;
+    historyVisible = true;
+    elements.graphSection.style.display = 'block';
+    elements.historySection.style.display = 'block';
+    window.electronAPI.setSettingsWindow(true);
+    await loadChart();
+    await loadHistoryTable();
+    resizeWidget();
+}
+
+async function closeSavedHistory() {
+    if (archiveReturnView) {
+        ({ graphVisible, historyVisible } = archiveReturnView);
+        elements.graphSection.style.display = graphVisible ? 'block' : 'none';
+        elements.historySection.style.display = historyVisible ? 'block' : 'none';
+        archiveReturnView = null;
+    }
+    await reloadActiveAccount();
+}
+
+function resetAccountView() {
+    latestUsageData = null;
+    historyLastEntries = [];
+    historyPage = 1;
+    historySourceId = null;
+    document.body.classList.remove('history-archive-open', 'api-account');
+    document.getElementById('archiveBanner').hidden = true;
+    if (usageChart) { usageChart.destroy(); usageChart = null; }
+    elements.historyTableBody.replaceChildren();
+    if (countdownInterval) clearInterval(countdownInterval);
+    elements.sessionPercentage.textContent = '—';
+    elements.weeklyPercentage.textContent = '—';
+    elements.mainContent.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    elements.noUsageContainer.style.display = 'none';
+    elements.loginContainer.style.display = 'none';
+    elements.loadingContainer.style.display = 'flex';
+    window.electronAPI.setTrayFrames([]);
+    isFirstDataLoad = true;
+    sessionResetTriggered = false;
+    weeklyResetTriggered = false;
+}
+
+async function reloadActiveAccount({ token } = {}) {
+    if (token == null) accountSetup.invalidate();
+    const version = ++selectionVersion;
+    addingAccount = false;
+    leaveSettings();
+    resetAccountView();
+    const selected = await window.electronAPI.getCredentials();
+    if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
+    credentials = selected;
+    const settings = await window.electronAPI.getSettings();
+    if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
+    window._cachedSettings = settings;
+    const state = await accountPanel.refresh();
+    if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
+    elements.activeAccountSelect.value = credentials?.id || '';
+    if (!state.accounts.length) { showLoginRequired(); return; }
+    const cached = state.snapshots?.find((row) => row.accountId === credentials.id);
+    if (cached?.data) updateUI(cached.data);
+    await fetchUsageData();
+    startAutoUpdate();
+}
+
+async function selectAccount(accountId) {
+    if (!accountId) return;
+    accountSetup.invalidate();
+    const version = ++selectionVersion;
+    resetAccountView();
+    await window.electronAPI.setActiveAccount(accountId);
+    if (version !== selectionVersion) return;
+    await reloadActiveAccount();
+}
+
+// Every account is polled independently; the selected account controls details only.
 async function fetchUsageData() {
-    debugLog('fetchUsageData called');
-
-    if (isFetching) {
-        debugLog('Fetch already in flight — skipping');
-        return;
-    }
-
-    if (!hasActiveCredentials(credentials)) {
-        debugLog('Missing credentials, showing login');
-        showLoginRequired();
-        return;
-    }
-
+    if (addingAccount) return;
+    if (isFetching) { refreshPending = true; return; }
+    if (!credentials?.accounts?.length) { showLoginRequired(); return; }
     isFetching = true;
     try {
-        debugLog('Calling electronAPI.fetchUsageData...');
-        const data = await window.electronAPI.fetchUsageData();
-        debugLog('Received usage data:', data);
-        updateUI(data);
-    } catch (error) {
-        console.error('Error fetching usage data:', error);
-        if (error.message.includes('SessionExpired') || error.message.includes('Unauthorized')) {
-            credentials = null;
-            await refreshAccountSelector();
-            showLoginRequired();
-        } else {
-            debugLog('Failed to fetch usage data');
-            displayFetchError(error);
+        const snapshots = await window.electronAPI.fetchAllUsage();
+        if (addingAccount) return;
+        await accountPanel.refresh(snapshots);
+        if (historySourceId) return;
+        const version = selectionVersion;
+        const selected = await window.electronAPI.getCredentials();
+        if (version !== selectionVersion || addingAccount) return;
+        credentials = selected;
+        const snapshot = snapshots.find((row) => row.accountId === credentials?.id);
+        if (snapshot?.data) updateUI(snapshot.data);
+        else {
+            const code = snapshot?.error?.code;
+            displayFetchError(new Error(window.i18n.t(code === 'AUTH_REQUIRED' ? 'accounts.authRequired' : code === 'RATE_LIMITED' ? 'accounts.rateLimited' : 'accounts.fetchFailed')));
         }
+    } catch {
+        displayFetchError(new Error(window.i18n.t('accounts.fetchFailed')));
     } finally {
         isFetching = false;
+        resizeWidget();
+        if (refreshPending && !addingAccount) { refreshPending = false; fetchUsageData(); }
     }
 }
-
 
 // Update UI with usage data
 // Format a cent-based amount with the correct currency symbol.
@@ -1127,11 +1206,19 @@ function formatCount(value) {
 }
 
 function applyProviderMetricPresentation(data) {
-    if (data?.provider !== 'codex') {
+    document.body.classList.toggle('api-account', isApiUsage(data));
+    document.getElementById('compactSessionLabel').textContent = window.i18n.t(isApiUsage(data) ? 'metric.codexRequests' : 'metric.session');
+    document.getElementById('compactWeeklyLabel').textContent = window.i18n.t(isApiUsage(data) ? 'metric.codexCost' : 'metric.weekly');
+    if (!isApiUsage(data)) {
         if (elements.sessionMetricLabel) elements.sessionMetricLabel.textContent = window.i18n.t('metric.session');
         if (elements.weeklyMetricLabel) elements.weeklyMetricLabel.textContent = window.i18n.t('metric.weekly');
         if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
         if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.resetsIn');
+        if (data?.provider === 'codex') {
+            const display = data.quota_display || activeCodexQuotaDisplay();
+            elements.sessionMetricLabel.textContent = window.i18n.t(display === 'remaining' ? 'metric.codexFiveHourRemaining' : 'metric.codexFiveHourUsed');
+            elements.weeklyMetricLabel.textContent = window.i18n.t(display === 'remaining' ? 'metric.codexWeeklyRemaining' : 'metric.codexWeeklyUsed');
+        }
         return;
     }
 
@@ -1143,7 +1230,7 @@ function applyProviderMetricPresentation(data) {
     if (elements.sessionMetricFootLabel) elements.sessionMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
     if (elements.weeklyMetricFootLabel) elements.weeklyMetricFootLabel.textContent = window.i18n.t('metric.codexWindow');
     if (elements.sessionPercentage) elements.sessionPercentage.textContent = formatCount(usage.num_model_requests);
-    if (elements.weeklyPercentage) elements.weeklyPercentage.textContent = formatCurrency(Math.round(Number(usage.cost || 0) * 100), currency);
+    if (elements.weeklyPercentage) elements.weeklyPercentage.textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(usage.cost || 0));
     if (elements.sessionTimeText) elements.sessionTimeText.textContent = window.i18n.t('metric.last7d');
     if (elements.weeklyTimeText) elements.weeklyTimeText.textContent = window.i18n.t('metric.last7d');
     if (elements.sessionResetsAt) {
@@ -1166,6 +1253,7 @@ const EXTRA_ROW_CONFIG = {
 };
 
 function buildExtraRows(data) {
+    if (isApiUsage(data)) { elements.extraRows.replaceChildren(); elements.expandToggle.style.display = 'none'; elements.expandSection.style.display = 'none'; return 0; }
     elements.extraRows.innerHTML = '';
     let count = 0;
 
@@ -1319,6 +1407,7 @@ function buildExtraRows(data) {
         elements.expandSection.style.display = 'none';
     }
 
+    if (count > 0 && isExpanded) elements.expandSection.style.display = 'block';
     return count;
 }
 
@@ -1385,6 +1474,7 @@ function startContentObserver() {
 }
 
 function updateUI(data) {
+    if (historySourceId) return;
     latestUsageData = data;
 
     showMainContent();
@@ -1423,54 +1513,56 @@ function checkUsageAlerts(data) {
 
     const sessionPct = data.five_hour?.utilization || 0;
     const weeklyPct = data.seven_day?.utilization || 0;
+    const remainingMode = isRemainingQuotaData(data);
 
     // Reset alert flags when a session window resets (utilization drops back low)
-    if (sessionPct < warnThreshold) {
+    if (isBelowWarnReset(sessionPct, remainingMode)) {
         alertFired.session_warn = false;
         alertFired.session_danger = false;
     }
-    if (weeklyPct < warnThreshold) {
+    if (isBelowWarnReset(weeklyPct, remainingMode)) {
         alertFired.weekly_warn = false;
         alertFired.weekly_danger = false;
     }
 
     // Current Session — danger threshold (check first, higher priority)
-    if (sessionPct >= dangerThreshold && !alertFired.session_danger) {
+    if (isDangerPercent(sessionPct, remainingMode) && !alertFired.session_danger) {
         alertFired.session_danger = true;
         alertFired.session_warn = true; // suppress warn if we jumped straight to danger
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.sessionDanger', { pct: Math.round(sessionPct) })
+            window.i18n.t(remainingMode ? 'notify.sessionRemainingDanger' : 'notify.sessionDanger', { pct: Math.round(sessionPct) })
         );
     // Current Session — warn threshold
-    } else if (sessionPct >= warnThreshold && !alertFired.session_warn) {
+    } else if (isWarnPercent(sessionPct, remainingMode) && !alertFired.session_warn) {
         alertFired.session_warn = true;
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.sessionWarn', { pct: Math.round(sessionPct) })
+            window.i18n.t(remainingMode ? 'notify.sessionRemainingWarn' : 'notify.sessionWarn', { pct: Math.round(sessionPct) })
         );
     }
 
     // Weekly Limit — danger threshold
-    if (weeklyPct >= dangerThreshold && !alertFired.weekly_danger) {
+    if (isDangerPercent(weeklyPct, remainingMode) && !alertFired.weekly_danger) {
         alertFired.weekly_danger = true;
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.weeklyDanger', { pct: Math.round(weeklyPct) })
+            window.i18n.t(remainingMode ? 'notify.weeklyRemainingDanger' : 'notify.weeklyDanger', { pct: Math.round(weeklyPct) })
         );
     // Weekly Limit — warn threshold
-    } else if (weeklyPct >= warnThreshold && !alertFired.weekly_warn) {
+    } else if (isWarnPercent(weeklyPct, remainingMode) && !alertFired.weekly_warn) {
         alertFired.weekly_warn = true;
         window.electronAPI.showNotification(
             window.i18n.t('app.productName'),
-            window.i18n.t('notify.weeklyWarn', { pct: Math.round(weeklyPct) })
+            window.i18n.t(remainingMode ? 'notify.weeklyRemainingWarn' : 'notify.weeklyWarn', { pct: Math.round(weeklyPct) })
         );
     }
 }
 
 // Apply or remove compact mode — switches view, resizes window, syncs all toggles
 function applyCompactMode(compact) {
+    document.body.classList.toggle('compact-mode', compact);
     isCompactMode = compact;
 
     // Show/hide the correct content view
@@ -1537,20 +1629,19 @@ function applyCompactMode(compact) {
 function updateCompactBars(data) {
     const sessionPct = Math.min(Math.max(data.five_hour?.utilization || 0, 0), 100);
     const weeklyPct = Math.min(Math.max(data.seven_day?.utilization || 0, 0), 100);
+    const remainingMode = isRemainingQuotaData(data);
 
     elements.compactSessionFill.style.width = `${sessionPct}%`;
-    elements.compactSessionPct.textContent = `${Math.round(sessionPct)}%`;
+    elements.compactSessionPct.textContent = isApiUsage(data) ? formatCount(data.codex_usage.num_model_requests) : quotaText(data.five_hour);
     elements.compactWeeklyFill.style.width = `${weeklyPct}%`;
-    elements.compactWeeklyPct.textContent = `${Math.round(weeklyPct)}%`;
+    elements.compactWeeklyPct.textContent = isApiUsage(data) ? new Intl.NumberFormat(undefined, { style: 'currency', currency: data.codex_usage.currency || 'USD' }).format(data.codex_usage.cost || 0) : quotaText(data.seven_day);
 
     // Apply warning/danger classes to compact bars
     elements.compactSessionFill.className = 'compact-bar-fill';
-    if (sessionPct >= dangerThreshold) elements.compactSessionFill.classList.add('danger');
-    else if (sessionPct >= warnThreshold) elements.compactSessionFill.classList.add('warning');
+    applyPercentStatus(elements.compactSessionFill, sessionPct, remainingMode);
 
     elements.compactWeeklyFill.className = 'compact-bar-fill weekly';
-    if (weeklyPct >= dangerThreshold) elements.compactWeeklyFill.classList.add('danger');
-    else if (weeklyPct >= warnThreshold) elements.compactWeeklyFill.classList.add('warning');
+    applyPercentStatus(elements.compactWeeklyFill, weeklyPct, remainingMode);
 }
 // Persist compact mode setting without touching the rest of settings — debounced
 let _saveCompactTimer = null;
@@ -1600,31 +1691,34 @@ const alertFired = {
 function seedAlertFlags(data) {
     const sessionPct = data.five_hour?.utilization || 0;
     const weeklyPct = data.seven_day?.utilization || 0;
+    const remainingMode = isRemainingQuotaData(data);
 
-    if (sessionPct >= dangerThreshold) {
+    if (isDangerPercent(sessionPct, remainingMode)) {
         alertFired.session_danger = true;
         alertFired.session_warn = true;
-    } else if (sessionPct >= warnThreshold) {
+    } else if (isWarnPercent(sessionPct, remainingMode)) {
         alertFired.session_warn = true;
     }
 
-    if (weeklyPct >= dangerThreshold) {
+    if (isDangerPercent(weeklyPct, remainingMode)) {
         alertFired.weekly_danger = true;
         alertFired.weekly_warn = true;
-    } else if (weeklyPct >= warnThreshold) {
+    } else if (isWarnPercent(weeklyPct, remainingMode)) {
         alertFired.weekly_warn = true;
     }
 }
 
 function refreshTimers() {
     if (!latestUsageData) return;
+    if (isApiUsage(latestUsageData)) { applyProviderMetricPresentation(latestUsageData); return; }
 
     const settings = window._cachedSettings || {};
     const timeFormat = settings.timeFormat || '12h';
     const weeklyDateFormat = settings.weeklyDateFormat || 'date';
+    const remainingMode = isRemainingQuotaData(latestUsageData);
 
     // Session data
-    const sessionUtilization = latestUsageData.five_hour?.utilization || 0;
+    const sessionUtilization = latestUsageData.five_hour?.utilization;
     const sessionResetsAt = latestUsageData.five_hour?.resets_at;
 
     // Check if session timer has expired and we need to refresh
@@ -1646,7 +1740,9 @@ function refreshTimers() {
     updateProgressBar(
         elements.sessionProgress,
         elements.sessionPercentage,
-        sessionUtilization
+        sessionUtilization,
+        false,
+        remainingMode
     );
 
     updateTimer(
@@ -1657,9 +1753,10 @@ function refreshTimers() {
     );
     elements.sessionResetsAt.textContent = formatResetsAt(sessionResetsAt, false, timeFormat, weeklyDateFormat);
     elements.sessionResetsAt.style.opacity = sessionResetsAt ? '1' : '0.4';
+    if (!latestUsageData.five_hour) elements.sessionTimeText.textContent = '—';
 
     // Weekly data
-    const weeklyUtilization = latestUsageData.seven_day?.utilization || 0;
+    const weeklyUtilization = latestUsageData.seven_day?.utilization;
     const weeklyResetsAt = latestUsageData.seven_day?.resets_at;
 
     // Check if weekly timer has expired and we need to refresh
@@ -1680,7 +1777,8 @@ function refreshTimers() {
         elements.weeklyProgress,
         elements.weeklyPercentage,
         weeklyUtilization,
-        true
+        true,
+        remainingMode
     );
 
     updateTimer(
@@ -1691,6 +1789,7 @@ function refreshTimers() {
     );
     elements.weeklyResetsAt.textContent = formatResetsAt(weeklyResetsAt, true, timeFormat, weeklyDateFormat);
     elements.weeklyResetsAt.style.opacity = weeklyResetsAt ? '1' : '0.4';
+    if (!latestUsageData.seven_day) elements.weeklyTimeText.textContent = '—';
 }
 
 function startCountdown() {
@@ -1704,6 +1803,9 @@ function startCountdown() {
 // Build a pre-rendered tray icon frame for a single metric.
 // Layout is controlled by the user's "Tray style" setting.
 function buildTrayFrame(label, percent) {
+    if (window.electronAPI.platform === 'darwin') {
+        return buildMacTrayFrame(document, label, percent, window._cachedSettings?.trayStyle || 'bigNumber');
+    }
     const size = 32;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -2039,20 +2141,32 @@ function buildMascotAnimation(status, restFrame) {
 }
 
 function updateTrayIcon(data) {
+    if (isApiUsage(data)) { window.electronAPI.setTrayFrames([]); return; }
+    if (data?.provider === 'codex') {
+        const metric = data.five_hour || data.seven_day;
+        window.electronAPI.setTrayFrames(metric ? [buildTrayFrame(window.i18n.t(data.five_hour ? 'metric.session' : 'metric.weekly'), metric.utilization)] : []);
+        return;
+    }
     try {
         const frames = [];
         const session = data && data.five_hour ? data.five_hour.utilization : undefined;
         const settings = window._cachedSettings || {};
         const animateMascot = !!settings.trayShowLogo;
+        const remainingMode = isRemainingQuotaData(data);
 
         let status = 'low';
         let rounded = null;
         if (typeof session === 'number') {
             rounded = Math.round(Math.max(0, Math.min(100, session)));
-            if (rounded >= 100) status = 'dead';
-            else if (rounded === 0) status = 'zero';
-            else if (rounded >= dangerThreshold) status = 'danger';
-            else if (rounded >= warnThreshold) status = 'warn';
+            if (remainingMode) {
+                if (rounded <= (100 - dangerThreshold)) status = 'danger';
+                else if (rounded <= (100 - warnThreshold)) status = 'warn';
+            } else {
+                if (rounded >= 100) status = 'dead';
+                else if (rounded === 0) status = 'zero';
+                else if (rounded >= dangerThreshold) status = 'danger';
+                else if (rounded >= warnThreshold) status = 'warn';
+            }
         }
 
         if (animateMascot) {
@@ -2064,7 +2178,7 @@ function updateTrayIcon(data) {
             for (const f of mascotFrames) {
                 frames.push({ ...f, tooltip: f.tooltip || label, title: rounded != null ? ` ${rounded}%` : '' });
             }
-        } else if (status === 'dead' || status === 'zero') {
+        } else if ((status === 'dead' || status === 'zero') && window.electronAPI.platform !== 'darwin') {
             frames.push(...buildMascotAnimation(status));
         } else if (typeof session === 'number') {
             frames.push(buildTrayFrame(window.i18n.t('metric.session'), session));
@@ -2078,19 +2192,56 @@ function updateTrayIcon(data) {
     }
 }
 
+function isRemainingQuotaData(data) {
+    return data?.quota_display === 'remaining'
+        || data?.five_hour?.display_mode === 'remaining'
+        || data?.seven_day?.display_mode === 'remaining';
+}
+
+function activeCodexQuotaDisplay() {
+    const settings = window._cachedSettings || {};
+    return settings.codexQuotaDisplay === 'remaining' ? 'remaining' : 'used';
+}
+
+function applyPercentStatus(element, percentage, remainingMode = false) {
+    element.classList.remove('warning', 'danger');
+    if (remainingMode) {
+        if (percentage <= (100 - dangerThreshold)) {
+            element.classList.add('danger');
+        } else if (percentage <= (100 - warnThreshold)) {
+            element.classList.add('warning');
+        }
+        return;
+    }
+
+    if (percentage >= dangerThreshold) {
+        element.classList.add('danger');
+    } else if (percentage >= warnThreshold) {
+        element.classList.add('warning');
+    }
+}
+
+function isDangerPercent(percentage, remainingMode = false) {
+    return remainingMode ? percentage <= (100 - dangerThreshold) : percentage >= dangerThreshold;
+}
+
+function isWarnPercent(percentage, remainingMode = false) {
+    return remainingMode ? percentage <= (100 - warnThreshold) : percentage >= warnThreshold;
+}
+
+function isBelowWarnReset(percentage, remainingMode = false) {
+    return remainingMode ? percentage > (100 - warnThreshold) : percentage < warnThreshold;
+}
+
 // Update progress bar
-function updateProgressBar(progressElement, percentageElement, value, isWeekly = false) {
+function updateProgressBar(progressElement, percentageElement, value, isWeekly = false, remainingMode = false) {
+    if (!Number.isFinite(value)) { progressElement.style.width = '0%'; percentageElement.textContent = '—'; return; }
     const percentage = Math.min(Math.max(value, 0), 100);
 
     progressElement.style.width = `${percentage}%`;
     percentageElement.textContent = `${Math.round(percentage)}%`;
 
-    progressElement.classList.remove('warning', 'danger');
-    if (percentage >= dangerThreshold) {
-        progressElement.classList.add('danger');
-    } else if (percentage >= warnThreshold) {
-        progressElement.classList.add('warning');
-    }
+    applyPercentStatus(progressElement, percentage, remainingMode);
 }
 
 // Format reset date for the "Resets At" column
@@ -2190,10 +2341,14 @@ function updateTimer(timerElement, textElement, resetsAt, totalMinutes) {
 
 // UI State Management
 function showLoginRequired() {
+    document.body.classList.add('account-setup-open');
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'flex';
     elements.noUsageContainer.style.display = 'none';
     elements.mainContent.style.display = 'none';
+    elements.compactContent.style.display = 'none';
+    if (accountPanel) accountPanel.discover();
+    resizeWidget();
     // Reset to step 1
     elements.loginStep1.style.display = 'flex';
     elements.loginStep2.style.display = 'none';
@@ -2205,7 +2360,7 @@ function showLoginRequired() {
     elements.settingsOverlay.style.display = 'none';
     elements.compactSettingsOverlay.style.display = 'none';
     // Hide header buttons during login
-    elements.settingsBtn.style.display = 'none';
+    elements.settingsBtn.style.display = 'flex';
     elements.refreshBtn.style.display = 'none';
     elements.graphBtn.style.display = 'none';
     stopAutoUpdate();
@@ -2224,6 +2379,7 @@ function showLoginRequired() {
 }
 
 function showMainContent() {
+    document.body.classList.remove('account-setup-open');
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'none';
     elements.noUsageContainer.style.display = 'none';
@@ -2265,7 +2421,11 @@ function stopAutoUpdate() {
 }
 
 async function loadChart() {
-    const history = await fetchGraphHistory();
+    const accountId = credentials?.id;
+    const version = selectionVersion;
+    const history = quotaHistory(await fetchGraphHistory(), activeCodexQuotaDisplay());
+    if (accountId !== credentials?.id || version !== selectionVersion) return;
+    document.getElementById('graphEmpty').hidden = history.length > 0;
     if (!history.length) {
         if (usageChart) { usageChart.destroy(); usageChart = null; }
         return;
@@ -2274,6 +2434,7 @@ async function loadChart() {
 }
 
 async function fetchGraphHistory() {
+    if (historySourceId) return filterSavedHistory(await window.electronAPI.getHistorySource(historySourceId), { rangeMs: graphRangeMs, custom: graphCustomActive, from: graphCustomFrom, to: graphCustomTo });
     if (graphCustomActive && (graphCustomFrom != null || graphCustomTo != null)) {
         if (window.electronAPI.getUsageHistoryWindow) {
             return window.electronAPI.getUsageHistoryWindow(graphCustomFrom, graphCustomTo);
@@ -2286,6 +2447,7 @@ async function fetchGraphHistory() {
 }
 
 async function fetchHistoryTableData() {
+    if (historySourceId) return filterSavedHistory(await window.electronAPI.getHistorySource(historySourceId), { rangeMs: historyRangeMs, custom: historyCustomActive, from: historyCustomFrom, to: historyCustomTo });
     if (historyCustomActive && (historyCustomFrom != null || historyCustomTo != null)) {
         if (window.electronAPI.getUsageHistoryWindow) {
             return window.electronAPI.getUsageHistoryWindow(historyCustomFrom, historyCustomTo);
@@ -2299,9 +2461,18 @@ async function fetchHistoryTableData() {
 
 async function loadHistoryTable() {
     if (!elements.historyTableBody) return;
-    const history = await fetchHistoryTableData();
+    const accountId = credentials?.id;
+    const version = selectionVersion;
+    const history = quotaHistory(await fetchHistoryTableData(), activeCodexQuotaDisplay());
+    if (accountId !== credentials?.id || version !== selectionVersion) return;
     historyLastEntries = [...history].sort((a, b) => b.timestamp - a.timestamp);
     renderHistoryPage();
+}
+
+function isHistoryRemainingEntry(entry) {
+    if (entry?.quotaDisplay === 'remaining') return true;
+    if (entry?.quotaDisplay === 'used') return false;
+    return latestUsageData?.provider === 'codex' && activeCodexQuotaDisplay() === 'remaining';
 }
 
 function renderHistoryPage() {
@@ -2343,10 +2514,15 @@ function renderHistoryPage() {
         : historyRangeMs;
     const showDate = !spanMs || spanMs === 0 || spanMs > 24 * 60 * 60 * 1000;
 
+    const apiHistory = historyLastEntries.some((row) => row.apiRequests != null);
+    const headers = document.querySelectorAll('.history-table th');
+    const headerKeys = apiHistory ? ['header.time', 'metric.codexRequests', 'metric.codexCost', 'accounts.inputTokens', 'accounts.outputTokens'] : ['header.time', 'metric.session', 'metric.weekly', 'metric.sonnet', 'metric.opus', 'metric.extra', 'header.deltaSession', 'header.deltaWeekly'];
+    headers.forEach((header, index) => { header.hidden = index >= headerKeys.length; if (headerKeys[index]) header.textContent = window.i18n.t(headerKeys[index]); });
     const frag = document.createDocumentFragment();
     for (let i = 0; i < pageEntries.length; i++) {
         const entry = pageEntries[i];
         const next = pageEntries[i + 1] || historyLastEntries[start + i + 1];
+        const remainingMode = isHistoryRemainingEntry(entry);
         const tr = document.createElement('tr');
 
         const timeCell = document.createElement('td');
@@ -2365,13 +2541,20 @@ function renderHistoryPage() {
         timeCell.title = date.toLocaleString();
         tr.appendChild(timeCell);
 
-        tr.appendChild(makePctCell(entry.session));
-        tr.appendChild(makePctCell(entry.weekly));
+        if (apiHistory) {
+            for (const value of [formatCount(entry.apiRequests), new Intl.NumberFormat(undefined, { style: 'currency', currency: entry.apiCurrency || 'USD' }).format(entry.apiCost || 0), formatCount(entry.inputTokens), formatCount(entry.outputTokens)]) {
+                const cell = document.createElement('td'); cell.className = 'col-pct'; cell.textContent = value; tr.appendChild(cell);
+            }
+            frag.appendChild(tr);
+            continue;
+        }
+        tr.appendChild(makePctCell(entry.session, remainingMode));
+        tr.appendChild(makePctCell(entry.weekly, remainingMode));
         tr.appendChild(makePctCell(entry.sonnet));
         tr.appendChild(makePctCell(entry.opus));
         tr.appendChild(makePctCell(entry.extraUsage));
-        tr.appendChild(makeDeltaCell(entry.session, next?.session));
-        tr.appendChild(makeDeltaCell(entry.weekly, next?.weekly));
+        tr.appendChild(makeDeltaCell(entry.session, next?.session, remainingMode));
+        tr.appendChild(makeDeltaCell(entry.weekly, next?.weekly, remainingMode));
 
         frag.appendChild(tr);
     }
@@ -2417,7 +2600,7 @@ function parseCustomInputs(fromEl, toEl) {
     return { from, to };
 }
 
-function makePctCell(value) {
+function makePctCell(value, remainingMode = false) {
     const td = document.createElement('td');
     td.className = 'col-pct';
     if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -2427,13 +2610,13 @@ function makePctCell(value) {
     }
     const pct = Math.max(0, value);
     td.textContent = `${Math.round(pct)}%`;
-    if (pct >= dangerThreshold) td.classList.add('col-danger');
-    else if (pct >= warnThreshold) td.classList.add('col-warning');
+    if (isDangerPercent(pct, remainingMode)) td.classList.add('col-danger');
+    else if (isWarnPercent(pct, remainingMode)) td.classList.add('col-warning');
     else if (pct === 0) td.classList.add('col-muted');
     return td;
 }
 
-function makeDeltaCell(current, previous) {
+function makeDeltaCell(current, previous, remainingMode = false) {
     const td = document.createElement('td');
     td.className = 'col-pct';
     if (typeof current !== 'number' || typeof previous !== 'number') {
@@ -2449,7 +2632,9 @@ function makeDeltaCell(current, previous) {
     }
     const rounded = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
     td.textContent = rounded;
+    const improved = remainingMode ? diff > 0 : diff < 0;
     td.classList.add(diff > 0 ? 'col-delta-up' : 'col-delta-down');
+    td.classList.add(improved ? 'col-delta-good' : 'col-delta-bad');
     return td;
 }
 
@@ -2464,9 +2649,9 @@ function renderChart(history) {
         if (showExtraUsage) values.push(entry.extraUsage || 0);
         return values;
     });
-    const yMax = Math.max(10, Math.ceil(Math.max(...allValues) / 10) * 10);
+    const yMax = Math.min(100, Math.max(10, Math.ceil(Math.max(...allValues.filter(Number.isFinite), 0) / 10) * 10));
 
-    const styles = getComputedStyle(document.documentElement);
+    const styles = getComputedStyle(document.body);
     const cssVar = (name, fallback) => {
         const v = styles.getPropertyValue(name).trim();
         return v || fallback;
@@ -2479,23 +2664,23 @@ function renderChart(history) {
     const datasets = [
         {
             label: window.i18n.t('metric.session'),
-            data: history.map((entry) => entry.session),
+            data: chartPoints(history, 'session'),
             borderColor: sessionColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
         },
         {
             label: window.i18n.t('metric.weekly'),
-            data: history.map((entry) => entry.weekly),
+            data: chartPoints(history, 'weekly'),
             borderColor: weeklyColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
         }
@@ -2506,12 +2691,12 @@ function renderChart(history) {
         if (sonnetData.some((value) => value > 0)) {
             datasets.push({
             label: window.i18n.t('metric.sonnet'),
-            data: sonnetData,
+            data: chartPoints(history, 'sonnet'),
             borderColor: sonnetColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
             });
@@ -2523,22 +2708,29 @@ function renderChart(history) {
         if (extraUsageData.some((value) => value > 0)) {
             datasets.push({
             label: window.i18n.t('metric.extraUsage'),
-            data: extraUsageData,
+            data: chartPoints(history, 'extraUsage'),
             borderColor: extraColor,
             backgroundColor: 'transparent',
             borderWidth: 1.5,
             stepped: true,
-            pointRadius: 0,
+            pointRadius: history.length === 1 ? 3 : 0,
             pointHoverRadius: 3,
             pointHitRadius: 10
             });
         }
     }
 
+    const apiChart = history.some((row) => row.apiRequests != null);
+    const chartCurrency = history.find((row) => row.apiCurrency)?.apiCurrency || latestUsageData?.codex_usage?.currency || 'USD';
+    if (apiChart) {
+        datasets.splice(0, datasets.length,
+            { label: window.i18n.t('metric.codexRequests'), data: chartPoints(history, 'apiRequests'), borderColor: sessionColor, borderWidth: 1.5, pointRadius: history.length === 1 ? 3 : 0, yAxisID: 'y' },
+            { label: window.i18n.t('metric.codexCost'), data: chartPoints(history, 'apiCost'), borderColor: weeklyColor, borderWidth: 1.5, pointRadius: history.length === 1 ? 3 : 0, yAxisID: 'cost' }
+        );
+    }
     usageChart = new Chart(elements.usageChart.getContext('2d'), {
         type: 'line',
         data: {
-            labels: history.map((entry) => entry.timestamp),
             datasets
         },
         options: {
@@ -2550,10 +2742,14 @@ function renderChart(history) {
                 mode: 'nearest'
             },
             scales: {
+                ...(apiChart ? { cost: { axis: 'y', position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { color: weeklyColor, callback: (value) => new Intl.NumberFormat(undefined, { style: 'currency', currency: chartCurrency }).format(value) } } } : {}),
                 x: {
-                    offset: true,
+                    type: 'linear',
+                    min: history[0].timestamp,
+                    max: history.at(-1).timestamp === history[0].timestamp ? history[0].timestamp + 60000 : history.at(-1).timestamp,
+                    offset: false,
                     ticks: {
-                        autoSkip: false,
+                        maxTicksLimit: 5,
                         maxRotation: 0,
                         minRotation: 0,
                         color: cssVar('--ink-mute', '#8a8070'),
@@ -2563,7 +2759,7 @@ function renderChart(history) {
                         },
                         callback(value, index) {
                             const tf = (window._cachedSettings || {}).timeFormat || '12h';
-                            return formatXAxisTick(history, index, tf);
+                            return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: tf !== '24h' });
                         }
                     },
                     grid: {
@@ -2575,14 +2771,14 @@ function renderChart(history) {
                 },
                 y: {
                     min: 0,
-                    max: yMax,
+                    ...(apiChart ? {} : { max: yMax }),
                     ticks: {
                         color: cssVar('--ink-mute', '#8a8070'),
                         font: {
                             family: cssVar('--font-mono', 'monospace'),
                             size: 9
                         },
-                        callback: (value) => `${value}%`
+                        callback: (value) => apiChart ? formatCount(value) : `${value}%`
                     },
                     grid: {
                         color: cssVar('--hairline', 'rgba(236,214,170,0.09)'),
@@ -2598,6 +2794,11 @@ function renderChart(history) {
                     display: false
                 },
                 tooltip: {
+                    backgroundColor: cssVar('--bg-raised', '#222'),
+                    titleColor: cssVar('--ink', '#fff'),
+                    bodyColor: cssVar('--ink-soft', '#ddd'),
+                    borderColor: cssVar('--hairline-strong', '#555'),
+                    borderWidth: 1,
                     callbacks: {
                         title(items) {
                             const point = history[items[0].dataIndex];
@@ -2609,13 +2810,14 @@ function renderChart(history) {
                             });
                         },
                         label(item) {
-                            return `${item.dataset.label}: ${Math.round(item.parsed.y)}%`;
+                            return `${item.dataset.label}: ${apiChart ? item.dataset.yAxisID === 'cost' ? new Intl.NumberFormat(undefined, { style: 'currency', currency: chartCurrency }).format(item.parsed.y) : formatCount(item.parsed.y) : `${Math.round(item.parsed.y)}%`}`;
                         }
                     }
                 }
             }
         }
     });
+
 }
 
 function formatXAxisTick(history, index, timeFormat) {
@@ -2701,7 +2903,9 @@ let warnThreshold = 75;
 let dangerThreshold = 90;
 
 async function loadSettings() {
+    await savedHistory.refresh();
     const settings = await window.electronAPI.getSettings();
+    window._cachedSettings = settings;
 
     elements.autoStartToggle.checked = settings.autoStart;
     elements.alwaysOnTopToggle.checked = settings.alwaysOnTop;
@@ -2709,6 +2913,7 @@ async function loadSettings() {
     elements.dangerThreshold.value = settings.dangerThreshold;
     elements.timeFormat.value = settings.timeFormat || '12h';
     elements.weeklyDateFormat.value = settings.weeklyDateFormat || 'date';
+    if (elements.codexQuotaDisplay) elements.codexQuotaDisplay.value = settings.codexQuotaDisplay || 'used';
     if (elements.languageSelect) elements.languageSelect.value = settings.language || 'tr';
     if (elements.refreshInterval) {
         const raw = parseInt(settings.refreshInterval);
@@ -2774,6 +2979,7 @@ async function saveSettings() {
     const activeThemeStyleBtn = document.querySelector('.theme-style-btn.active');
     const warn = parseInt(elements.warnThreshold.value) || 75;
     const danger = parseInt(elements.dangerThreshold.value) || 90;
+    const previousCodexQuotaDisplay = activeCodexQuotaDisplay();
 
     warnThreshold = warn;
     dangerThreshold = danger;
@@ -2793,6 +2999,7 @@ async function saveSettings() {
         dangerThreshold: danger,
         timeFormat: elements.timeFormat.value || '12h',
         weeklyDateFormat: elements.weeklyDateFormat.value || 'date',
+        codexQuotaDisplay: elements.codexQuotaDisplay ? elements.codexQuotaDisplay.value || 'used' : 'used',
         language: elements.languageSelect ? elements.languageSelect.value : 'tr',
         refreshInterval: elements.refreshInterval ? String(Math.max(15, parseInt(elements.refreshInterval.value) || 300)) : '300',
         usageAlerts: elements.usageAlertsToggle.checked,
@@ -2819,6 +3026,11 @@ async function saveSettings() {
     applyThemeStyle(settings.themeStyle);
     if (elements.pinBtn) elements.pinBtn.classList.toggle('active', settings.alwaysOnTop !== false);
 
+    if (latestUsageData?.provider === 'codex' && previousCodexQuotaDisplay !== settings.codexQuotaDisplay) {
+        await fetchUsageData();
+        return;
+    }
+
     // Re-render resets-at values immediately with new format
     if (latestUsageData) {
         refreshTimers();
@@ -2837,13 +3049,15 @@ async function saveSettings() {
 }
 
 function applyTheme(theme) {
+    if (themeController) { themeController.apply({ theme }); return; }
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const useDark = theme === 'dark' || (theme === 'system' && prefersDark);
     document.body.classList.toggle('theme-light', !useDark);
 }
 
 function applyThemeStyle(style) {
-    const allowed = new Set(['classic', 'plate', 'nord', 'sunset', 'mono']);
+    if (themeController) { themeController.apply({ themeStyle: style }); return; }
+    const allowed = new Set(['classic', 'plate', 'nord', 'sunset', 'mono', 'glass', 'graphite']);
     const value = allowed.has(style) ? style : 'classic';
     document.body.setAttribute('data-theme-style', value);
 }

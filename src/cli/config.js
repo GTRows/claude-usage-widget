@@ -48,8 +48,8 @@ function writeConfig(patch) {
   return next;
 }
 
-function loadCredentials() {
-  const requestedProvider = process.env.CLAUDE_USAGE_PROVIDER || process.env.USAGE_PROVIDER;
+function loadCredentials(requestedProviderOverride = null) {
+  const requestedProvider = requestedProviderOverride || process.env.CLAUDE_USAGE_PROVIDER || process.env.USAGE_PROVIDER;
   const provider = normalizeProvider(requestedProvider || ((process.env.OPENAI_ADMIN_KEY || process.env.OPENAI_API_KEY) ? 'codex' : 'claude'));
   const fromEnv = {
     id: process.env.CLAUDE_USAGE_ACCOUNT || DEFAULT_ACCOUNT_ID,
@@ -59,6 +59,7 @@ function loadCredentials() {
     apiKey: process.env.OPENAI_ADMIN_KEY || process.env.OPENAI_API_KEY || null,
     organizationHeader: process.env.OPENAI_ORGANIZATION_ID || null,
     projectId: process.env.OPENAI_PROJECT_ID || null,
+    codexQuotaDisplay: process.env.CODEX_QUOTA_DISPLAY || null,
   };
   if (provider === 'claude' && fromEnv.sessionKey && fromEnv.organizationId) return fromEnv;
   if (provider === 'codex' && fromEnv.apiKey) return fromEnv;
@@ -68,6 +69,12 @@ function loadCredentials() {
   const accounts = normalizeAccounts(cfg.accounts);
   const legacy = legacyClaudeAccount(cfg);
   const active = getActiveAccount(accounts, activeAccountId) || legacy;
+  if (requestedProvider) {
+    if (active && active.provider === provider) return active;
+    const matching = accounts.find((account) => account.provider === provider);
+    if (matching) return matching;
+    if (provider === 'codex') return fromEnv;
+  }
   if (active) return active;
 
   return {
