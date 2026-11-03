@@ -15,14 +15,12 @@ function fixture(reduce = false) {
 }
 
 describe('account switch presentation', () => {
-  it('keeps the window locked after the target account is ready', () => {
+  it('finishes the loading state when the target account is ready', () => {
     const f = fixture();
     f.flow.begin('personal');
-    expect(f.flow.isLocked()).toBe(true);
     expect(f.attributes['aria-busy']).toBe('true');
     f.flow.complete('personal');
     expect(f.flow.isPending()).toBe(false);
-    expect(f.flow.isLocked()).toBe(true);
     expect(f.classes.has('account-switching')).toBe(false);
     expect(f.view.animate).toHaveBeenCalledTimes(1);
   });
@@ -39,12 +37,11 @@ describe('account switch presentation', () => {
     expect(f.flow.isPending()).toBe(false);
   });
 
-  it('unlocks layout changes and cancels the current animation on reset', () => {
+  it('cancels the current animation on reset', () => {
     const f = fixture();
     f.flow.begin('personal');
     f.flow.complete('personal');
     f.flow.reset();
-    expect(f.flow.isLocked()).toBe(false);
     expect(f.classes.size).toBe(0);
     expect(f.cancel).toHaveBeenCalledTimes(1);
   });
@@ -57,14 +54,4 @@ describe('account switch presentation', () => {
     expect(f.attributes['aria-busy']).toBe('false');
   });
 
-  it('allows an explicit layout change without discarding the pending account', () => {
-    const f = fixture();
-    f.flow.begin('personal');
-    f.flow.unlock();
-    expect(f.flow.isLocked()).toBe(false);
-    expect(f.flow.isFor('personal')).toBe(true);
-    expect(f.attributes['aria-busy']).toBe('true');
-    f.flow.complete('personal');
-    expect(f.flow.isPending()).toBe(false);
-  });
 });

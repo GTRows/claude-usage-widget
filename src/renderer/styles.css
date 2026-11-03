@@ -171,7 +171,19 @@ body.theme-light .widget-container::before {
 .widget-container > * {
     position: relative;
     z-index: 1;
+    flex-shrink: 0;
 }
+
+#mainContent, #loginContainer, #noUsageContainer, #loadingContainer {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+body.compact-mode .widget-container { overflow-y: auto; }
+body.compact-mode .title-bar { position: sticky; top: 0; z-index: 11; }
 
 /* Drag handle: the title-bar is draggable, children opt out */
 .title-bar { -webkit-app-region: drag; }

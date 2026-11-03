@@ -1,6 +1,6 @@
 import { accountProviderLabel, quotaText } from './account-presentation.js';
 
-export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChanged, onResize, setup }) {
+export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChanged, setup }) {
   const byId = (id) => document.getElementById(id);
   let state = { accounts: [], activeAccountId: null, snapshots: [] };
   const node = (tag, className, text) => {
@@ -64,7 +64,6 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
     byId('cancelAddAccount').hidden = state.accounts.length === 0;
     const name = byId('renameAccountInput');
     if (document.activeElement !== name) name.value = active?.label || '';
-    onResize();
   }
 
   async function refresh(snapshots) {
@@ -103,7 +102,6 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
       list.append(button);
     }
     byId('localProfileEmpty').hidden = profiles.length > 0;
-    onResize();
   }
 
   byId('settingsAddAccountBtn').addEventListener('click', onAdd);
