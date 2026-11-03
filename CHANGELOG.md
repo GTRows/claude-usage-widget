@@ -16,6 +16,8 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ## [1.17.0-gtrows.1] - 2026-11-03
 
+Independent account monitoring and desktop themes contributed by KadirOzturkk in PR #2.
+
 ### Added
 - Independent account monitoring for local Claude Code and Codex subscription profiles, alongside Claude web and OpenAI API accounts.
 - Glass and Graphite desktop themes with dark, light, and system appearance modes.
@@ -23,11 +25,13 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 
 ### Changed
 - Improve macOS tray activation, Dock visibility, window recovery, and clean shutdown.
+- Use native macOS menu bar percentages and monochrome Retina tray icons.
 
 ### Fixed
 - Preserve unrelated account history during refresh and prevent delayed settings saves from changing another account's retention policy.
 - Keep API billing separate from local Codex subscription metadata and normalize quota history when switching used/remaining display modes.
 - Preserve the quota display and CLI options from v1.16.4-gtrows.2.
+- Pin Linux packaging to Ubuntu 24.04 so the bundled FPM remains compatible with RPM buildroot handling.
 
 ## [1.16.4-gtrows.2] - 2026-05-29
 
