@@ -16,6 +16,7 @@ const { selectAccountHistory, appendAccountSample, removeAccountHistory } = requ
 const { discoverLocalProfiles, linkLocalProfile, fetchLocalUsage } = require('./src/providers');
 const { fitWindowBounds, trayWindowBounds } = require('./src/shared/window-geometry');
 const { createDockVisibility } = require('./src/main/dock-visibility');
+const { createTrayFrameImage, createMacTrayPlaceholder } = require('./src/main/tray-image');
 const { historyForSource, historySources, applyHistoryPolicies, disconnectAccount } = require('./src/main/history-sources');
 const {
   hasUsableCredentials,
@@ -232,7 +233,7 @@ function buildTrayMenuTemplate() {
 function createTray() {
   try {
     const trayIconPath = path.join(__dirname, process.platform === 'darwin' ? 'assets/tray-icon-mac.png' : process.platform === 'linux' ? 'assets/tray-icon-linux.png' : 'assets/tray-icon.png');
-    defaultTrayImage = nativeImage.createFromPath(trayIconPath);
+    defaultTrayImage = process.platform === 'darwin' ? createMacTrayPlaceholder(nativeImage) : nativeImage.createFromPath(trayIconPath);
     tray = new Tray(defaultTrayImage);
 
     const contextMenu = Menu.buildFromTemplate(buildTrayMenuTemplate());
@@ -981,13 +982,13 @@ function applyTrayFrame(index) {
   }
   const frame = trayIconFrames[index % trayIconFrames.length];
   try {
-    const img = nativeImage.createFromDataURL(frame.dataURL);
-    if (!img.isEmpty()) tray.setImage(img);
+    const img = createTrayFrameImage(nativeImage, frame, process.platform);
+    if (!img.isEmpty() || (process.platform === 'darwin' && frame.nativeTextOnly)) tray.setImage(img);
   } catch (err) {
     debugLog('Failed to apply tray frame:', err.message);
   }
   if (frame.tooltip) tray.setToolTip(frame.tooltip);
-  if (process.platform === 'darwin') tray.setTitle(frame.title || '');
+  if (process.platform === 'darwin') tray.setTitle((frame.title || '').trim(), { fontType: 'monospacedDigit' });
 }
 
 function startTrayCycle() {

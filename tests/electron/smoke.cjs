@@ -1,5 +1,5 @@
 // Fixture-only integration test. It never reads real profile credentials.
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const assert = require('assert/strict');
@@ -44,6 +44,18 @@ async function waitFor(test, description) {
 
 app.whenReady().then(async () => {
   try {
+    if (process.platform === 'darwin') {
+      const { createTrayFrameImage, createMacTrayPlaceholder } = require(path.join(root, 'src/main/tray-image'));
+      const placeholder = createMacTrayPlaceholder(nativeImage);
+      assert.deepEqual(placeholder.getSize(), { width: 16, height: 16 });
+      assert.equal(placeholder.isTemplateImage(), true);
+      const bitmap = nativeImage.createFromBitmap(Buffer.alloc(32 * 32 * 4, 255), { width: 32, height: 32 });
+      const icon = createTrayFrameImage(nativeImage, { dataURL: bitmap.toDataURL(), template: true }, 'darwin');
+      assert.deepEqual(icon.getSize(), { width: 16, height: 16 });
+      assert.equal(icon.getScaleFactors().includes(2), true);
+      assert.equal(icon.isTemplateImage(), true);
+      assert.equal(createTrayFrameImage(nativeImage, { nativeTextOnly: true }, 'darwin').isEmpty(), true);
+    }
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html')) || BrowserWindow.getAllWindows()[0];
     win.webContents.on('console-message', (_, level, message) => { if (level >= 2) process.stderr.write(`renderer: ${message}\n`); });
     const js = (source) => win.webContents.executeJavaScript(source);
@@ -57,6 +69,7 @@ app.whenReady().then(async () => {
       return;
     }
     await waitFor(async () => await js('document.getElementById("sessionPercentage")?.textContent === "38%"'), 'initial usage');
+    if (process.platform === 'darwin') assert.equal(await js('document.getElementById("trayStyleSelect").options[0].textContent'), 'Percentage');
     assert.equal(await js('document.querySelectorAll(".account-card").length'), 3);
     assert.equal(await js('document.body.dataset.themeStyle'), 'glass');
     const publicState = await js('window.electronAPI.getCredentials()');
