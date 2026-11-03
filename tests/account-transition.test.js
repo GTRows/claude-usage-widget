@@ -56,4 +56,15 @@ describe('account switch presentation', () => {
     expect(f.view.animate).not.toHaveBeenCalled();
     expect(f.attributes['aria-busy']).toBe('false');
   });
+
+  it('allows an explicit layout change without discarding the pending account', () => {
+    const f = fixture();
+    f.flow.begin('personal');
+    f.flow.unlock();
+    expect(f.flow.isLocked()).toBe(false);
+    expect(f.flow.isFor('personal')).toBe(true);
+    expect(f.attributes['aria-busy']).toBe('true');
+    f.flow.complete('personal');
+    expect(f.flow.isPending()).toBe(false);
+  });
 });

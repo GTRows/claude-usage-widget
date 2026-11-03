@@ -34,8 +34,13 @@ export function createAccountTransition({ body, content, reducedMotion }) {
     body.setAttribute('aria-busy', 'false');
   }
 
+  function unlock() {
+    locked = false;
+    body.classList.remove('account-size-locked');
+  }
+
   return {
-    begin, complete, reset,
+    begin, complete, reset, unlock,
     isLocked: () => locked,
     isPending: () => target !== null,
     isFor: (id) => target === id,

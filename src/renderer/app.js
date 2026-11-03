@@ -1080,6 +1080,7 @@ function leaveSettings() {
 }
 
 async function showSavedHistory(source) {
+    accountTransition.reset();
     selectionVersion++;
     archiveReturnView = { graphVisible, historyVisible };
     leaveSettings();
@@ -1585,6 +1586,7 @@ function checkUsageAlerts(data) {
 
 // Apply or remove compact mode — switches view, resizes window, syncs all toggles
 function applyCompactMode(compact) {
+    accountTransition.unlock();
     document.body.classList.toggle('compact-mode', compact);
     isCompactMode = compact;
 
