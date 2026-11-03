@@ -41,7 +41,6 @@ body.compact-mode .account-status { grid-column: 1 / -1; text-align: left; }
 body.compact-mode .account-overview { margin: 0 10px 8px; }
 body.compact-mode .account-list { max-height: 218px; }
 
-body.account-size-locked #mainContent { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 body.account-switching :is(#mainContent, #compactContent) :is(.metric-pct, .metric-dateline, .metric-card-foot, .metric-ring, .progress-fill, .compact-pct, .compact-bar-fill) { opacity: 0; }
 body.account-switching :is(.graph-section, .history-section, .expand-section) { opacity: 0.3; pointer-events: none; }
 body.account-switching :is(#mainContent, #compactContent)::after {

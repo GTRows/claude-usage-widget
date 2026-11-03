@@ -105,9 +105,9 @@ function activeHistory() {
 const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 let mainWindow = null;
+let compactWindowMode = store.get('settings.compactMode', false);
 let quitting = false;
 let dockVisibility = null;
-let settingsReturnBounds = null;
 app.on('before-quit', () => { quitting = true; dockVisibility?.dispose(); });
 let tray = null;
 let trayIconFrames = [];
@@ -117,7 +117,8 @@ let defaultTrayImage = null;
 
 const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_COMPACT_WIDTH = 320;
-const WIDGET_HEIGHT = 155;
+const WIDGET_HEIGHT = 720;
+const WIDGET_COMPACT_HEIGHT = 360;
 const CHART_DAYS = 7;
 
 function storeUsageHistory(data, accountId) {
@@ -148,7 +149,7 @@ function createMainWindow() {
   const savedPosition = store.get('windowPosition');
   const windowOptions = {
     width: WIDGET_WIDTH,
-    height: WIDGET_HEIGHT,
+    height: store.get('settings.compactMode', false) ? WIDGET_COMPACT_HEIGHT : WIDGET_HEIGHT,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -156,6 +157,7 @@ function createMainWindow() {
     roundedCorners: false,
     alwaysOnTop: store.get('settings.alwaysOnTop', true),
     resizable: false,
+    movable: !compactWindowMode,
     icon: path.join(__dirname, process.platform === 'darwin' ? 'assets/icon.icns' : process.platform === 'linux' ? 'assets/logo.png' : 'assets/icon.ico'),
     webPreferences: {
       nodeIntegration: false,
@@ -165,11 +167,11 @@ function createMainWindow() {
     }
   };
 
-  if (savedPosition) {
-    const { screen } = require('electron');
-    const display = screen.getDisplayMatching({ ...savedPosition, width: WIDGET_WIDTH, height: WIDGET_HEIGHT });
-    Object.assign(windowOptions, fitWindowBounds({ ...savedPosition, width: WIDGET_WIDTH, height: WIDGET_HEIGHT }, display.workArea));
-  }
+  const { screen } = require('electron');
+  if (store.get('settings.compactMode', false)) windowOptions.width = WIDGET_COMPACT_WIDTH;
+  const position = savedPosition || screen.getPrimaryDisplay().workArea;
+  const initialBounds = { x: position.x, y: position.y, width: windowOptions.width, height: windowOptions.height };
+  Object.assign(windowOptions, fitWindowBounds(initialBounds, screen.getDisplayMatching(initialBounds).workArea));
 
   mainWindow = new BrowserWindow(windowOptions);
   mainWindow.loadFile(path.join(__dirname, 'src/renderer/index.html'));
@@ -316,14 +318,15 @@ function applyTaskbarVisibility() {
 }
 
 function applyCompactWindowMode(compact) {
-  if (!mainWindow) return;
+  if (!mainWindow || compact === compactWindowMode) return;
+  compactWindowMode = compact;
   if (compact) {
     mainWindow.setMovable(false);
-    mainWindow.setContentSize(WIDGET_COMPACT_WIDTH, mainWindow.getContentSize()[1]);
+    mainWindow.setContentSize(WIDGET_COMPACT_WIDTH, WIDGET_COMPACT_HEIGHT);
     if (tray) anchorAboveTray(tray.getBounds());
   } else {
     mainWindow.setMovable(true);
-    mainWindow.setContentSize(WIDGET_WIDTH, mainWindow.getContentSize()[1]);
+    mainWindow.setContentSize(WIDGET_WIDTH, WIDGET_HEIGHT);
     const saved = store.get('windowPosition');
     if (saved) mainWindow.setPosition(saved.x, saved.y);
     if (!mainWindow.isVisible()) mainWindow.show();
@@ -443,45 +446,8 @@ ipcMain.on('quit-app', () => {
 
 let _settingsModeActive = false;
 
-ipcMain.on('resize-window', (event, height) => {
-  if (!mainWindow) return;
-  const { screen } = require('electron');
-  const bounds = mainWindow.getBounds();
-  const display = screen.getDisplayMatching(bounds);
-  const maxH = Math.max(200, display.workArea.height - 40);
-  const clamped = Math.min(height, maxH);
-  const compact = store.get('settings.compactMode', false);
-  const width = _settingsModeActive ? WIDGET_WIDTH : (compact ? WIDGET_COMPACT_WIDTH : WIDGET_WIDTH);
-  mainWindow.setContentSize(width, clamped);
-  if (compact && !_settingsModeActive && tray) {
-    anchorAboveTray(tray.getBounds());
-  } else {
-    recoverWindow();
-  }
-});
-
 ipcMain.on('set-settings-window', (event, on) => {
-  if (!mainWindow) return;
-  const compact = store.get('settings.compactMode', false);
-  const { screen } = require('electron');
-  if (on) {
-    if (!_settingsModeActive && !compact) settingsReturnBounds = mainWindow.getBounds();
-    _settingsModeActive = true;
-    const area = screen.getDisplayMatching(mainWindow.getBounds()).workArea;
-    mainWindow.setMovable(true);
-    mainWindow.setBounds(fitWindowBounds({ ...mainWindow.getBounds(), width: WIDGET_WIDTH, height: 640 }, area));
-    if (compact && tray) anchorAboveTray();
-  } else {
-    if (!compact && settingsReturnBounds) {
-      const area = screen.getDisplayMatching(settingsReturnBounds).workArea;
-      mainWindow.setBounds(fitWindowBounds(settingsReturnBounds, area));
-      mainWindow.setMovable(true);
-      settingsReturnBounds = null;
-    } else if (compact) {
-      applyCompactWindowMode(true);
-    }
-    _settingsModeActive = false;
-  }
+  _settingsModeActive = !!on;
 });
 
 ipcMain.handle('get-window-position', () => {
@@ -627,8 +593,7 @@ ipcMain.on('show-notification', (event, { title, body }) => {
   }
 });
 
-// Resize window for compact vs normal mode
-// Compact: 290px wide, normal: 530px wide. Height stays managed by renderer.
+// Only explicit view mode changes resize the window.
 ipcMain.on('set-compact-mode', (event, compact) => {
   if (!mainWindow) return;
   const wasCompact = store.get('settings.compactMode', false);
@@ -1041,7 +1006,7 @@ app.whenReady().then(async () => {
     mainWindow.setAlwaysOnTop(alwaysOnTop, 'floating');
   }
   if (store.get('settings.compactMode', false)) {
-    applyCompactWindowMode(true);
+    anchorAboveTray();
   }
   if (headlessMode && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.hide();

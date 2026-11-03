@@ -24,7 +24,7 @@ const history = accounts.flatMap((account, accountIndex) => Array.from({ length:
   session: Math.round((i % 20) * 2 + accountIndex * 9), weekly: Math.round(i * 0.55 + accountIndex * 5),
 })));
 history.push({ timestamp: Date.now() - 7 * 86400000, accountId: 'personal', session: 9, weekly: 12 });
-fs.writeFileSync(path.join(dataDir, 'config.json'), JSON.stringify({ accounts, usageHistory: history, settings: { activeProfile: process.env.WIDGET_BROKEN_START ? 'broken' : 'team', language: 'en', theme: 'dark', themeStyle: 'glass', graphVisible: true, usageAlerts: false } }));
+fs.writeFileSync(path.join(dataDir, 'config.json'), JSON.stringify({ accounts, usageHistory: history, settings: { activeProfile: process.env.WIDGET_BROKEN_START ? 'broken' : 'team', language: 'en', theme: 'dark', themeStyle: 'glass', compactMode: process.env.WIDGET_COMPACT_START === '1', graphVisible: true, usageAlerts: false } }));
 const api = require(path.join(root, 'src/cli/api'));
 api.fetchCodexUsage = async () => ({ provider: 'codex', codex_usage: { num_model_requests: 250, cost: 0.23, input_tokens: 50000, output_tokens: 12000, currency: 'USD' }, extra_usage: { used_cents: 23, currency: 'USD', is_enabled: true } });
 const adapters = require(path.join(root, 'src/providers'));
@@ -78,6 +78,17 @@ app.whenReady().then(async () => {
       return;
     }
     await waitFor(async () => await js('document.getElementById("sessionPercentage")?.textContent === "38%"'), 'initial usage');
+    if (process.env.WIDGET_COMPACT_START === '1') {
+      await delay(350);
+      assert.deepEqual(win.getContentSize(), [320, 360]);
+      const size = win.getContentSize();
+      await js('document.getElementById("refreshBtn").click()');
+      await delay(350);
+      assert.deepEqual(win.getContentSize(), size);
+      process.stdout.write('ELECTRON_SMOKE_PASS: stable persisted compact startup\n');
+      app.quit();
+      return;
+    }
     if (process.platform === 'darwin') assert.equal(await js('document.getElementById("trayStyleSelect").options[0].textContent'), 'Percentage');
     assert.equal(await js('document.querySelectorAll(".account-card").length'), 3);
     assert.equal(await js('document.getElementById("addAccountBtn")'), null);
@@ -88,6 +99,7 @@ app.whenReady().then(async () => {
     assert.equal(publicState.apiKey, undefined);
     if (process.env.WIDGET_HOLD === '1') { process.stdout.write('WIDGET_HOLD_READY\n'); return; }
     await delay(250);
+    await require('./stable-window.cjs')(win, js, delay, screenshots);
     fs.writeFileSync(path.join(screenshots, 'glass-dark.png'), (await win.webContents.capturePage()).toPNG());
     slowProfile = 'personal';
     await js(`window.electronAPI.saveCredentials({ id: 'personal', provider: 'claude', label: 'Claude · Personal' })`);
@@ -143,9 +155,7 @@ app.whenReady().then(async () => {
     assert(setupHeight >= 480, `Account setup collapsed to ${setupHeight}px`);
     await delay(600);
     assert(Math.abs(win.getContentSize()[1] - setupHeight) <= 2, 'Account setup height must stay stable');
-    win.setContentSize(win.getContentSize()[0], 155);
-    await delay(600);
-    assert(win.getContentSize()[1] >= 480, 'Account setup must recover its content height from a small window');
+    assert.deepEqual(win.getContentSize(), switchBounds, 'Account setup must keep the normal window size');
     fs.writeFileSync(path.join(screenshots, 'account-setup.png'), (await win.webContents.capturePage()).toPNG());
     await js('document.getElementById("cancelAddAccount").click()');
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'cancel setup');

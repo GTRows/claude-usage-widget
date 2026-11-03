@@ -1,13 +1,11 @@
 export function createAccountTransition({ body, content, reducedMotion }) {
   let target = null;
-  let locked = false;
   let animation = null;
 
   function begin(accountId) {
     animation?.cancel();
     target = accountId;
-    locked = true;
-    body.classList.add('account-size-locked', 'account-switching');
+    body.classList.add('account-switching');
     body.setAttribute('aria-busy', 'true');
   }
 
@@ -29,19 +27,12 @@ export function createAccountTransition({ body, content, reducedMotion }) {
     animation?.cancel();
     animation = null;
     target = null;
-    locked = false;
-    body.classList.remove('account-size-locked', 'account-switching');
+    body.classList.remove('account-switching');
     body.setAttribute('aria-busy', 'false');
   }
 
-  function unlock() {
-    locked = false;
-    body.classList.remove('account-size-locked');
-  }
-
   return {
-    begin, complete, reset, unlock,
-    isLocked: () => locked,
+    begin, complete, reset,
     isPending: () => target !== null,
     isFor: (id) => target === id,
     accepts: (id) => target === null || target === id,

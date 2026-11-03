@@ -286,7 +286,6 @@ function displayFetchError(error) {
             : window.i18n.t('noUsage.errorBody', { error: detail || 'Unknown error' });
     }
     accountTransition.complete(credentials?.id);
-    resizeWidget();
 }
 
 function selectedProvider() {
@@ -371,7 +370,6 @@ async function init() {
         }
     }
     setupEventListeners();
-    startContentObserver();
 
     // Hydrate language BEFORE first paint so the first applyTranslations()
     // pass renders the persisted locale rather than the default.
@@ -427,14 +425,12 @@ async function init() {
             leaveSettings();
             showLoginRequired();
             accountPanel.discover();
-            resizeWidget();
         },
         onCancel: async () => {
             if (!accountSetup.cancel()) return;
             await reloadActiveAccount();
         },
         onChanged: async (_account, token) => reloadActiveAccount({ token }),
-        onResize: resizeWidget
     });
     savedHistory = createSavedHistory({ api: window.electronAPI, t: (key) => window.i18n.t(key), onView: showSavedHistory, onBack: closeSavedHistory });
     await accountPanel.discover();
@@ -568,7 +564,6 @@ function setupEventListeners() {
         if (graphVisible) {
             await loadChart();
         }
-        if (!isCompactMode) resizeWidget();
         _saveViewState();
     });
 
@@ -578,7 +573,6 @@ function setupEventListeners() {
             elements.historyBtn.classList.toggle('active', historyVisible);
             elements.historySection.style.display = historyVisible ? 'block' : 'none';
             if (historyVisible) await loadHistoryTable();
-            if (!isCompactMode) resizeWidget();
             _saveViewState();
         });
     }
@@ -595,7 +589,6 @@ function setupEventListeners() {
                 elements.historyRangeCustom.style.display = 'flex';
                 elements.historySection.classList.add('custom-active');
                 seedCustomInputs(elements.historyRangeFrom, elements.historyRangeTo, historyCustomFrom, historyCustomTo, historyRangeMs);
-                if (!isCompactMode) resizeWidget();
                 const seeded = parseCustomInputs(elements.historyRangeFrom, elements.historyRangeTo);
                 if (seeded) {
                     historyCustomFrom = seeded.from;
@@ -614,7 +607,6 @@ function setupEventListeners() {
             if (!Number.isFinite(range)) return;
             historyRangeMs = range;
             historyPage = 1;
-            if (!isCompactMode) resizeWidget();
             await loadHistoryTable();
         });
     }
@@ -687,7 +679,6 @@ function setupEventListeners() {
                 elements.graphRangeCustom.style.display = 'flex';
                 elements.graphSection.classList.add('custom-active');
                 seedCustomInputs(elements.graphRangeFrom, elements.graphRangeTo, graphCustomFrom, graphCustomTo, graphRangeMs);
-                if (!isCompactMode) resizeWidget();
                 return;
             }
             graphCustomActive = false;
@@ -696,7 +687,6 @@ function setupEventListeners() {
             const range = parseInt(btn.dataset.range, 10);
             if (!Number.isFinite(range)) return;
             graphRangeMs = range;
-            if (!isCompactMode) resizeWidget();
             await loadChart();
         });
     }
@@ -792,7 +782,6 @@ function setupEventListeners() {
         if (graphVisible) {
             loadChart();
         }
-        resizeWidget();
         _saveViewState();
     });
 
@@ -801,11 +790,9 @@ function setupEventListeners() {
         await saveSettings();
         elements.settingsOverlay.style.display = 'none';
         _settingsOpen = false;
-        _lastResizeHeight = 0;
         if (window.electronAPI.setSettingsWindow) {
             window.electronAPI.setSettingsWindow(false);
         }
-        resizeWidget();
         startAutoUpdate();
     });
 
@@ -871,7 +858,6 @@ function setupEventListeners() {
     // Update banner
     elements.updateBannerDismiss.addEventListener('click', () => {
         elements.updateBanner.style.display = 'none';
-        resizeWidget();
     });
     elements.updateBannerText.addEventListener('click', () => {
         window.electronAPI.openExternal(latestReleaseUrl);
@@ -933,13 +919,11 @@ function setupEventListeners() {
     elements.settingsBtn.addEventListener('click', async () => {
         stopAutoUpdate();
         await loadSettings();
+        document.getElementById('widgetContainer').scrollTop = 0;
         elements.settingsOverlay.style.display = 'flex';
         _settingsOpen = true;
-        _lastResizeHeight = SETTINGS_HEIGHT;
         if (window.electronAPI.setSettingsWindow) {
             window.electronAPI.setSettingsWindow(true);
-        } else {
-            window.electronAPI.resizeWindow(SETTINGS_HEIGHT);
         }
     });
 
@@ -1075,7 +1059,6 @@ function leaveSettings() {
     elements.settingsOverlay.style.display = 'none';
     elements.compactSettingsOverlay.style.display = 'none';
     _settingsOpen = false;
-    _lastResizeHeight = 0;
     window.electronAPI.setSettingsWindow(false);
 }
 
@@ -1102,7 +1085,6 @@ async function showSavedHistory(source) {
     window.electronAPI.setSettingsWindow(true);
     await loadChart();
     await loadHistoryTable();
-    resizeWidget();
 }
 
 async function closeSavedHistory() {
@@ -1205,7 +1187,6 @@ async function fetchUsageData() {
         displayFetchError(new Error(window.i18n.t('accounts.fetchFailed')));
     } finally {
         isFetching = false;
-        resizeWidget();
         if (refreshPending && !addingAccount) { refreshPending = false; fetchUsageData(); }
     }
 }
@@ -1445,56 +1426,7 @@ function refreshExtraTimers() {
     });
 }
 
-let _lastResizeHeight = 0;
 let _settingsOpen = false;
-const SETTINGS_HEIGHT = 640;
-function measureAndResize() {
-    if (_settingsOpen || accountTransition.isLocked()) return;
-    const container = document.getElementById('widgetContainer');
-    if (!container) return;
-    let total = 0;
-    for (const child of container.children) {
-        const style = getComputedStyle(child);
-        if (style.display === 'none' || style.position === 'absolute' || style.position === 'fixed') continue;
-        const mt = parseFloat(style.marginTop) || 0;
-        const mb = parseFloat(style.marginBottom) || 0;
-        const childHeight = child === elements.loginContainer ? Math.max(child.offsetHeight, child.scrollHeight) : child.offsetHeight;
-        total += childHeight + mt + mb;
-    }
-    const containerStyle = getComputedStyle(container);
-    const padding = 12 + (parseFloat(containerStyle.borderTopWidth) || 0)
-        + (parseFloat(containerStyle.borderBottomWidth) || 0);
-    const height = Math.max(Math.ceil(total) + padding, 120);
-    if (height === _lastResizeHeight) return;
-    _lastResizeHeight = height;
-    window.electronAPI.resizeWindow(height);
-}
-
-function resizeWidget() {
-    requestAnimationFrame(() => {
-        requestAnimationFrame(measureAndResize);
-    });
-}
-
-let _contentObserver = null;
-function startContentObserver() {
-    if (_contentObserver) return;
-    const container = document.getElementById('widgetContainer');
-    if (!container || typeof ResizeObserver === 'undefined') return;
-    let pending = false;
-    _contentObserver = new ResizeObserver(() => {
-        if (isCompactMode) return;
-        if (pending) return;
-        pending = true;
-        requestAnimationFrame(() => {
-            pending = false;
-            measureAndResize();
-        });
-    });
-    for (const child of container.children) {
-        _contentObserver.observe(child);
-    }
-}
 
 function updateUI(data) {
     if (historySourceId || !accountTransition.accepts(credentials?.id)) return;
@@ -1506,7 +1438,6 @@ function updateUI(data) {
     refreshTimers();
     applyProviderMetricPresentation(data);
     if (isExpanded) refreshExtraTimers();
-    if (!isCompactMode) resizeWidget();
     startCountdown();
     if (graphVisible) {
         loadChart();
@@ -1586,7 +1517,6 @@ function checkUsageAlerts(data) {
 
 // Apply or remove compact mode — switches view, resizes window, syncs all toggles
 function applyCompactMode(compact) {
-    accountTransition.unlock();
     document.body.classList.toggle('compact-mode', compact);
     isCompactMode = compact;
 
@@ -1635,7 +1565,7 @@ function applyCompactMode(compact) {
         elements.historyBtn.style.display = compact ? 'none' : '';
     }
 
-    // Tell main process to resize the window width
+    // Explicit mode changes select the native window dimensions.
     window.electronAPI.setCompactMode(compact);
 
     // Sync both settings toggles
@@ -1644,8 +1574,6 @@ function applyCompactMode(compact) {
 
     // Update compact bars if we have data
     if (compact && latestUsageData) updateCompactBars(latestUsageData);
-    _lastResizeHeight = 0;
-    resizeWidget();
 
     // Persist graph/expanded state changes caused by compact mode toggle
     _saveViewState();
@@ -2376,7 +2304,6 @@ function showLoginRequired() {
     elements.mainContent.style.display = 'none';
     elements.compactContent.style.display = 'none';
     if (accountPanel) accountPanel.discover();
-    resizeWidget();
     // Reset to step 1
     elements.loginStep1.style.display = 'flex';
     elements.loginStep2.style.display = 'none';
@@ -3123,7 +3050,6 @@ async function checkForUpdate() {
             latestReleaseUrl = releaseUrl;
             elements.updateBannerText.textContent = window.i18n.t('update.bannerVersion', { version });
             elements.updateBanner.style.display = 'flex';
-            resizeWidget(true);
             if (elements.settingsUpdateLink) {
                 elements.settingsUpdateLink.textContent = window.i18n.t('update.shortlink', { version });
                 elements.settingsUpdateLink.style.display = 'inline';
