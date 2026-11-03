@@ -1438,9 +1438,12 @@ function measureAndResize() {
         if (style.display === 'none' || style.position === 'absolute' || style.position === 'fixed') continue;
         const mt = parseFloat(style.marginTop) || 0;
         const mb = parseFloat(style.marginBottom) || 0;
-        total += child.offsetHeight + mt + mb;
+        const childHeight = child === elements.loginContainer ? Math.max(child.offsetHeight, child.scrollHeight) : child.offsetHeight;
+        total += childHeight + mt + mb;
     }
-    const padding = 12;
+    const containerStyle = getComputedStyle(container);
+    const padding = 12 + (parseFloat(containerStyle.borderTopWidth) || 0)
+        + (parseFloat(containerStyle.borderBottomWidth) || 0);
     const height = Math.max(Math.ceil(total) + padding, 120);
     if (height === _lastResizeHeight) return;
     _lastResizeHeight = height;

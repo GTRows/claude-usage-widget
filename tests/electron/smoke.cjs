@@ -100,6 +100,14 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(screenshots, 'graphite-dark.png'), (await win.webContents.capturePage()).toPNG());
     await js('document.getElementById("addAccountBtn").click()');
     await waitFor(async () => await js('getComputedStyle(document.getElementById("loginContainer")).display !== "none"'), 'account setup');
+    await delay(1800);
+    const setupHeight = win.getContentSize()[1];
+    assert(setupHeight >= 480, `Account setup collapsed to ${setupHeight}px`);
+    await delay(600);
+    assert(Math.abs(win.getContentSize()[1] - setupHeight) <= 2, 'Account setup height must stay stable');
+    win.setContentSize(win.getContentSize()[0], 155);
+    await delay(600);
+    assert(win.getContentSize()[1] >= 480, 'Account setup must recover its content height from a small window');
     fs.writeFileSync(path.join(screenshots, 'account-setup.png'), (await win.webContents.capturePage()).toPNG());
     await js('document.getElementById("cancelAddAccount").click()');
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'cancel setup');
