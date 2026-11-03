@@ -14,6 +14,15 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.17.4-gtrows.1] - 2026-11-03
+
+### Changed
+- Use a fixed window size for each view mode, with scrolling for content that exceeds the available height.
+
+### Fixed
+- Stop content changes, refreshes, graph/history controls, account setup, and Settings from resizing or moving the window.
+- Keep compact Settings reachable after scrolling, and restore compact startup positioning above the tray.
+
 ## [1.17.3-gtrows.1] - 2026-11-03
 
 ### Changed
