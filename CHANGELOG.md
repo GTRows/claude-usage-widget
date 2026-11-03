@@ -14,6 +14,15 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.17.3-gtrows.1] - 2026-11-03
+
+### Changed
+- Replace the full-screen account-switch loader with in-place placeholders, a subtle progress indicator, and a short fade transition.
+
+### Fixed
+- Keep the window size unchanged during cached and slow account switches, including changes to graph visibility while loading.
+- Respect reduced-motion preferences and ignore stale account presentation updates.
+
 ## [1.17.2-gtrows.1] - 2026-11-03
 
 ### Changed

@@ -5,6 +5,7 @@ import { chartPoints, quotaHistory } from './usage-chart.js';
 import { createAccountSetup } from './account-setup.js';
 import { createSavedHistory, filterSavedHistory } from './saved-history.js';
 import { buildMacTrayFrame } from './mac-tray.js';
+import { createAccountTransition } from './account-transition.js';
 
 // Application state
 let credentials = null;
@@ -185,6 +186,12 @@ const elements = {
     closeCompactSettingsBtn: document.getElementById('closeCompactSettingsBtn')
 };
 
+const accountTransition = createAccountTransition({
+    body: document.body,
+    content: () => isCompactMode ? elements.compactContent : elements.mainContent,
+    reducedMotion: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+});
+
 // Render a translated string into an element. If the value contains a
 // whitelisted inline tag (em / strong / code / br), parse it via the DOM API
 // (no innerHTML, no script execution) and append the resulting nodes; otherwise
@@ -278,6 +285,7 @@ function displayFetchError(error) {
             ? window.i18n.t('noUsage.codexErrorBody', { error: detail || 'Unknown error' })
             : window.i18n.t('noUsage.errorBody', { error: detail || 'Unknown error' });
     }
+    accountTransition.complete(credentials?.id);
     resizeWidget();
 }
 
@@ -1072,6 +1080,7 @@ function leaveSettings() {
 }
 
 async function showSavedHistory(source) {
+    accountTransition.reset();
     selectionVersion++;
     archiveReturnView = { graphVisible, historyVisible };
     leaveSettings();
@@ -1106,7 +1115,7 @@ async function closeSavedHistory() {
     await reloadActiveAccount();
 }
 
-function resetAccountView() {
+function resetAccountView({ preserveLayout = false } = {}) {
     latestUsageData = null;
     historyLastEntries = [];
     historyPage = 1;
@@ -1118,23 +1127,26 @@ function resetAccountView() {
     if (countdownInterval) clearInterval(countdownInterval);
     elements.sessionPercentage.textContent = '—';
     elements.weeklyPercentage.textContent = '—';
-    elements.mainContent.style.display = 'none';
-    elements.compactContent.style.display = 'none';
+    if (!preserveLayout) {
+        elements.mainContent.style.display = 'none';
+        elements.compactContent.style.display = 'none';
+    }
     elements.noUsageContainer.style.display = 'none';
     elements.loginContainer.style.display = 'none';
-    elements.loadingContainer.style.display = 'flex';
+    elements.loadingContainer.style.display = preserveLayout ? 'none' : 'flex';
     window.electronAPI.setTrayFrames([]);
     isFirstDataLoad = true;
     sessionResetTriggered = false;
     weeklyResetTriggered = false;
 }
 
-async function reloadActiveAccount({ token } = {}) {
+async function reloadActiveAccount({ token, preserveLayout = false } = {}) {
+    if (!preserveLayout) accountTransition.reset();
     if (token == null) accountSetup.invalidate();
     const version = ++selectionVersion;
     addingAccount = false;
     leaveSettings();
-    resetAccountView();
+    resetAccountView({ preserveLayout });
     const selected = await window.electronAPI.getCredentials();
     if (version !== selectionVersion || (token != null && !accountSetup.current(token))) return;
     credentials = selected;
@@ -1152,13 +1164,20 @@ async function reloadActiveAccount({ token } = {}) {
 }
 
 async function selectAccount(accountId) {
-    if (!accountId) return;
+    if (!accountId || (accountId === credentials?.id && !accountTransition.isPending())) return;
     accountSetup.invalidate();
     const version = ++selectionVersion;
-    resetAccountView();
-    await window.electronAPI.setActiveAccount(accountId);
-    if (version !== selectionVersion) return;
-    await reloadActiveAccount();
+    accountTransition.begin(accountId);
+    resetAccountView({ preserveLayout: true });
+    try {
+        await window.electronAPI.setActiveAccount(accountId);
+        if (version !== selectionVersion) return;
+        await reloadActiveAccount({ preserveLayout: true });
+    } catch (error) {
+        if (!accountTransition.isFor(accountId)) return;
+        displayFetchError(error);
+        accountTransition.complete(accountId);
+    }
 }
 
 // Every account is polled independently; the selected account controls details only.
@@ -1430,7 +1449,7 @@ let _lastResizeHeight = 0;
 let _settingsOpen = false;
 const SETTINGS_HEIGHT = 640;
 function measureAndResize() {
-    if (_settingsOpen) return;
+    if (_settingsOpen || accountTransition.isLocked()) return;
     const container = document.getElementById('widgetContainer');
     if (!container) return;
     let total = 0;
@@ -1478,7 +1497,7 @@ function startContentObserver() {
 }
 
 function updateUI(data) {
-    if (historySourceId) return;
+    if (historySourceId || !accountTransition.accepts(credentials?.id)) return;
     latestUsageData = data;
 
     showMainContent();
@@ -1507,6 +1526,7 @@ function updateUI(data) {
     }
 
     checkUsageAlerts(data);
+    accountTransition.complete(credentials?.id);
 }
 
 // Fire OS desktop notifications when usage crosses warn/danger thresholds.
@@ -1566,6 +1586,7 @@ function checkUsageAlerts(data) {
 
 // Apply or remove compact mode — switches view, resizes window, syncs all toggles
 function applyCompactMode(compact) {
+    accountTransition.unlock();
     document.body.classList.toggle('compact-mode', compact);
     isCompactMode = compact;
 
@@ -1664,6 +1685,7 @@ async function _saveCompactSetting(compact) {
 let _saveViewStateTimer = null;
 async function _saveViewState() {
     if (appInitializing) return;
+    if (!accountTransition.isPending()) accountTransition.reset();
     if (_saveViewStateTimer) clearTimeout(_saveViewStateTimer);
     _saveViewStateTimer = setTimeout(async () => {
         const settings = window._cachedSettings || await window.electronAPI.getSettings();
@@ -2346,6 +2368,7 @@ function updateTimer(timerElement, textElement, resetsAt, totalMinutes) {
 
 // UI State Management
 function showLoginRequired() {
+    accountTransition.reset();
     document.body.classList.add('account-setup-open');
     elements.loadingContainer.style.display = 'none';
     elements.loginContainer.style.display = 'flex';

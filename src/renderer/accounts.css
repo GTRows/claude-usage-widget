@@ -41,6 +41,19 @@ body.compact-mode .account-status { grid-column: 1 / -1; text-align: left; }
 body.compact-mode .account-overview { margin: 0 10px 8px; }
 body.compact-mode .account-list { max-height: 218px; }
 
+body.account-size-locked #mainContent { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+body.account-switching :is(#mainContent, #compactContent) :is(.metric-pct, .metric-dateline, .metric-card-foot, .metric-ring, .progress-fill, .compact-pct, .compact-bar-fill) { opacity: 0; }
+body.account-switching :is(.graph-section, .history-section, .expand-section) { opacity: 0.3; pointer-events: none; }
+body.account-switching :is(#mainContent, #compactContent)::after {
+  content: ''; position: absolute; top: 0; left: 0; width: 34%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  pointer-events: none; animation: account-switch-progress 1s ease-in-out infinite;
+}
+@keyframes account-switch-progress { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) {
+  body.account-switching :is(#mainContent, #compactContent)::after { animation: none; width: 100%; }
+}
+
 body.account-setup-open :is(.account-overview, .account-detail-label, .account-refresh-status) { display: none !important; }
 .account-mini-label { white-space: nowrap; }
 .graph-empty { padding: 24px 12px; text-align: center; color: var(--ink-mute); font-size: 11px; }
