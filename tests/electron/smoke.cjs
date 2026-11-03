@@ -71,6 +71,8 @@ app.whenReady().then(async () => {
     await waitFor(async () => await js('document.getElementById("sessionPercentage")?.textContent === "38%"'), 'initial usage');
     if (process.platform === 'darwin') assert.equal(await js('document.getElementById("trayStyleSelect").options[0].textContent'), 'Percentage');
     assert.equal(await js('document.querySelectorAll(".account-card").length'), 3);
+    assert.equal(await js('document.getElementById("addAccountBtn")'), null);
+    assert.equal(await js('document.getElementById("accountOverview").getBoundingClientRect().top >= document.querySelector(".metric-grid").getBoundingClientRect().bottom'), true);
     assert.equal(await js('document.body.dataset.themeStyle'), 'glass');
     const publicState = await js('window.electronAPI.getCredentials()');
     assert.equal(publicState.sessionKey, undefined);
@@ -98,7 +100,9 @@ app.whenReady().then(async () => {
     await js('document.getElementById("closeSettingsBtn").click()');
     await delay(200);
     fs.writeFileSync(path.join(screenshots, 'graphite-dark.png'), (await win.webContents.capturePage()).toPNG());
-    await js('document.getElementById("addAccountBtn").click()');
+    await js('document.getElementById("settingsBtn").click()');
+    await delay(100);
+    await js('document.getElementById("settingsAddAccountBtn").click()');
     await waitFor(async () => await js('getComputedStyle(document.getElementById("loginContainer")).display !== "none"'), 'account setup');
     await delay(1800);
     const setupHeight = win.getContentSize()[1];

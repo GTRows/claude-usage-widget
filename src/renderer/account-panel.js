@@ -11,9 +11,19 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
   };
   const errorText = (code) => t(code === 'AUTH_REQUIRED' ? 'accounts.authRequired' : code === 'RATE_LIMITED' ? 'accounts.rateLimited' : 'accounts.fetchFailed');
 
+  function position() {
+    const main = byId('mainContent');
+    const compact = byId('compactContent');
+    const anchor = main.style.display !== 'none' ? main.querySelector('.metric-grid')
+      : compact.style.display !== 'none' ? compact : byId('noUsageContainer');
+    const overview = byId('accountOverview');
+    if (overview.previousElementSibling !== anchor) anchor.after(overview);
+  }
+
   function render(snapshots = state.snapshots) {
     state.snapshots = snapshots;
     const overview = byId('accountOverview');
+    position();
     overview.hidden = state.accounts.length < 2;
     byId('accountCount').textContent = String(state.accounts.length);
     byId('accountList').replaceChildren();
@@ -96,7 +106,6 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
     onResize();
   }
 
-  byId('addAccountBtn').addEventListener('click', onAdd);
   byId('settingsAddAccountBtn').addEventListener('click', onAdd);
   byId('cancelAddAccount').addEventListener('click', onCancel);
   byId('chooseLocalProfileBtn').addEventListener('click', () => link(byId('localProviderSelect').value));
@@ -106,5 +115,5 @@ export function createAccountPanel({ api, t, onSelect, onAdd, onCancel, onChange
     await api.renameAccount(state.activeAccountId, label);
     await onChanged();
   });
-  return { refresh, render, discover };
+  return { refresh, render, discover, position };
 }
