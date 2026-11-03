@@ -69,10 +69,6 @@
                 <button class="update-banner-dismiss" id="updateBannerDismiss" title="Dismiss" data-i18n-attr="title:update.bannerDismiss">✕</button>
             </div>
 
-            <section class="account-overview" id="accountOverview" hidden>
-                <div class="account-overview-head"><span><strong data-i18n="accounts.title">Accounts</strong><span class="account-count" id="accountCount"></span></span><button id="addAccountBtn" data-i18n="accounts.add">Add account</button></div>
-                <div class="account-list" id="accountList"></div>
-            </section>
             <div class="account-detail-label" id="accountDetailLabel" hidden></div>
             <div class="account-refresh-status" id="accountRefreshStatus" role="status" hidden></div>
 
@@ -224,6 +220,11 @@
                         </div>
                     </div>
                 </div>
+
+                <section class="account-overview" id="accountOverview" hidden>
+                    <div class="account-overview-head"><span><strong data-i18n="accounts.title">Accounts</strong><span class="account-count" id="accountCount"></span></span></div>
+                    <div class="account-list" id="accountList"></div>
+                </section>
 
                 <!-- Expand Toggle -->
                 <div class="expand-toggle" id="expandToggle">

@@ -1,5 +1,6 @@
 [hidden] { display: none !important; }
 .account-overview { margin: 0 16px 10px; -webkit-app-region: no-drag; }
+#mainContent > .account-overview { margin: 12px 0 10px; }
 .account-overview-head { display: flex; justify-content: space-between; align-items: center; margin: 0 0 8px; color: var(--ink-soft); font-size: 11px; }
 .account-overview-head strong { color: var(--ink); font-weight: 600; }
 .account-count { margin-left: 6px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }

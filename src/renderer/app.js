@@ -269,6 +269,7 @@ function displayFetchError(error) {
     elements.settingsBtn.style.display = 'flex';
     elements.refreshBtn.style.display = 'flex';
     elements.graphBtn.style.display = 'none';
+    accountPanel?.position();
     if (elements.noUsageTitle) {
         elements.noUsageTitle.textContent = window.i18n.t(provider === 'codex' ? 'noUsage.codexErrorTitle' : 'noUsage.errorTitle');
     }
@@ -1571,6 +1572,7 @@ function applyCompactMode(compact) {
     // Show/hide the correct content view
     elements.mainContent.style.display = compact ? 'none' : 'block';
     elements.compactContent.style.display = compact ? 'flex' : 'none';
+    accountPanel?.position();
 
     // Collapse extra rows when entering compact — prevents stale isExpanded state
     if (compact && isExpanded) {
@@ -2393,6 +2395,7 @@ function showMainContent() {
         elements.mainContent.style.display = 'block';
     }
     elements.compactContent.style.display = isCompactMode ? 'flex' : 'none';
+    accountPanel?.position();
     // Always show collapse chevron here — applyCompactMode hides it when needed
     if (elements.compactCollapseBtn) {
         elements.compactCollapseBtn.style.display = isCompactMode ? 'none' : 'flex';
