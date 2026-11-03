@@ -1683,7 +1683,7 @@ async function _saveCompactSetting(compact) {
 let _saveViewStateTimer = null;
 async function _saveViewState() {
     if (appInitializing) return;
-    accountTransition.reset();
+    if (!accountTransition.isPending()) accountTransition.reset();
     if (_saveViewStateTimer) clearTimeout(_saveViewStateTimer);
     _saveViewStateTimer = setTimeout(async () => {
         const settings = window._cachedSettings || await window.electronAPI.getSettings();

@@ -100,6 +100,8 @@ app.whenReady().then(async () => {
     assert.equal(await js('getComputedStyle(document.getElementById("loadingContainer")).display'), 'none');
     await delay(250);
     assert.equal(await js('document.body.classList.contains("account-switching")'), true);
+    await js('document.getElementById("graphBtn").click(); document.getElementById("graphBtn").click()');
+    assert.equal(await js('document.body.classList.contains("account-switching")'), true);
     assert.deepEqual(win.getContentSize(), switchBounds);
     fs.writeFileSync(path.join(screenshots, 'account-switch-loading.png'), (await win.webContents.capturePage()).toPNG());
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'stable account switch');
