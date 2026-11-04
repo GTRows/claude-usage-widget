@@ -7,6 +7,10 @@ describe('update presentation', () => {
     expect(presentUpdate({ supported: true, status: 'downloading', version: '2.0.0', percent: 36 }, t)).toMatchObject({ action: null, progress: 36 });
     expect(presentUpdate({ supported: true, status: 'downloaded', version: '2.0.0' }, t).action).toBe('install');
   });
+  it('reports a successful manual check with no newer version as up to date', () => {
+    expect(presentUpdate({ supported: false, status: 'manual', checkedAt: 123, version: null }, t).statusText).toContain('update.upToDate');
+    expect(presentUpdate({ supported: false, status: 'manual', checkedAt: null, version: null }, t).statusText).toContain('update.notChecked');
+  });
   it('explains unsupported Mac installations and retains a manual release action', () => {
     expect(presentUpdate({ supported: false, status: 'manual', reason: 'unsigned-mac', version: '2.0.0' }, t)).toMatchObject({ action: 'manual', supportKey: 'update.support.unsigned-mac' });
   });
