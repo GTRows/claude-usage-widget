@@ -71,7 +71,7 @@ jobs:
       - name: Build Electron app (DMG)
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            npm run build:mac -- --publish never
+            npm run build:mac -- --publish never "-c.mac.notarize.teamId=$APPLE_TEAM_ID"
           else
             npm run build:mac -- --publish never -c.mac.identity=null -c.mac.notarize=false
           fi
