@@ -45,6 +45,9 @@ jobs:
       - name: Verify update manifests and payload checksums
         run: node scripts/verify-update-metadata.cjs dist
 
+      - name: Verify native update and restart on isolated installers
+        run: node scripts/test-windows-update.cjs
+
       - name: Upload Setup installer
         uses: actions/upload-artifact@v4
         with:
