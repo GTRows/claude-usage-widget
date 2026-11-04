@@ -14,7 +14,7 @@ const { createAccountStore, publicAccount } = require('./src/main/account-store'
 const { createAccountUsage } = require('./src/main/account-usage');
 const { selectAccountHistory, appendAccountSample, removeAccountHistory } = require('./src/shared/account-history');
 const { discoverLocalProfiles, linkLocalProfile, fetchLocalUsage } = require('./src/providers');
-const { fitWindowBounds, trayWindowBounds } = require('./src/shared/window-geometry');
+const { contentWindowBounds, trayWindowBounds } = require('./src/shared/window-geometry');
 const { createDockVisibility } = require('./src/main/dock-visibility');
 const { createTrayFrameImage, createMacTrayPlaceholder } = require('./src/main/tray-image');
 const { historyForSource, historySources, applyHistoryPolicies, disconnectAccount } = require('./src/main/history-sources');
@@ -119,6 +119,7 @@ const WIDGET_WIDTH = process.platform === 'darwin' ? 590 : 560;
 const WIDGET_COMPACT_WIDTH = 320;
 const WIDGET_HEIGHT = 720;
 const WIDGET_COMPACT_HEIGHT = 360;
+let windowContentHeight = compactWindowMode ? WIDGET_COMPACT_HEIGHT : WIDGET_HEIGHT;
 const CHART_DAYS = 7;
 
 function storeUsageHistory(data, accountId) {
@@ -171,7 +172,7 @@ function createMainWindow() {
   if (store.get('settings.compactMode', false)) windowOptions.width = WIDGET_COMPACT_WIDTH;
   const position = savedPosition || screen.getPrimaryDisplay().workArea;
   const initialBounds = { x: position.x, y: position.y, width: windowOptions.width, height: windowOptions.height };
-  Object.assign(windowOptions, fitWindowBounds(initialBounds, screen.getDisplayMatching(initialBounds).workArea));
+  Object.assign(windowOptions, contentWindowBounds(initialBounds, windowContentHeight, screen.getDisplayMatching(initialBounds).workArea));
 
   mainWindow = new BrowserWindow(windowOptions);
   mainWindow.loadFile(path.join(__dirname, 'src/renderer/index.html'));
@@ -192,6 +193,7 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  mainWindow.on('moved', recoverWindow);
 
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -274,7 +276,13 @@ function anchorAboveTray(trayBounds) {
   const bounds = trayBounds || tray?.getBounds();
   if (!bounds) return;
   const display = screen.getDisplayMatching(bounds);
-  mainWindow.setBounds(trayWindowBounds(mainWindow.getBounds(), bounds, display.workArea));
+  const fitted = contentWindowBounds(mainWindow.getBounds(), windowContentHeight, display.workArea);
+  setWindowBounds(trayWindowBounds(fitted, bounds, display.workArea));
+}
+
+function setWindowBounds(bounds) {
+  const current = mainWindow.getBounds();
+  if (Object.keys(bounds).some((key) => bounds[key] !== current[key])) mainWindow.setBounds(bounds);
 }
 
 function recoverWindow() {
@@ -282,7 +290,7 @@ function recoverWindow() {
   if (store.get('settings.compactMode', false) && !_settingsModeActive && tray) { anchorAboveTray(); return; }
   const { screen } = require('electron');
   const bounds = mainWindow.getBounds();
-  mainWindow.setBounds(fitWindowBounds(bounds, screen.getDisplayMatching(bounds).workArea));
+  setWindowBounds(contentWindowBounds(bounds, windowContentHeight, screen.getDisplayMatching(bounds).workArea));
 }
 
 function showMainWindow() {
@@ -322,11 +330,11 @@ function applyCompactWindowMode(compact) {
   compactWindowMode = compact;
   if (compact) {
     mainWindow.setMovable(false);
-    mainWindow.setContentSize(WIDGET_COMPACT_WIDTH, WIDGET_COMPACT_HEIGHT);
+    mainWindow.setContentSize(WIDGET_COMPACT_WIDTH, mainWindow.getContentSize()[1]);
     if (tray) anchorAboveTray(tray.getBounds());
   } else {
     mainWindow.setMovable(true);
-    mainWindow.setContentSize(WIDGET_WIDTH, WIDGET_HEIGHT);
+    mainWindow.setContentSize(WIDGET_WIDTH, mainWindow.getContentSize()[1]);
     const saved = store.get('windowPosition');
     if (saved) mainWindow.setPosition(saved.x, saved.y);
     if (!mainWindow.isVisible()) mainWindow.show();
@@ -593,7 +601,12 @@ ipcMain.on('show-notification', (event, { title, body }) => {
   }
 });
 
-// Only explicit view mode changes resize the window.
+ipcMain.on('fit-content-height', (event, height) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || !Number.isFinite(height) || height <= 0) return;
+  windowContentHeight = height;
+  recoverWindow();
+});
+
 ipcMain.on('set-compact-mode', (event, compact) => {
   if (!mainWindow) return;
   const wasCompact = store.get('settings.compactMode', false);

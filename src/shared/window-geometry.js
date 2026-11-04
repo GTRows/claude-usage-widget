@@ -15,4 +15,9 @@ function trayWindowBounds(bounds, tray, area) {
   return fitWindowBounds({ ...bounds, x, y }, area);
 }
 
-module.exports = { fitWindowBounds, trayWindowBounds };
+function contentWindowBounds(bounds, contentHeight, area) {
+  const height = Math.max(1, Math.min(Math.ceil(contentHeight), Math.floor(area.height * 70 / 100)));
+  return fitWindowBounds({ ...bounds, height }, area);
+}
+
+module.exports = { fitWindowBounds, trayWindowBounds, contentWindowBounds };

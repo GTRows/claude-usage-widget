@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
   quitApp: () => ipcRenderer.send('quit-app'),
+  fitContentHeight: (height) => ipcRenderer.send('fit-content-height', height),
 
   // Window position
   getWindowPosition: () => ipcRenderer.invoke('get-window-position'),
