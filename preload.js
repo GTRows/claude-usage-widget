@@ -85,7 +85,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Updates
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  setUpdatePreferences: (enabled) => ipcRenderer.invoke('set-update-preferences', enabled),
+  onUpdateState: (callback) => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('update-state', listener);
+    return () => ipcRenderer.removeListener('update-state', listener);
+  },
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // Storage info

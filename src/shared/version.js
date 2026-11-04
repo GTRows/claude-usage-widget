@@ -23,7 +23,19 @@ function compareVersions(a, b) {
   if (!pa.preRelease && pb.preRelease) return 1;
   if (pa.preRelease && pb.preRelease) {
     if (pa.preRelease === pb.preRelease) return 0;
-    return pa.preRelease < pb.preRelease ? -1 : 1;
+    const left = pa.preRelease.split('.');
+    const right = pb.preRelease.split('.');
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      if (left[i] == null) return -1;
+      if (right[i] == null) return 1;
+      if (left[i] === right[i]) continue;
+      const aNumeric = /^\d+$/.test(left[i]);
+      const bNumeric = /^\d+$/.test(right[i]);
+      if (aNumeric && bNumeric) return Number(left[i]) - Number(right[i]);
+      if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+      return left[i] < right[i] ? -1 : 1;
+    }
+    return 0;
   }
   return 0;
 }

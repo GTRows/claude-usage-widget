@@ -5,6 +5,7 @@ import { chartPoints, quotaHistory } from './usage-chart.js';
 import { createAccountSetup } from './account-setup.js';
 import { createSavedHistory, filterSavedHistory } from './saved-history.js';
 import { buildMacTrayFrame } from './mac-tray.js';
+import { createUpdatePanel } from './update-panel.js';
 import { createAccountTransition } from './account-transition.js';
 import { watchContentHeight } from './window-size.js';
 
@@ -22,8 +23,7 @@ const accountSetup = createAccountSetup({ onBusy: (busy) => {
     document.querySelectorAll('#cancelAddAccount, #connectBtn, #autoDetectBtn, #chooseLocalProfileBtn, .profile-choice').forEach((button) => { button.disabled = busy; });
 } });
 let updateInterval = null;
-const RELEASES_PAGE_URL = 'https://github.com/GTRows/claude-usage-widget/releases';
-let latestReleaseUrl = RELEASES_PAGE_URL;
+let updatePanel = null;
 let countdownInterval = null;
 let latestUsageData = null;
 let isExpanded = false;
@@ -387,6 +387,7 @@ async function init() {
         window.electronAPI.onLanguageChanged((lang) => {
             if (window.i18n) window.i18n.setLanguage(lang);
             applyTranslations();
+            updatePanel?.render();
             applyLoginProvider();
             if (accountPanel) accountPanel.refresh();
             // Re-render dynamic surfaces — chart labels, tray frames, version label.
@@ -500,14 +501,8 @@ async function init() {
     if (elements.settingsVersionLabel) {
         elements.settingsVersionLabel.textContent = window.i18n.t('app.versionLabel', { version });
     }
-    setTimeout(checkForUpdate, 2000);
-    // Also check once every 24 hours for users who never close the app
-    setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
-
-    try {
-        const persisted = parseInt(localStorage.getItem('claude-usage-widget.lastUpdateCheckMs') || '', 10);
-        if (Number.isFinite(persisted)) renderLastUpdateCheckTimestamp(persisted);
-    } catch {}
+    updatePanel = createUpdatePanel({ document, api: window.electronAPI, t: (...args) => window.i18n.t(...args) });
+    await updatePanel.start();
 
     // Startup restore complete — allow _saveViewState to persist changes
     appInitializing = false;
@@ -855,52 +850,6 @@ function setupEventListeners() {
     });
 
     window.electronAPI.onSessionExpired(() => reloadActiveAccount());
-
-    // Update banner
-    elements.updateBannerDismiss.addEventListener('click', () => {
-        elements.updateBanner.style.display = 'none';
-    });
-    elements.updateBannerText.addEventListener('click', () => {
-        window.electronAPI.openExternal(latestReleaseUrl);
-    });
-    elements.settingsUpdateLink.addEventListener('click', () => {
-        window.electronAPI.openExternal(latestReleaseUrl);
-    });
-
-    elements.checkUpdatesBtn.addEventListener('click', async () => {
-        if (!elements.checkUpdatesBtn || !elements.checkUpdatesStatus) return;
-        if (elements.checkUpdatesBtn.disabled) return;
-
-        elements.checkUpdatesBtn.disabled = true;
-        const previousLabel = elements.checkUpdatesBtn.textContent;
-        elements.checkUpdatesBtn.textContent = window.i18n.t('update.checking');
-        elements.checkUpdatesStatus.classList.remove('update-check-status--ok', 'update-check-status--available', 'update-check-status--error');
-        elements.checkUpdatesStatus.textContent = window.i18n.t('update.checkingStatus');
-
-        try {
-            const result = await checkForUpdate();
-            const checkedAt = Date.now();
-
-            if (!result.ok) {
-                elements.checkUpdatesStatus.textContent = window.i18n.t('update.failed');
-                elements.checkUpdatesStatus.classList.add('update-check-status--error');
-            } else if (result.hasUpdate && result.version) {
-                elements.checkUpdatesStatus.textContent = window.i18n.t('update.available', { version: result.version });
-                elements.checkUpdatesStatus.classList.add('update-check-status--available');
-            } else {
-                elements.checkUpdatesStatus.textContent = window.i18n.t('update.upToDate');
-                elements.checkUpdatesStatus.classList.add('update-check-status--ok');
-            }
-
-            if (result.ok) {
-                try { localStorage.setItem('claude-usage-widget.lastUpdateCheckMs', String(checkedAt)); } catch {}
-                renderLastUpdateCheckTimestamp(checkedAt);
-            }
-        } finally {
-            elements.checkUpdatesBtn.disabled = false;
-            elements.checkUpdatesBtn.textContent = previousLabel || 'Check now';
-        }
-    });
 
     // Compact mode — collapse chevron (normal → compact)
     elements.compactCollapseBtn.addEventListener('click', async () => {
@@ -3019,55 +2968,11 @@ function applyThemeStyle(style) {
     document.body.setAttribute('data-theme-style', value);
 }
 
-function renderLastUpdateCheckTimestamp(ms) {
-    if (!elements.checkUpdatesTimestamp) return;
-    if (!ms || !Number.isFinite(ms)) {
-        elements.checkUpdatesTimestamp.textContent = '';
-        return;
-    }
-    const d = new Date(ms);
-    // Reuse the user's chosen time format setting if available.
-    const use24 = (typeof currentSettings !== 'undefined' && currentSettings && currentSettings.timeFormat === '24h');
-    const time = use24
-        ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-        : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
-    const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    elements.checkUpdatesTimestamp.textContent = window.i18n.t('update.lastChecked', { date, time });
-}
-
-// Update check
-async function checkForUpdate() {
-    try {
-        const result = await window.electronAPI.checkForUpdate();
-        // After Task 3, main.js returns { ok: false } on network/parse error,
-        // and { ok: true, hasUpdate, version, releaseUrl } on success. Default ok to true
-        // for backward shape (older main.js builds during dev hot-reload).
-        const ok = result && result.ok !== false;
-        const hasUpdate = !!(result && result.hasUpdate);
-        const version = (result && result.version) || null;
-        const releaseUrl = (result && result.releaseUrl) || RELEASES_PAGE_URL;
-
-        if (ok && hasUpdate && version) {
-            latestReleaseUrl = releaseUrl;
-            elements.updateBannerText.textContent = window.i18n.t('update.bannerVersion', { version });
-            elements.updateBanner.style.display = 'flex';
-            if (elements.settingsUpdateLink) {
-                elements.settingsUpdateLink.textContent = window.i18n.t('update.shortlink', { version });
-                elements.settingsUpdateLink.style.display = 'inline';
-            }
-            debugLog(`Update available: v${version}`);
-        }
-        return { ok, hasUpdate, version, releaseUrl };
-    } catch (e) {
-        debugLog('Update check failed silently', e);
-        return { ok: false, hasUpdate: false, version: null, releaseUrl: null };
-    }
-}
-
 // Start the application
 const stopContentHeight = watchContentHeight();
 init();
 window.addEventListener('beforeunload', () => {
+    updatePanel?.dispose();
     stopContentHeight();
     stopAutoUpdate();
     if (countdownInterval) clearInterval(countdownInterval);

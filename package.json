@@ -45,13 +45,23 @@
   },
   "dependencies": {
     "chart.js": "^4.5.1",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.8.11"
   },
   "build": {
     "appId": "com.gtrows.claudewidget",
     "productName": "Claude-Usage-Widget",
     "copyright": "Copyright © 2026 GTRows / aciro — originally © 2025 Slavomir Durej",
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GTRows",
+        "repo": "claude-usage-widget",
+        "channel": "latest",
+        "releaseType": "release",
+        "private": false
+      }
+    ],
     "win": {
       "target": [
         "nsis",
@@ -71,14 +81,25 @@
       "artifactName": "${productName}-${version}-win-Setup.${ext}"
     },
     "files": [
-      "**/*",
-      "!**/*.ts",
-      "!*.md"
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*",
+      "bin/**/*",
+      "package.json",
+      "LICENSE"
     ],
     "mac": {
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"
@@ -95,7 +116,8 @@
       },
       "extendInfo": {
         "NSHumanReadableCopyright": "Copyright © 2026 GTRows / aciro — originally © 2025 Slavomir Durej"
-      }
+      },
+      "artifactName": "${productName}-${version}-macOS-${arch}.${ext}"
     },
     "dmg": {
       "artifactName": "${productName}-${version}-macOS-${arch}.dmg"
@@ -142,6 +164,7 @@
       "category": "Utility",
       "maintainer": "GTRows <aciroglu.fatih@gmail.com>",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
-    }
+    },
+    "detectUpdateChannel": false
   }
 }

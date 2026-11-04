@@ -6,12 +6,12 @@ const require = createRequire(import.meta.url);
 
 // Hosted Windows runners provide a desktop session; local npm test stays lightweight.
 describe('Windows desktop integration', () => {
-  for (const mode of ['normal', 'broken', 'compact']) {
-    const label = mode === 'compact' ? 'fits persisted compact mode to its content'
+  for (const mode of ['normal', 'broken', 'compact', 'updates']) {
+    const label = mode === 'updates' ? 'downloads and installs through the widget without changing account history' : mode === 'compact' ? 'fits persisted compact mode to its content'
       : mode === 'broken' ? 'keeps healthy accounts available when the selected credential is unreadable' : 'completes the real account, theme, logout and history flow';
     it.runIf(process.platform === 'win32' && Boolean(process.env.CI))(label, async () => {
       const result = await new Promise((resolve, reject) => {
-        const child = spawn(require('electron'), ['--enable-logging=stderr', path.join(process.cwd(), 'tests/electron/smoke.cjs')], { cwd: process.cwd(), env: { ...process.env, WIDGET_BROKEN_START: mode === 'broken' ? '1' : '', WIDGET_COMPACT_START: mode === 'compact' ? '1' : '', WIDGET_HOLD: '' }, windowsHide: true });
+        const child = spawn(require('electron'), ['--enable-logging=stderr', path.join(process.cwd(), 'tests/electron/smoke.cjs')], { cwd: process.cwd(), env: { ...process.env, WIDGET_UPDATE_FLOW: mode === 'updates' ? '1' : '', WIDGET_BROKEN_START: mode === 'broken' ? '1' : '', WIDGET_COMPACT_START: mode === 'compact' ? '1' : '', WIDGET_HOLD: '' }, windowsHide: true });
         let output = '';
         child.stdout.on('data', (data) => { output += data; });
         child.stderr.on('data', (data) => { output += data; });
