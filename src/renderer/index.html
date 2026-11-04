@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="accounts.css">
     <link rel="stylesheet" href="themes.css">
+    <link rel="stylesheet" href="updates.css">
     <script src="../../node_modules/chart.js/dist/chart.umd.js"></script>
 </head>
 
@@ -65,7 +66,7 @@
 
             <!-- Update Banner (hidden by default) -->
             <div class="update-banner" id="updateBanner" style="display: none;">
-                <span class="update-banner-text" id="updateBannerText"></span>
+                <button type="button" class="update-banner-text" id="updateBannerText"></button>
                 <button class="update-banner-dismiss" id="updateBannerDismiss" title="Dismiss" data-i18n-attr="title:update.bannerDismiss">✕</button>
             </div>
 
@@ -767,12 +768,22 @@
                                     </div>
                                     <button class="storage-path-btn" id="checkUpdatesBtn" title="Check now" data-i18n="update.checkBtn" data-i18n-attr="title:update.checkBtnTitle">Check now</button>
                                 </div>
+                                <div class="settings-item">
+                                    <div class="settings-item-text">
+                                        <label class="settings-item-label" for="autoDownloadUpdates" data-i18n="update.autoDownload">Download updates automatically</label>
+                                        <span class="settings-item-hint" data-i18n="update.autoDownloadHint">Download in the background; restart when you are ready.</span>
+                                    </div>
+                                    <input type="checkbox" id="autoDownloadUpdates">
+                                </div>
+                                <p class="settings-item-hint update-support-hint" id="updateSupportHint" role="status" hidden></p>
                                 <div class="settings-item settings-item-stack" id="checkUpdatesStatusRow">
                                     <div class="settings-item-text">
                                         <span class="settings-item-label" data-i18n="settings.update.statusLabel">Status</span>
                                         <span class="settings-item-hint update-check-status" id="checkUpdatesStatus" data-i18n="update.notChecked">Not checked yet.</span>
                                     </div>
                                     <span class="settings-item-hint update-check-timestamp" id="checkUpdatesTimestamp"></span>
+                                    <progress id="updateProgress" max="100" value="0" data-i18n-attr="aria-label:update.downloadProgress" hidden></progress>
+                                    <button type="button" class="storage-path-btn" id="updateInstallBtn" hidden></button>
                                 </div>
                             </div>
                         </section>
@@ -780,7 +791,7 @@
 
                     <div class="settings-footer">
                         <span class="settings-version-label" id="settingsVersionLabel">v1.5.0</span>
-                        <span class="settings-update-link" id="settingsUpdateLink" style="display: none;"></span>
+                        <button type="button" class="settings-update-link" id="settingsUpdateLink" style="display: none;"></button>
                         <button class="logout-btn" id="logoutBtn" data-i18n="settings.logoutBtn">Log Out</button>
                     </div>
                 </div>

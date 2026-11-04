@@ -1,0 +1,17 @@
+#updateBannerText, #settingsUpdateLink {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#updateBannerText { flex: 1; }
+#updateBannerText:disabled { cursor: default; opacity: 1; }
+#updateBannerText:focus-visible, #settingsUpdateLink:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+#updateProgress { width: 100%; height: 8px; accent-color: var(--accent, #6fa7e8); }
+.update-support-hint { margin: 10px 0; }
+#updateInstallBtn { align-self: flex-start; margin-top: 8px; }

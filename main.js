@@ -4,7 +4,6 @@ const https = require('https');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
 const historyShared = require('./src/shared/history');
-const { isNewerVersion, pickLatestRelease } = require('./src/shared/version');
 const { normalizeSettings } = require('./src/shared/settings-schema');
 const { t, setLanguage } = require('./src/shared/i18n');
 const { fetchCodexUsage } = require('./src/cli/api');
@@ -16,6 +15,8 @@ const { selectAccountHistory, appendAccountSample, removeAccountHistory } = requ
 const { discoverLocalProfiles, linkLocalProfile, fetchLocalUsage } = require('./src/providers');
 const { contentWindowBounds, trayWindowBounds } = require('./src/shared/window-geometry');
 const { createDockVisibility } = require('./src/main/dock-visibility');
+const { createDesktopUpdates } = require('./src/main/update-runtime');
+const { RELEASES_URL } = require('./src/main/release-check');
 const { createTrayFrameImage, createMacTrayPlaceholder } = require('./src/main/tray-image');
 const { historyForSource, historySources, applyHistoryPolicies, disconnectAccount } = require('./src/main/history-sources');
 const {
@@ -23,8 +24,6 @@ const {
   normalizeProvider,
 } = require('./src/shared/accounts');
 
-const GITHUB_OWNER = 'GTRows';
-const GITHUB_REPO = 'claude-usage-widget';
 
 // Migration: Handle old encrypted config files from v1.7.0 and earlier
 // Must happen BEFORE creating Store instance to prevent parse errors
@@ -107,8 +106,9 @@ const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit
 let mainWindow = null;
 let compactWindowMode = store.get('settings.compactMode', false);
 let quitting = false;
+let desktopUpdates = null;
 let dockVisibility = null;
-app.on('before-quit', () => { quitting = true; dockVisibility?.dispose(); });
+app.on('before-quit', () => { quitting = true; dockVisibility?.dispose(); desktopUpdates?.dispose(); });
 let tray = null;
 let trayIconFrames = [];
 let trayIconIndex = 0;
@@ -637,6 +637,7 @@ ipcMain.handle('save-appearance', (event, patch = {}) => {
 ipcMain.handle('get-settings', () => {
   return {
     autoStart: store.get('settings.autoStart', false),
+    autoDownloadUpdates: store.get('settings.autoDownloadUpdates', true),
     alwaysOnTop: store.get('settings.alwaysOnTop', true),
     theme: store.get('settings.theme', process.platform === 'darwin' ? 'system' : 'dark'),
     themeStyle: store.get('settings.themeStyle', process.platform === 'darwin' ? 'glass' : 'classic'),
@@ -791,55 +792,18 @@ ipcMain.handle('detect-session-key', async () => {
   });
 });
 
-// Check GitHub releases for a newer version.
-// Scans the full releases list (including prereleases) and picks the
-// highest semver, so fork tags like 1.11.0-gtrows.1 are compared
-// correctly even when they are published as prereleases.
-ipcMain.handle('check-for-update', () => {
-  return new Promise((resolve) => {
-    const options = {
-      hostname: 'api.github.com',
-      path: `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'claude-usage-widget',
-        'Accept': 'application/vnd.github+json'
-      },
-      timeout: 5000
-    };
-
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => {
-        try {
-          const data = JSON.parse(body);
-          if (!Array.isArray(data)) {
-            resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null });
-            return;
-          }
-          const current = app.getVersion();
-          const latestRelease = pickLatestRelease(data);
-          if (latestRelease && isNewerVersion(latestRelease.version, current)) {
-            resolve({
-              ok: true,
-              hasUpdate: true,
-              version: latestRelease.version,
-              releaseUrl: latestRelease.releaseUrl
-            });
-          } else {
-            resolve({ ok: true, hasUpdate: false, version: null, releaseUrl: null });
-          }
-        } catch {
-          resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null });
-        }
-      });
-    });
-
-    req.on('error', () => resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, hasUpdate: false, version: null, releaseUrl: null }); });
-    req.end();
-  });
+// Update actions accept no renderer-supplied URL or executable path.
+ipcMain.handle('get-update-state', () => desktopUpdates.getState());
+ipcMain.handle('check-for-update', async () => {
+  const state = await desktopUpdates.check();
+  return { ...state, ok: !state.error, hasUpdate: Boolean(state.version), releaseUrl: RELEASES_URL };
+});
+ipcMain.handle('download-update', () => desktopUpdates.download());
+ipcMain.handle('install-update', () => desktopUpdates.install());
+ipcMain.handle('set-update-preferences', (event, enabled) => {
+  if (typeof enabled !== 'boolean') throw new Error('Invalid update preference');
+  store.set('settings.autoDownloadUpdates', enabled);
+  return desktopUpdates.setAutomaticDownloads(enabled);
 });
 
 async function fetchAccountUsage(activeAccount) {
@@ -1008,8 +972,12 @@ app.whenReady().then(async () => {
   applyAutoPrune();
 
   const headlessMode = store.get('settings.headlessMode', false);
+  desktopUpdates = createDesktopUpdates({ app, store, emitState: (state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-state', state);
+  } });
   createMainWindow();
   createTray();
+  desktopUpdates.start();
   const { screen } = require('electron');
   for (const event of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(event, recoverWindow);
 
