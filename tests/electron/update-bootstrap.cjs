@@ -8,6 +8,7 @@ if (!config?.dataDirectory) throw new Error('Missing isolated updater fixture co
 app.setPath('userData', config.dataDirectory);
 app.setLoginItemSettings = () => {};
 require(path.join(root, 'src/main/release-check')).checkLatestRelease = async () => ({ ok: true, hasUpdate: false });
+require(path.join(root, 'src/providers')).fetchLocalUsage = async () => ({ provider: 'claude', five_hour: { utilization: 12 }, seven_day: { utilization: 34 } });
 require(path.join(root, 'main.js'));
 function write(name, data) {
   const file = path.join(config.dataDirectory, name);
@@ -18,7 +19,7 @@ app.whenReady().then(async () => {
   try {
     if (metadata.version === config.target) {
       const stored = JSON.parse(fs.readFileSync(path.join(config.dataDirectory, 'config.json'), 'utf8'));
-      if (stored.updateAcceptanceSentinel !== 'preserve-me' || stored.settings.codexQuotaDisplay !== 'remaining' || stored.usageHistory[0]?.accountId !== 'fixture') throw new Error('Persisted data was not preserved');
+      if (stored.updateAcceptanceSentinel !== 'preserve-me' || stored.settings.codexQuotaDisplay !== 'remaining' || stored.usageHistory[0]?.accountId !== 'fixture' || stored.accounts[0]?.id !== 'fixture' || stored.accounts[0]?.configDir !== path.join(config.dataDirectory, 'profile')) throw new Error('Persisted data was not preserved');
       write('result.json', { ok: true, version: metadata.version, preserved: true });
       app.quit(); return;
     }

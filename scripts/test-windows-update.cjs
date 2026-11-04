@@ -23,7 +23,7 @@ async function main() {
   const dataDirectory = path.join(directory, 'data');
   const candidate = path.join(directory, 'candidate');
   fs.mkdirSync(dataDirectory); fs.mkdirSync(candidate);
-  fs.writeFileSync(path.join(dataDirectory, 'config.json'), JSON.stringify({ accounts: [], updateAcceptanceSentinel: 'preserve-me', settings: { codexQuotaDisplay: 'remaining', autoDownloadUpdates: false, usageAlerts: false }, usageHistory: [{ accountId: 'fixture', timestamp: Date.now(), session: 12, weekly: 34 }] }));
+  fs.writeFileSync(path.join(dataDirectory, 'config.json'), JSON.stringify({ accounts: [{ id: 'fixture', provider: 'claude', authType: 'local', configDir: path.join(dataDirectory, 'profile'), label: 'Fixture account' }], updateAcceptanceSentinel: 'preserve-me', settings: { codexQuotaDisplay: 'remaining', autoDownloadUpdates: false, usageAlerts: false }, usageHistory: [{ accountId: 'fixture', timestamp: Date.now(), session: 12, weekly: 34 }] }));
   const server = http.createServer((request, response) => {
     const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname.slice(1));
     if (!name || name !== path.basename(name)) { response.writeHead(404).end(); return; }

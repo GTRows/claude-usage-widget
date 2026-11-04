@@ -27,7 +27,8 @@ function prepare(root) {
     await js('document.getElementById("updateInstallBtn").click()');
     await waitFor(async () => await js('document.getElementById("checkUpdatesStatus").textContent.includes("37%")'), 'download progress');
     assert.equal(installed, false);
-    await js('document.getElementById("updatesSection").scrollIntoView({ block: "center" })');
+    assert.equal(await js('document.getElementById("updateInstallBtn").getBoundingClientRect().bottom <= innerHeight'), true);
+    await js('document.getElementById("checkUpdatesStatusRow").scrollIntoView({ block: "end" })');
     await delay(150);
     fs.writeFileSync(path.join(screenshots, 'update-downloading.png'), (await win.webContents.capturePage()).toPNG());
     updater.emit('update-downloaded', { version: '99.0.1-gtrows.1' }); finish();

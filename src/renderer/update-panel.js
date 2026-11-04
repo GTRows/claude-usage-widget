@@ -12,7 +12,7 @@ export function presentUpdate(state, t) {
   return { statusText, action, progress, supportKey: state.supported ? null : `update.support.${state.reason || 'package-manager'}` };
 }
 export function createUpdatePanel({ document, api, t, onChange = () => {} }) {
-  const ids = ['updateBanner', 'updateBannerText', 'updateBannerDismiss', 'settingsUpdateLink', 'checkUpdatesBtn', 'checkUpdatesStatus', 'checkUpdatesTimestamp', 'updateInstallBtn', 'updateProgress', 'autoDownloadUpdates', 'updateSupportHint'];
+  const ids = ['updateBanner', 'updateBannerText', 'updateBannerDismiss', 'checkUpdatesBtn', 'checkUpdatesStatus', 'checkUpdatesTimestamp', 'updateInstallBtn', 'updateProgress', 'autoDownloadUpdates', 'updateSupportHint'];
   const nodes = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
   let state = { status: 'idle', supported: false, automaticDownloads: true };
   let revision = 0;
@@ -42,8 +42,6 @@ export function createUpdatePanel({ document, api, t, onChange = () => {} }) {
     nodes.updateBanner.style.display = visible ? 'flex' : 'none';
     nodes.updateBannerText.textContent = `${view.statusText}${view.action ? ' — ' + t(actionLabel) : ''}`;
     nodes.updateBannerText.disabled = !view.action;
-    nodes.settingsUpdateLink.style.display = view.action ? 'inline' : 'none';
-    nodes.settingsUpdateLink.textContent = t(actionLabel);
     if (state.checkedAt) {
       const date = new Date(state.checkedAt);
       nodes.checkUpdatesTimestamp.textContent = t('update.lastChecked', { date: date.toLocaleDateString(), time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
@@ -71,7 +69,7 @@ export function createUpdatePanel({ document, api, t, onChange = () => {} }) {
     else if (action === 'download') await request('downloadUpdate');
   }
   bind('checkUpdatesBtn', 'click', () => request('checkForUpdate'));
-  for (const id of ['updateBannerText', 'settingsUpdateLink', 'updateInstallBtn']) bind(id, 'click', act);
+  for (const id of ['updateBannerText', 'updateInstallBtn']) bind(id, 'click', act);
   bind('updateBannerDismiss', 'click', () => { dismissed = `${state.version}:${state.status}`; render(); });
   bind('autoDownloadUpdates', 'change', () => request('setUpdatePreferences', nodes.autoDownloadUpdates.checked));
   async function start() {
