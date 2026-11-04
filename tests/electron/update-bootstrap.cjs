@@ -37,7 +37,10 @@ app.whenReady().then(async () => {
     state = await js('window.electronAPI.getUpdateState()');
     if (state.status !== 'downloaded') throw new Error('Verified download did not complete: ' + JSON.stringify(state));
     write('downloaded.json', { version: state.version });
-    await js('window.electronAPI.installUpdate()');
+    // Successful installation closes this renderer before its IPC reply may arrive.
+    js('window.electronAPI.installUpdate()').then(ok => {
+      if (!ok) write('result.json', { ok: false, error: 'Install action was rejected' });
+    }).catch(() => {});
   } catch (error) {
     write('result.json', { ok: false, error: error.message });
     app.exit(1);
