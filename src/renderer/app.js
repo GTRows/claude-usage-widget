@@ -6,6 +6,7 @@ import { createAccountSetup } from './account-setup.js';
 import { createSavedHistory, filterSavedHistory } from './saved-history.js';
 import { buildMacTrayFrame } from './mac-tray.js';
 import { createAccountTransition } from './account-transition.js';
+import { watchContentHeight } from './window-size.js';
 
 // Application state
 let credentials = null;
@@ -1565,7 +1566,7 @@ function applyCompactMode(compact) {
         elements.historyBtn.style.display = compact ? 'none' : '';
     }
 
-    // Explicit mode changes select the native window dimensions.
+    // Mode changes select the window width; content determines its height.
     window.electronAPI.setCompactMode(compact);
 
     // Sync both settings toggles
@@ -3064,8 +3065,10 @@ async function checkForUpdate() {
 }
 
 // Start the application
+const stopContentHeight = watchContentHeight();
 init();
 window.addEventListener('beforeunload', () => {
+    stopContentHeight();
     stopAutoUpdate();
     if (countdownInterval) clearInterval(countdownInterval);
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { fitWindowBounds, trayWindowBounds } = require('../src/shared/window-geometry');
+const { fitWindowBounds, trayWindowBounds, contentWindowBounds } = require('../src/shared/window-geometry');
 
 describe('reachable widget geometry', () => {
   const area = { x: 0, y: 25, width: 1440, height: 875 };
@@ -17,5 +17,17 @@ describe('reachable widget geometry', () => {
   it('anchors below a Mac menu bar and above a Windows taskbar', () => {
     expect(trayWindowBounds({ width: 300, height: 250 }, { x: 1300, y: 0, width: 24, height: 25 }, area)).toEqual({ x: 1132, y: 33, width: 300, height: 250 });
     expect(trayWindowBounds({ width: 300, height: 250 }, { x: 1300, y: 900, width: 24, height: 40 }, area).y).toBe(642);
+  });
+  it('grows and shrinks to fit content without changing the width', () => {
+    const bounds = { x: 120, y: 100, width: 560, height: 400 };
+    expect(contentWindowBounds(bounds, 550.2, area)).toEqual({ ...bounds, height: 551 });
+    expect(contentWindowBounds(bounds, 250, area)).toEqual({ ...bounds, height: 250 });
+  });
+  it('caps content at seventy percent of the current work area', () => {
+    expect(contentWindowBounds({ x: 120, y: 100, width: 560, height: 400 }, 1200, area).height).toBe(612);
+  });
+  it('keeps growing content on screens with negative coordinates', () => {
+    expect(contentWindowBounds({ x: -800, y: 600, width: 560, height: 200 }, 800,
+      { x: -1280, y: 0, width: 1280, height: 720 })).toEqual({ x: -800, y: 208, width: 560, height: 504 });
   });
 });

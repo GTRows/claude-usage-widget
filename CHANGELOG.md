@@ -14,6 +14,15 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.17.5-gtrows.1] - 2026-11-04
+
+### Changed
+- Fit normal and compact windows to their visible content, growing and shrinking when graphs, tables, account lists, or Settings change.
+
+### Fixed
+- Limit the window to 70% of the current display's usable height and enable scrolling only when content exceeds that limit.
+- Preserve scroll positions while measuring content, and keep Settings reachable without a second outer scrollbar.
+
 ## [1.17.4-gtrows.1] - 2026-11-03
 
 ### Changed

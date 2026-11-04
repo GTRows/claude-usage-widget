@@ -1,5 +1,5 @@
 // Fixture-only integration test. It never reads real profile credentials.
-const { app, BrowserWindow, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, nativeImage, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const assert = require('assert/strict');
@@ -80,12 +80,17 @@ app.whenReady().then(async () => {
     await waitFor(async () => await js('document.getElementById("sessionPercentage")?.textContent === "38%"'), 'initial usage');
     if (process.env.WIDGET_COMPACT_START === '1') {
       await delay(350);
-      assert.deepEqual(win.getContentSize(), [320, 360]);
+      assert.equal(win.getContentSize()[0], 320);
+      assert(win.getContentSize()[1] <= Math.floor(screen.getDisplayMatching(win.getBounds()).workArea.height * 70 / 100));
+      assert.equal(await js(`(() => {
+        const widget = document.getElementById('widgetContainer');
+        return widget.scrollHeight <= widget.clientHeight + 1 && Math.abs(widget.getBoundingClientRect().bottom + 6 - innerHeight) <= 1;
+      })()`), true, 'Compact startup must fit its content');
       const size = win.getContentSize();
       await js('document.getElementById("refreshBtn").click()');
       await delay(350);
       assert.deepEqual(win.getContentSize(), size);
-      process.stdout.write('ELECTRON_SMOKE_PASS: stable persisted compact startup\n');
+      process.stdout.write('ELECTRON_SMOKE_PASS: content-sized persisted compact startup\n');
       app.quit();
       return;
     }
@@ -155,7 +160,8 @@ app.whenReady().then(async () => {
     assert(setupHeight >= 480, `Account setup collapsed to ${setupHeight}px`);
     await delay(600);
     assert(Math.abs(win.getContentSize()[1] - setupHeight) <= 2, 'Account setup height must stay stable');
-    assert.deepEqual(win.getContentSize(), switchBounds, 'Account setup must keep the normal window size');
+    assert.equal(win.getContentSize()[0], switchBounds[0], 'Account setup must keep the normal window width');
+    assert(setupHeight <= Math.floor(screen.getDisplayMatching(win.getBounds()).workArea.height * 70 / 100), 'Account setup must respect the screen height limit');
     fs.writeFileSync(path.join(screenshots, 'account-setup.png'), (await win.webContents.capturePage()).toPNG());
     await js('document.getElementById("cancelAddAccount").click()');
     await waitFor(async () => await js('document.getElementById("sessionPercentage").textContent === "17%"'), 'cancel setup');
@@ -187,9 +193,13 @@ app.whenReady().then(async () => {
     assert((await js('window.electronAPI.getHistorySource("api")')).every((row) => row.apiRequests === 250));
     await js('document.getElementById("closeArchiveHistoryBtn").click()');
     await waitFor(async () => await js('!document.body.classList.contains("history-archive-open")'), 'return from history');
+    await delay(450);
     const beforeMove = win.getBounds();
-    win.setPosition(beforeMove.x + 5, beforeMove.y + 5);
-    await waitFor(() => JSON.parse(fs.readFileSync(path.join(dataDir, 'config.json'))).windowPosition?.x === beforeMove.x + 5, 'normal position persistence after settings logout');
+    const moveArea = screen.getDisplayMatching(beforeMove).workArea;
+    const moveX = beforeMove.x + (beforeMove.x + beforeMove.width / 2 > moveArea.x + moveArea.width / 2 ? -5 : 5);
+    const moveY = beforeMove.y + (beforeMove.y + beforeMove.height / 2 > moveArea.y + moveArea.height / 2 ? -5 : 5);
+    win.setPosition(moveX, moveY);
+    await waitFor(() => JSON.parse(fs.readFileSync(path.join(dataDir, 'config.json'))).windowPosition?.x === moveX, 'normal position persistence after settings logout');
     const activeBeforeTray = (await js('window.electronAPI.getCredentials()')).id;
     await js(`window.electronAPI.deleteCredentials(${JSON.stringify(activeBeforeTray)})`);
     win.webContents.send('session-expired');

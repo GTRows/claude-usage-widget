@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 // Hosted Windows runners provide a desktop session; local npm test stays lightweight.
 describe('Windows desktop integration', () => {
   for (const mode of ['normal', 'broken', 'compact']) {
-    const label = mode === 'compact' ? 'starts in the persisted compact size without content resizing'
+    const label = mode === 'compact' ? 'fits persisted compact mode to its content'
       : mode === 'broken' ? 'keeps healthy accounts available when the selected credential is unreadable' : 'completes the real account, theme, logout and history flow';
     it.runIf(process.platform === 'win32' && Boolean(process.env.CI))(label, async () => {
       const result = await new Promise((resolve, reject) => {
