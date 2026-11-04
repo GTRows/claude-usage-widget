@@ -84,7 +84,8 @@ function createUpdateController({ updater, capability, readPreference = () => tr
   function dispose() {
     disposed = true;
     clearTimeout(initialTimer); clearInterval(interval);
-    for (const [name, callback] of listeners) updater.removeListener(name, callback);
+    // Keep the error sink while an in-flight native request shuts down.
+    for (const [name, callback] of listeners) if (name !== 'error') updater.removeListener(name, callback);
   }
   return { start, check, download, install, getState, setAutomaticDownloads, dispose };
 }

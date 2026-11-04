@@ -112,6 +112,7 @@ describe('desktop update controller', () => {
       const count = states.length;
       await vi.advanceTimersByTimeAsync(8 * 3600000);
       updater.emit('update-available', { version: '2.0.0' });
+      expect(() => updater.emit('error', new Error('late network failure'))).not.toThrow();
       expect(updater.checkForUpdates).not.toHaveBeenCalled();
       expect(states).toHaveLength(count);
     } finally { vi.useRealTimers(); }
