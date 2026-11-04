@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     permissions:
       contents: write
 
@@ -38,9 +38,12 @@ jobs:
         shell: pwsh
 
       - name: Build Electron app (Setup + Portable)
-        run: npm run build:win
+        run: npm run build:win -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify update manifests and payload checksums
+        run: node scripts/verify-update-metadata.cjs dist
 
       - name: Upload Setup installer
         uses: actions/upload-artifact@v4
@@ -56,6 +59,15 @@ jobs:
           path: dist/*portable*.exe
           if-no-files-found: error
 
+      - name: Upload Windows update metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-win-update
+          path: |
+            dist/*Setup*.exe.blockmap
+            dist/latest.yml
+          if-no-files-found: error
+
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -65,5 +77,7 @@ jobs:
           files: |
             dist/*Setup*.exe
             dist/*portable*.exe
+            dist/*Setup*.exe.blockmap
+            dist/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

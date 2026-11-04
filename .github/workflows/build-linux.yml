@@ -52,13 +52,16 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
 
       - name: Build Electron app (AppImage + RPM + DEB + Pacman + tar.gz)
-        run: npm run build:linux
+        run: npm run build:linux -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FPM_DEBUG: 'true'
 
       - name: List built artifacts
         run: ls -lh dist/
+
+      - name: Verify update manifests and payload checksums
+        run: node scripts/verify-update-metadata.cjs dist
 
       - name: Upload x64 AppImage
         uses: actions/upload-artifact@v4
@@ -102,6 +105,13 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
+      - name: Upload Linux update metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-linux-update
+          path: dist/latest-linux*.yml
+          if-no-files-found: error
+
       - name: Upload to Release (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -115,6 +125,7 @@ jobs:
             dist/*.deb
             dist/*.pacman
             dist/*.tar.gz
+            dist/latest-linux*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -129,4 +140,5 @@ jobs:
             dist/*.deb \
             dist/*.pacman \
             dist/*.tar.gz \
+            dist/latest-linux*.yml \
             --clobber --repo "$GITHUB_REPOSITORY"

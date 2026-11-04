@@ -2,6 +2,8 @@ name: Build macOS (DMG)
 
 on:
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 jobs:
   build:
@@ -11,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18]
+        node-version: [22]
 
     steps:
       - name: Checkout
@@ -32,6 +34,7 @@ jobs:
           npm pkg set version="$VERSION"
 
       - name: Import macOS certificates
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           # Create keychain
           security create-keychain -p "" build.keychain
@@ -56,13 +59,21 @@ jobs:
           rm -f certificate.p12 certificate.b64
 
       - name: Build Electron app (DMG)
-        run: npm run build:mac
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            npm run build:mac -- --publish never
+          else
+            npm run build:mac -- --publish never -c.mac.identity=null -c.mac.notarize=false
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: build.keychain
+
+      - name: Verify update manifests and payload checksums
+        run: node scripts/verify-update-metadata.cjs dist
 
       - name: Upload arm64 DMG
         uses: actions/upload-artifact@v4
@@ -78,6 +89,16 @@ jobs:
           path: dist/*x64*.dmg
           if-no-files-found: error
 
+      - name: Upload Mac update payload and metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-mac-update
+          path: |
+            dist/*macOS*.zip
+            dist/*macOS*.zip.blockmap
+            dist/latest-mac.yml
+          if-no-files-found: error
+
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -89,5 +110,8 @@ jobs:
             dist/*arm64*.dmg.blockmap
             dist/*x64*.dmg
             dist/*x64*.dmg.blockmap
+            dist/*macOS*.zip
+            dist/*macOS*.zip.blockmap
+            dist/latest-mac.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
