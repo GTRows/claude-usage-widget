@@ -50,6 +50,18 @@ Supported local stores are Claude Code's `.credentials.json`, its scoped macOS K
 
 Quota adapters use provider usage endpoints referenced by the MIT-licensed [CodexBar source](https://github.com/steipete/CodexBar); the JavaScript adapters were implemented independently. Credential storage is described in [OpenAI's authentication documentation](https://learn.chatgpt.com/docs/auth). Usage endpoint formats can change; errors retain the last successful snapshot and never delete a saved account.
 
+### Automatic updates
+
+Installed Windows Setup builds, signed Mac builds and Linux AppImages check for updates shortly after launch and every four hours. New versions download in the background by default. The widget shows download progress and offers **Restart and update** when verification finishes; it does not force an immediate restart. Disable automatic downloads in Settings to choose when to download.
+
+Development builds, unsigned/ad-hoc Mac bundles, Windows portable executables and package-manager Linux installations retain the manual release link. A missing update feed or network error can be retried without interrupting account monitoring.
+
+**One-time Mac migration:** the current local development bundle cannot install native updates. Install the first Developer ID-signed Mac release once; subsequent releases must retain the same signing identity. The existing account and history directory is retained. Until a signed release is published, signed Mac update installation remains unverified.
+
+For maintainers: keep the GitHub provider pointed at `GTRows/claude-usage-widget`, stable channel `latest`, and the existing `-gtrows.N` version format. Windows publishes `latest.yml`, Setup EXE and its blockmap; Mac publishes `latest-mac.yml`, both architecture ZIP payloads/blockmaps and the existing DMGs; Linux publishes the AppImage update manifests. CI validates each manifest against its payload SHA-512 before upload. Build commands use `--publish never`; the existing release upload steps own publication.
+
+Mac release tags require the existing `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` CI secrets, with a valid signing identity matching the app. Untagged Mac verification builds remain unsigned and are not advertised as native-update-capable. Native Windows update acceptance builds two isolated fixture installers and verifies download, installation/relaunch and persisted data without touching production accounts.
+
 ### Development verification
 
 `npm test` runs the unit suite. On hosted Windows CI it also launches real Electron windows using fixture-only data and exercises account switching, themes, API currency totals, logout, retained history, window restoration and an unreadable active credential. Run that same desktop smoke locally with:

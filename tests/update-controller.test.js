@@ -84,6 +84,19 @@ describe('desktop update controller', () => {
     await controller.download();
     expect(updater.downloadUpdate).toHaveBeenCalledTimes(2);
   });
+  it('does not begin a stale download while a fresh version check is running', async () => {
+    const { updater, controller } = fixture({ readPreference: () => false });
+    updater.emit('update-available', { version: '2.0.0' });
+    let finish;
+    updater.checkForUpdates.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const check = controller.check();
+    await controller.download();
+    expect(updater.downloadUpdate).not.toHaveBeenCalled();
+    updater.emit('update-available', { version: '2.0.1' }); finish();
+    await check;
+    await controller.download();
+    expect(updater.downloadUpdate).toHaveBeenCalledTimes(1);
+  });
   it('only installs supported, fully downloaded updates', () => {
     const { updater, controller } = fixture();
     expect(controller.install()).toBe(false);

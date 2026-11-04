@@ -12,7 +12,7 @@ describe('update presentation', () => {
   });
   it('offers a retry after errors without presenting an incomplete download as installed', () => {
     expect(presentUpdate({ supported: true, status: 'error', version: '2.0.0' }, t).action).toBe('download');
-    expect(presentUpdate({ supported: true, status: 'error', version: null }, t).action).toBe(null);
+    expect(presentUpdate({ supported: true, status: 'error', version: null }, t).action).toBe('manual');
   });
   it('ignores a stale initial snapshot received after a newer update event', async () => {
     let receive; let resolve;

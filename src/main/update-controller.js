@@ -55,7 +55,7 @@ function createUpdateController({ updater, capability, readPreference = () => tr
     return checkPromise;
   }
   function download() {
-    if (disposed || !capability.supported || !state.version || ['downloaded', 'installing'].includes(state.status)) return Promise.resolve(getState());
+    if (disposed || !capability.supported || !state.version || ['checking', 'downloaded', 'installing'].includes(state.status)) return Promise.resolve(getState());
     if (downloadPromise) return downloadPromise;
     change({ status: 'downloading', percent: 0, error: null });
     let work;

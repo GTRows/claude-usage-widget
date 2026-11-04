@@ -6,7 +6,7 @@ export function presentUpdate(state, t) {
   const keys = { checking: 'checkingStatus', 'up-to-date': 'upToDate', available: 'available', downloading: 'downloading', downloaded: 'ready', installing: 'installing', error: 'failed' };
   const statusText = t(`update.${keys[status] || (version ? 'available' : 'notChecked')}`, { version, percent: progress });
   let action = null;
-  if (version && !state.supported) action = 'manual';
+  if ((version && !state.supported) || (status === 'error' && !version)) action = 'manual';
   else if (state.supported && status === 'downloaded') action = 'install';
   else if (state.supported && version && ['available', 'error'].includes(status)) action = 'download';
   return { statusText, action, progress, supportKey: state.supported ? null : `update.support.${state.reason || 'package-manager'}` };
