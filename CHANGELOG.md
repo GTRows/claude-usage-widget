@@ -14,6 +14,19 @@ Newest releases at the top. Format inspired by [Keep a Changelog](https://keepac
 ### Fixed
 ### Security
 
+## [1.18.0-gtrows.1] - 2026-11-25
+
+### Added
+- Add in-app update checks, download progress, and an explicit restart action for supported installations.
+- Enable native updates for Linux AppImage installations. Install this release manually once to get the updater.
+
+### Changed
+- Ship Windows and Linux builds in this release. Windows Setup and Portable keep the manual download flow. Linux package-manager installations continue updating through their package manager.
+- Defer macOS builds until Developer ID signing and notarization are available.
+
+### Security
+- Require a trusted Authenticode signature from the configured publisher before launching a native Windows update installer.
+
 ## [1.17.5-gtrows.1] - 2026-11-04
 
 ### Changed
