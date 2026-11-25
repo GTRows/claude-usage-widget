@@ -185,6 +185,7 @@ const tr = {
   'update.autoDownloadHint': 'Arka planda indir; hazır olduğunda yeniden başlat.',
   'update.downloadProgress': 'Güncelleme indirme ilerlemesi',
   'update.support.unsigned-mac': 'Otomatik güncelleme için ilk imzalı Mac sürümünü bir kez kur.',
+  'update.support.unsigned-windows': 'Otomatik güncelleme için imzalı Windows kurulum sürümünü yükle.',
   'update.support.development': 'Bu geliştirme sürümü elle güncellenir.',
   'update.support.portable': 'Taşınabilir sürüm elle güncellenir. Otomatik güncelleme için kurulum sürümünü kullan.',
   'update.support.package-manager': 'Bu kurulumu paket yöneticin üzerinden güncelle.',

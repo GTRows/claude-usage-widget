@@ -1,9 +1,10 @@
-function createUpdateController({ updater, capability, readPreference = () => true, emitState = () => {}, checkManual = async () => ({ hasUpdate: false }) }) {
+function createUpdateController({ updater, capability, verifyInstaller, readPreference = () => true, emitState = () => {}, checkManual = async () => ({ hasUpdate: false }) }) {
   let disposed = false;
   let checkPromise = null;
   let downloadPromise = null;
   let initialTimer = null;
   let interval = null;
+  let downloadedFile = null;
   const listeners = [];
   let state = {
     status: capability.supported ? 'idle' : 'manual', supported: capability.supported,
@@ -35,7 +36,10 @@ function createUpdateController({ updater, capability, readPreference = () => tr
       const percent = Number.isFinite(progress.percent) ? Math.max(0, Math.min(100, Math.round(progress.percent))) : 0;
       change({ status: 'downloading', percent });
     });
-    listen('update-downloaded', (info) => change({ status: 'downloaded', version: info.version, percent: 100, error: null }));
+    listen('update-downloaded', (info) => {
+      downloadedFile = info.downloadedFile;
+      change({ status: 'downloaded', version: info.version, percent: 100, error: null });
+    });
     listen('error', failure);
   }
   function check() {
@@ -64,11 +68,22 @@ function createUpdateController({ updater, capability, readPreference = () => tr
     downloadPromise = Promise.resolve(work).catch(failure).then(() => getState()).finally(() => { downloadPromise = null; });
     return downloadPromise;
   }
+  function startInstaller() {
+    if (disposed || state.status !== 'installing') return false;
+    try { updater.quitAndInstall(true, true); return true; }
+    catch { failure(); return false; }
+  }
   function install() {
     if (disposed || !capability.supported || state.status !== 'downloaded') return false;
     change({ status: 'installing' });
-    try { updater.quitAndInstall(true, true); return true; }
-    catch { failure(); return false; }
+    if (!verifyInstaller) return startInstaller();
+    return Promise.resolve().then(() => verifyInstaller(downloadedFile)).then(error => {
+      if (error === null) return startInstaller();
+      throw new Error('Invalid update signature');
+    }).catch(() => {
+      change({ status: 'error', version: null, error: 'UPDATE_FAILED' });
+      return false;
+    });
   }
   function setAutomaticDownloads(enabled) {
     change({ automaticDownloads: Boolean(enabled) });

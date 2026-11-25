@@ -28,7 +28,7 @@ Official references:
 | `APPLE_APP_SPECIFIC_PASSWORD` | Apple app-specific password for that account |
 | `APPLE_TEAM_ID` | Team ID corresponding to the signing certificate |
 
-The tagged workflow overrides the legacy static notarization Team ID with `APPLE_TEAM_ID`. It stops before publication when inputs are absent, the bundle's signing Team ID differs, or signature/staple/Gatekeeper validation fails. Untagged verification builds intentionally remain unsigned and cannot demonstrate native Mac update installation.
+The tagged release workflow overrides the legacy static notarization Team ID with `APPLE_TEAM_ID`. It blocks publication of the desktop release when inputs are absent, the bundle's signing Team ID differs, or signature/staple/Gatekeeper validation fails. Untagged verification builds remain unsigned.
 
 For a signed local build with the same identity imported into the local keychain and the three `APPLE_*` values provided through the local environment, use:
 
@@ -39,7 +39,7 @@ npm run build:mac -- --publish never "-c.mac.notarize.teamId=$APPLE_TEAM_ID"
 ## First installation and acceptance
 
 1. Merge the updater changes and configure the official release repository's secrets before publishing the first signed Mac release. Release versions remain controlled by the existing release procedure.
-2. Verify both ARM64 and x64 bundles are Developer ID signed and notarized. Publish the existing DMGs plus `latest-mac.yml`, architecture ZIPs and blockmaps. The workflow verifies payload SHA-512 before upload.
+2. The release workflow verifies Developer ID signing and notarization for the ARM64 and x64 bundles. It publishes the DMGs, ZIPs, blockmaps and `latest-mac.yml` together with the Windows and Linux artifacts.
 3. Quit the old development bundle and install the signed app once in Applications. Keep the existing user-data directory: `~/Library/Application Support/claude-usage-widget`. Do not launch the old Downloads copy alongside it.
 4. Reopen the signed app and confirm existing accounts/history, the displayed version and native-update availability.
 5. Test an upgrade to a higher version signed by the same owner: check, download, verify progress, select **Restart and update**, and confirm the new process/version plus retained account/settings/history. Use an isolated signed fixture feed for pre-release acceptance or the next official signed release; never publish synthetic test versions into the production update channel.

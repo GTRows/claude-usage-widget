@@ -52,15 +52,15 @@ Quota adapters use provider usage endpoints referenced by the MIT-licensed [Code
 
 ### Automatic updates
 
-Installed Windows Setup builds, signed Mac builds and Linux AppImages check for updates shortly after launch and every four hours. New versions download in the background by default. The widget shows download progress and offers **Restart and update** when verification finishes; it does not force an immediate restart. Disable automatic downloads in Settings to choose when to download.
+Signed Windows Setup builds, signed Mac builds and Linux AppImages check for updates shortly after launch and every four hours. New versions download in the background by default. The widget shows download progress and offers **Restart and update** after the download. Disable automatic downloads in Settings to choose when to download.
 
-Development builds, unsigned/ad-hoc Mac bundles, Windows portable executables and package-manager Linux installations retain the manual release link. A missing update feed or network error can be retried without interrupting account monitoring.
+Development builds, unsigned Windows or Mac builds, Windows portable executables and package-manager Linux installations retain the manual release link. Install the first signed Windows Setup release once to enable native updates. Windows verifies the Authenticode signature against the publisher in the installed app immediately before launching the update installer. A missing update feed or network error can be retried without interrupting account monitoring.
 
 **One-time Mac migration:** the current local development bundle cannot install native updates. Install the first Developer ID-signed Mac release once; subsequent releases must retain the same signing identity. The existing account and history directory is retained. Until a signed release is published, signed Mac update installation remains unverified.
 
-For maintainers: keep the GitHub provider pointed at `GTRows/claude-usage-widget`, stable channel `latest`, and the existing `-gtrows.N` version format. Windows publishes `latest.yml`, Setup EXE and its blockmap; Mac publishes `latest-mac.yml`, both architecture ZIP payloads/blockmaps and the existing DMGs; Linux publishes the AppImage update manifests. CI validates each manifest against its payload SHA-512 before upload. Build commands use `--publish never`; the existing release upload steps own publication.
+The update provider uses the `latest` channel in `GTRows/claude-usage-widget` and the existing `-gtrows.N` version format. The release workflow assembles all three platforms in one draft and verifies the uploaded assets before publishing. See the [release runbook](RELEASE.md) for Windows signing and publication requirements.
 
-Mac release tags require the existing `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` CI secrets, with a valid signing identity matching the app. The tagged build passes `APPLE_TEAM_ID` explicitly to notarization instead of inheriting the static project default. See [Mac signing setup](MACOS_SIGNING.md) for certificate ownership, secret setup and the first signed installation. Untagged Mac verification builds remain unsigned and are not advertised as native-update-capable. Native Windows update acceptance builds two isolated fixture installers and verifies download, installation/relaunch and persisted data without touching production accounts.
+See [Mac signing setup](MACOS_SIGNING.md) for certificate ownership, notarization and the first signed installation. Native Windows update acceptance uses two isolated fixture installers to test download, installation, relaunch and persisted data. The production signature policy has separate Authenticode checks.
 
 ### Development verification
 

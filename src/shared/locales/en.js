@@ -185,6 +185,7 @@ const en = {
   'update.autoDownloadHint': 'Download in the background; restart when you are ready.',
   'update.downloadProgress': 'Update download progress',
   'update.support.unsigned-mac': 'Install the first signed Mac release once to enable automatic updates.',
+  'update.support.unsigned-windows': 'Install the signed Windows Setup release to enable automatic updates.',
   'update.support.development': 'This development build is updated manually.',
   'update.support.portable': 'Portable builds update manually. Use the Setup installer for automatic updates.',
   'update.support.package-manager': 'Use your package manager to update this installation.',

@@ -102,6 +102,27 @@ describe('desktop update controller', () => {
     expect(controller.install()).toBe(false);
     expect(updater.quitAndInstall).not.toHaveBeenCalled();
   });
+  it('blocks installation of an already downloaded Windows installer without a valid publisher signature', async () => {
+    let finishVerification;
+    const verifyInstaller = vi.fn(() => new Promise(resolve => { finishVerification = resolve; }));
+    const { updater, controller } = fixture({ verifyInstaller });
+    updater.emit('update-downloaded', { version: '2.0.0', downloadedFile: 'cached-setup.exe' });
+    const install = controller.install();
+    await Promise.resolve();
+    expect(verifyInstaller).toHaveBeenCalledWith('cached-setup.exe');
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(controller.install()).toBe(false);
+    finishVerification('Invalid signature');
+    expect(await install).toBe(false);
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(controller.getState()).toMatchObject({ status: 'error', version: null });
+  });
+  it('installs after Windows publisher verification succeeds', async () => {
+    const { updater, controller } = fixture({ verifyInstaller: async () => null });
+    updater.emit('update-downloaded', { version: '2.0.0', downloadedFile: 'signed-setup.exe' });
+    expect(await controller.install()).toBe(true);
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce();
+  });
   it('uses manual release checks when native updates are unavailable', async () => {
     const { updater, controller } = fixture({ capability: { supported: false, reason: 'unsigned-mac' }, checkManual: async () => ({ hasUpdate: true, version: '2.0.0-gtrows.1' }) });
     await controller.check();

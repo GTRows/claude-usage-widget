@@ -3,21 +3,21 @@ name: Build Linux (AppImage + RPM + DEB + Pacman + tar.gz)
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing release tag to attach artifacts to (e.g. v1.11.0-gtrows.1). Leave blank to skip release upload.'
+        description: 'Optional existing tag to rebuild as workflow artifacts (e.g. v1.11.0-gtrows.1).'
         required: false
         default: ''
+  workflow_call:
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       matrix:
@@ -26,6 +26,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.release_tag && format('refs/tags/{0}', github.event.inputs.release_tag) || github.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -36,17 +39,16 @@ jobs:
         run: npm install
 
       - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.release_tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npm pkg set version="$VERSION"
-
-      - name: Override version for manual release upload
-        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
-        run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          npm pkg set version="$VERSION"
+          if [[ -n "$RELEASE_TAG" ]]; then
+            if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-gtrows\.[0-9]+$ ]]; then
+              echo "Invalid GTRows release tag" >&2
+              exit 1
+            fi
+            npm pkg set version="${RELEASE_TAG#v}"
+          fi
 
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
@@ -61,6 +63,7 @@ jobs:
         run: ls -lh dist/
 
       - name: Verify update manifests and payload checksums
+        if: github.event_name != 'workflow_dispatch' || hashFiles('scripts/verify-update-metadata.cjs') != ''
         run: node scripts/verify-update-metadata.cjs dist
 
       - name: Upload x64 AppImage
@@ -106,39 +109,9 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Linux update metadata
+        if: github.event_name != 'workflow_dispatch' || hashFiles('scripts/verify-update-metadata.cjs') != ''
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-Widget-linux-update
           path: dist/latest-linux*.yml
           if-no-files-found: error
-
-      - name: Upload to Release (tag push)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          files: |
-            dist/*x86_64*.AppImage
-            dist/*arm64*.AppImage
-            dist/*.rpm
-            dist/*.deb
-            dist/*.pacman
-            dist/*.tar.gz
-            dist/latest-linux*.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to existing release (manual dispatch)
-        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ inputs.release_tag }}" \
-            dist/*.AppImage \
-            dist/*.rpm \
-            dist/*.deb \
-            dist/*.pacman \
-            dist/*.tar.gz \
-            dist/latest-linux*.yml \
-            --clobber --repo "$GITHUB_REPOSITORY"

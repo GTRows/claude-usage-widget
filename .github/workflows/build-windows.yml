@@ -3,16 +3,27 @@ name: Build Windows (Setup + Portable)
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      signed_release:
+        type: boolean
+        default: false
+    secrets:
+      WIN_CSC_LINK:
+        required: false
+      WIN_CSC_KEY_PASSWORD:
+        required: false
+      WINDOWS_UPDATE_PUBLISHER:
+        required: false
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: ${{ inputs.signed_release && vars.WINDOWS_SIGNING_CERTIFICATE_SHA1 != '' && fromJSON('["self-hosted", "Windows", "windows-signing"]') || 'windows-2022' }}
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       matrix:
@@ -21,6 +32,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -31,21 +45,52 @@ jobs:
         run: npm install
 
       - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: inputs.signed_release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $version = $env:RELEASE_TAG -replace '^v', ''
           npm pkg set version="$version"
         shell: pwsh
 
       - name: Build Electron app (Setup + Portable)
+        if: '!inputs.signed_release'
         run: npm run build:win -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require Windows signing inputs
+        if: inputs.signed_release
+        run: node scripts/verify-win-release.cjs --preflight
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WINDOWS_UPDATE_PUBLISHER: ${{ secrets.WINDOWS_UPDATE_PUBLISHER }}
+          WINDOWS_SIGNING_CERTIFICATE_SHA1: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_SHA1 }}
+
+      - name: Build and verify signed Windows installers
+        if: inputs.signed_release
+        shell: pwsh
+        run: |
+          $signing = @('-c.forceCodeSigning=true', "-c.win.publisherName=$env:WINDOWS_UPDATE_PUBLISHER")
+          if ($env:WINDOWS_SIGNING_CERTIFICATE_SHA1) {
+            $signing += "-c.win.certificateSha1=$env:WINDOWS_SIGNING_CERTIFICATE_SHA1"
+          }
+          npm run build:win -- --publish never @signing
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-win-release.cjs dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WINDOWS_UPDATE_PUBLISHER: ${{ secrets.WINDOWS_UPDATE_PUBLISHER }}
+          WINDOWS_SIGNING_CERTIFICATE_SHA1: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_SHA1 }}
 
       - name: Verify update manifests and payload checksums
         run: node scripts/verify-update-metadata.cjs dist
 
       - name: Verify native update and restart on isolated installers
+        if: '!inputs.signed_release'
         run: node scripts/test-windows-update.cjs
 
       - name: Upload Setup installer
@@ -70,17 +115,3 @@ jobs:
             dist/*Setup*.exe.blockmap
             dist/latest.yml
           if-no-files-found: error
-
-      - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          files: |
-            dist/*Setup*.exe
-            dist/*portable*.exe
-            dist/*Setup*.exe.blockmap
-            dist/latest.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

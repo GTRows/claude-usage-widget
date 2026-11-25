@@ -6,9 +6,12 @@ describe('native update availability', () => {
   it('does not install from a development checkout', () => {
     expect(updateCapability({ packaged: false, platform: 'win32' })).toMatchObject({ supported: false, reason: 'development' });
   });
-  it('supports installed NSIS and excludes portable Windows', () => {
-    expect(updateCapability({ packaged: true, platform: 'win32', environment: {} }).supported).toBe(true);
-    expect(updateCapability({ packaged: true, platform: 'win32', environment: { PORTABLE_EXECUTABLE_FILE: 'widget.exe' } }).supported).toBe(false);
+  it('requires a configured Windows publisher and excludes portable builds', () => {
+    const installed = { packaged: true, platform: 'win32', environment: {} };
+    const windowsPublisher = 'CN=Widget Publisher, O=Widget Publisher, C=US';
+    expect(updateCapability(installed)).toEqual({ supported: false, reason: 'unsigned-windows' });
+    expect(updateCapability({ ...installed, windowsPublisher }).supported).toBe(true);
+    expect(updateCapability({ ...installed, windowsPublisher, environment: { PORTABLE_EXECUTABLE_FILE: 'widget.exe' } })).toEqual({ supported: false, reason: 'portable' });
   });
   it('requires a Developer ID signature for Mac updates', () => {
     for (const signature of ['', 'Signature=adhoc\nTeamIdentifier=not set', 'Signature=adhoc\nTeamIdentifier=ABC']) {
