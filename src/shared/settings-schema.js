@@ -1,5 +1,6 @@
 const SETTINGS_DEFAULTS = {
   autoStart: false,
+  autoDownloadUpdates: true,
   alwaysOnTop: true,
   theme: 'dark',
   themeStyle: 'classic',

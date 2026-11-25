@@ -71,3 +71,11 @@ describe('pickLatestRelease', () => {
     ])).toEqual({ version: '1.9.0', releaseUrl: 'stable-url' });
   });
 });
+
+describe('fork release numeric ordering', () => {
+  it('orders gtrows.10 after gtrows.9 and preserves prerelease precedence', () => {
+    expect(compareVersions('1.17.5-gtrows.10', '1.17.5-gtrows.9')).toBeGreaterThan(0);
+    expect(compareVersions('1.17.5-gtrows.2', '1.17.5-gtrows.10')).toBeLessThan(0);
+    expect(compareVersions('1.17.5-gtrows.2', '1.17.5-gtrows.2.1')).toBeLessThan(0);
+  });
+});

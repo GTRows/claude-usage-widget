@@ -43,6 +43,8 @@ const registerHandler = ipcMain.handle.bind(ipcMain);
 ipcMain.handle = (channel, handler) => registerHandler(channel, channel === 'set-active-account'
   ? async (...args) => { await new Promise((resolve) => setTimeout(resolve, 180)); return handler(...args); }
   : handler);
+require(path.join(root, 'src/main/release-check')).checkLatestRelease = async () => ({ ok: true, hasUpdate: false });
+const updateFlow = process.env.WIDGET_UPDATE_FLOW === '1' ? require('./update-ui.cjs').prepare(root) : null;
 require(path.join(root, 'main.js'));
 ipcMain.handle = registerHandler;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,6 +70,7 @@ app.whenReady().then(async () => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html')) || BrowserWindow.getAllWindows()[0];
     win.webContents.on('console-message', (_, level, message) => { if (level >= 2) process.stderr.write(`renderer: ${message}\n`); });
     const js = (source) => win.webContents.executeJavaScript(source);
+    if (updateFlow) { await updateFlow({ win, js, waitFor, delay, screenshots }); app.quit(); return; }
     if (process.env.WIDGET_BROKEN_START) {
       await waitFor(async () => await js('document.querySelectorAll(".account-card").length === 4 && document.getElementById("accountList").textContent.includes("38%")'), 'healthy accounts while active credential unavailable');
       assert.equal(await js('getComputedStyle(document.getElementById("loginContainer")).display'), 'none');

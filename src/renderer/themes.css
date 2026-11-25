@@ -116,6 +116,7 @@ body:is([data-theme-style="graphite"], [data-theme-style="glass"]) .compact-bar-
 body:is([data-theme-style="graphite"], [data-theme-style="glass"]) .compact-bar-fill.danger { background: var(--danger); }
 body:is([data-theme-style="graphite"], [data-theme-style="glass"]) .compact-pct { color: var(--ink); background: var(--bg-raised); border-radius: 4px; padding: 0 4px; text-shadow: none; }
 body:is([data-theme-style="graphite"], [data-theme-style="glass"]) .settings-overlay { background: var(--overlay-bg, var(--bg)); }
+body[data-theme-style="glass"] .settings-overlay { backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
 body:is([data-theme-style="graphite"], [data-theme-style="glass"]) .settings-list { background: var(--surface); }
 body:is([data-theme-style="graphite"], [data-theme-style="glass"]) .settings-item { border-bottom-style: solid; }
 body:is([data-theme-style="graphite"], [data-theme-style="glass"]) :is(.settings-item:hover, .history-table tbody tr:hover td, .kbd-mod, .settings-group-num, .settings-disclaimer, .toggle-switch input:checked + .toggle-slider) { background: var(--surface-2); }

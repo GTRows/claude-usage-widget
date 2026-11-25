@@ -2,20 +2,39 @@ name: Build macOS (DMG)
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      signed_release:
+        type: boolean
+        default: false
+    secrets:
+      CSC_LINK:
+        required: false
+      CSC_KEY_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_APP_SPECIFIC_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
 
 jobs:
   build:
     runs-on: macos-latest
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       matrix:
-        node-version: [18]
+        node-version: [22]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -26,12 +45,26 @@ jobs:
         run: npm install
 
       - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: inputs.signed_release
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           npm pkg set version="$VERSION"
 
+      - name: Require signing and notarization inputs for release tags
+        if: inputs.signed_release
+        run: node scripts/verify-mac-release.cjs --preflight
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
       - name: Import macOS certificates
+        if: inputs.signed_release
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
           # Create keychain
           security create-keychain -p "" build.keychain
@@ -40,11 +73,11 @@ jobs:
           security unlock-keychain -p "" build.keychain
           
           # Write base64 to file, then decode
-          echo '${{ secrets.CSC_LINK }}' > certificate.b64
+          printf '%s' "$CSC_LINK" > certificate.b64
           base64 --decode -i certificate.b64 -o certificate.p12
           
           # Import certificate
-          security import certificate.p12 -k build.keychain -P '${{ secrets.CSC_KEY_PASSWORD }}' -T /usr/bin/codesign -T /usr/bin/productbuild
+          security import certificate.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
           
           # Set keychain partition list
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
@@ -55,8 +88,13 @@ jobs:
           # Cleanup
           rm -f certificate.p12 certificate.b64
 
-      - name: Build Electron app (DMG)
-        run: npm run build:mac
+      - name: Build unsigned macOS artifacts
+        if: '!inputs.signed_release'
+        run: npm run build:mac -- --publish never -c.mac.identity=null -c.mac.notarize=false
+
+      - name: Build signed macOS artifacts
+        if: inputs.signed_release
+        run: npm run build:mac -- --publish never "-c.mac.notarize.teamId=$APPLE_TEAM_ID"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -64,30 +102,43 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: build.keychain
 
+      - name: Require signed and notarized Mac release bundles
+        if: inputs.signed_release
+        run: node scripts/verify-mac-release.cjs dist
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify update manifests and payload checksums
+        run: node scripts/verify-update-metadata.cjs dist
+
       - name: Upload arm64 DMG
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-Widget-arm64
-          path: dist/*arm64*.dmg
+          path: |
+            dist/*arm64*.dmg
+            dist/*arm64*.dmg.blockmap
           if-no-files-found: error
 
       - name: Upload x64 DMG
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-Widget-x64
-          path: dist/*x64*.dmg
-          if-no-files-found: error
-
-      - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          files: |
-            dist/*arm64*.dmg
-            dist/*arm64*.dmg.blockmap
+          path: |
             dist/*x64*.dmg
             dist/*x64*.dmg.blockmap
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if-no-files-found: error
+
+      - name: Upload Mac update payload and metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-mac-update
+          path: |
+            dist/*macOS*.zip
+            dist/*macOS*.zip.blockmap
+            dist/latest-mac.yml
+          if-no-files-found: error

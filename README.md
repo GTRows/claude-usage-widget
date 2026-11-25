@@ -50,6 +50,18 @@ Supported local stores are Claude Code's `.credentials.json`, its scoped macOS K
 
 Quota adapters use provider usage endpoints referenced by the MIT-licensed [CodexBar source](https://github.com/steipete/CodexBar); the JavaScript adapters were implemented independently. Credential storage is described in [OpenAI's authentication documentation](https://learn.chatgpt.com/docs/auth). Usage endpoint formats can change; errors retain the last successful snapshot and never delete a saved account.
 
+### Automatic updates
+
+Signed Windows Setup builds, signed Mac builds and Linux AppImages check for updates shortly after launch and every four hours. New versions download in the background by default. The widget shows download progress and offers **Restart and update** after the download. Disable automatic downloads in Settings to choose when to download.
+
+Development builds, unsigned Windows or Mac builds, Windows portable executables and package-manager Linux installations retain the manual release link. Install the first signed Windows Setup release once to enable native updates. Windows verifies the Authenticode signature against the publisher in the installed app immediately before launching the update installer. A missing update feed or network error can be retried without interrupting account monitoring.
+
+**One-time Mac migration:** the current local development bundle cannot install native updates. Install the first Developer ID-signed Mac release once; subsequent releases must retain the same signing identity. The existing account and history directory is retained. Until a signed release is published, signed Mac update installation remains unverified.
+
+The update provider uses the `latest` channel in `GTRows/claude-usage-widget` and the existing `-gtrows.N` version format. The release workflow assembles all three platforms in one draft and verifies the uploaded assets before publishing. See the [release runbook](RELEASE.md) for Windows signing and publication requirements.
+
+See [Mac signing setup](MACOS_SIGNING.md) for certificate ownership, notarization and the first signed installation. Native Windows update acceptance uses two isolated fixture installers to test download, installation, relaunch and persisted data. The production signature policy has separate Authenticode checks.
+
 ### Development verification
 
 `npm test` runs the unit suite. On hosted Windows CI it also launches real Electron windows using fixture-only data and exercises account switching, themes, API currency totals, logout, retained history, window restoration and an unreadable active credential. Run that same desktop smoke locally with:

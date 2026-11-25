@@ -1,7 +1,7 @@
 # Release Runbook
 
 Source of truth for identity and release config: `IDENTITY.yaml`.
-Automation: `.github/workflows/release.yml`.
+Automation: `.github/workflows/publish-desktop.yml`.
 Notes source: `CHANGELOG.md`.
 
 ## Versioning rules
@@ -34,6 +34,7 @@ Before cutting a release:
 - [ ] `IDENTITY.yaml#version` matches the target version.
 - [ ] Derived manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, etc.) match `IDENTITY.yaml#version`. Run `/gtr:doctor` to verify.
 - [ ] CI on `main` is green.
+- [ ] Windows Authenticode and [Mac signing and notarization](MACOS_SIGNING.md) secrets are configured.
 - [ ] Screenshots for any visual changes saved under `assets/release/v<version>/`.
 
 ## Cut the release
@@ -47,24 +48,36 @@ Use `/gtr:release` to do steps 1–4 mechanically, or do them by hand:
 5. Tag: `git tag v<version> -m "Release v<version>"`.
 6. Push: `git push && git push --tags`.
 
-The tag push triggers `.github/workflows/release.yml`.
+The tag push triggers `.github/workflows/publish-desktop.yml`.
 
 ## Workflow behavior
 
-On tag push matching `v*.*.*`:
-1. Tests run first. Release aborts on failure.
-2. Build matrix runs for each platform in `IDENTITY.yaml#release.platforms`.
-3. Artifacts collected into `dist/`. `SHA256SUMS.<platform>` generated per job.
-4. Release notes extracted from the `## [x.y.z]` section of `CHANGELOG.md`.
-5. A **draft** GitHub Release is created with all artifacts and notes attached.
-6. Draft is not auto-published — a maintainer reviews and clicks Publish.
+On tag pushes in the `vMAJOR.MINOR.PATCH-gtrows.N` format:
+
+1. The Windows, macOS and Linux jobs build the triggering commit with release publication disabled. Windows and macOS verify their required signatures before uploading workflow artifacts.
+2. After all three jobs pass, the publication job validates the full installer and updater asset set, checks manifest versions and payload hashes, and generates `SHA256SUMS`.
+3. The publication job uploads the assets to a GitHub release draft. It checks each uploaded SHA-256 digest and confirms the tag still matches the build commit before making the draft public.
+
+Rerun the failed publication job with the original build artifacts to resume a draft. Existing assets are reused when their digests match. Leave the draft unpublished while the workflow runs. A manual Linux dispatch can rebuild an exact existing tag as workflow artifacts. Public releases are updated by cutting a new version.
+
+## Windows Authenticode signing
+
+Set the `WINDOWS_UPDATE_PUBLISHER` Actions secret to the full certificate subject from `(Get-AuthenticodeSignature -LiteralPath $signedFile).SignerCertificate.Subject`. Choose one signing setup:
+
+| Signing setup | Configuration |
+| --- | --- |
+| Certificate store | Provision a dedicated Windows runner with the `windows-signing` label and a signing provider that exposes its Authenticode certificate in the runner user's Windows certificate store. Set the `WINDOWS_SIGNING_CERTIFICATE_SHA1` Actions variable to its 40-digit thumbprint. The private key stays with the provider. Restrict the runner to trusted release jobs. |
+| Exportable PFX/P12 | If you already have a trusted, exportable Authenticode certificate, set the `WIN_CSC_LINK` secret to the Base64 of the PFX/P12 and `WIN_CSC_KEY_PASSWORD` to its password. This mode uses the hosted Windows runner. |
+
+Use a stable certificate subject for subsequent releases. Use a signed Setup package once to migrate from an unsigned installation. A change to the certificate subject requires another manual Setup installation before native updates can continue.
+
+Before the first signed rollout, use an isolated Windows VM and two builds signed by the same publisher to verify the actual upgrade and relaunch. Also confirm that a candidate signed by a different publisher cannot be installed by the updater.
 
 ## Post-release
 
 - [ ] Verify artifacts open/install/run on a clean machine for each platform.
 - [ ] Verify checksums match.
 - [ ] Attach screenshots from `assets/release/v<version>/` to the release body if relevant.
-- [ ] Click Publish in GitHub.
 - [ ] Announce externally (if applicable).
 
 ## Rollback

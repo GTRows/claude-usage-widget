@@ -1,0 +1,65 @@
+name: Publish desktop release
+
+on:
+  push:
+    tags: ['v*-gtrows.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      signed_release: true
+    secrets:
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      WINDOWS_UPDATE_PUBLISHER: ${{ secrets.WINDOWS_UPDATE_PUBLISHER }}
+
+  macos:
+    uses: ./.github/workflows/build-macos.yml
+    with:
+      signed_release: true
+    secrets:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+  linux:
+    uses: ./.github/workflows/build-linux.yml
+
+  publish:
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: desktop-release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Claude-Usage-Widget-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify all artifacts and publish the release
+        run: node scripts/publish-desktop-release.cjs release-assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
